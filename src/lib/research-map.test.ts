@@ -1,7 +1,7 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 // Fixtures are trimmed copies of real lum.id experiments (2026-11-24).
 import type { MeExperiment } from "@/api/me";
-import { humanId, experimentStatus, versionsOf, criteriaInWords, buildResearchTree, pathTo, mapSummary, comparabilityNote, suggestionParent, type Proposal } from "./research-map";
+import { humanId, experimentStatus, versionsOf, criteriaInWords, buildResearchTree, pathTo, mapSummary, comparabilityNote, suggestionParent, experimentLoop, versionsToRun, type Proposal } from "./research-map";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -91,7 +91,22 @@ check("forked_from draws experiment → experiment, deeper", () => {
 	eq(t.edges.find((e) => e.target === "exp:readability_v2")?.label, "forked from");
 	eq(t.nodes.find((x) => x.id === "ver:readability_v2:plain_style")?.depth, 3);
 });
-check("summary line", () => eq(mapSummary([kol, won], props), "2 experiments · 5 versions tried · 1 suggested"));
+check("runs started by hand, no version run: say so, not 'records no results'", () => {
+	eq(experimentStatus({ ...fresh, unrecorded: true } as MeExperiment).text, "None of its versions has run yet");
+	eq(experimentStatus({ ...fresh, arms: [], unrecorded: true } as unknown as MeExperiment).text, "Its workflow runs but records no results");
+});
+check("which versions a Run button starts, and from which workflow", () => {
+	eq(versionsToRun(fresh), { ids: ["a", "b"], untried: true });
+	eq(versionsToRun(kol), { ids: ["current", "musk_v1", "musk_llm_scored"], untried: false });
+	eq(versionsToRun({ ...kol, variants: { current: { n: 3, mean: 1 } } } as unknown as MeExperiment), { ids: ["musk_v1", "musk_llm_scored"], untried: true });
+	eq(experimentLoop({ ...kol, dispatch: { loop: "kol_poll" }, loops: ["kol_strategy", "kol_poll"] } as unknown as MeExperiment), "kol_poll");
+	eq(experimentLoop({ ...kol, dispatch: { loop: "other" }, loops: ["kol_strategy"] } as unknown as MeExperiment), "kol_strategy");
+});
+check("summary line counts only versions that actually ran", () => {
+	eq(mapSummary([kol, won], props), "2 experiments · 5 versions tried · 1 suggested");
+	eq(mapSummary([fresh], []), "1 experiment · 2 versions, none tried yet");
+	eq(mapSummary([kol, fresh], []), "2 experiments · 3 of 5 versions tried");
+});
 
 export function run(): number {
 	let failed = 0;

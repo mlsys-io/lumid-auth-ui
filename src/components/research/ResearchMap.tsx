@@ -22,6 +22,8 @@ import VersionChain from "@/components/research/VersionChain";
 import { buildEvolution } from "@/lib/evolution";
 import ApprovalCard, { readNotNow, writeNotNow } from "@/components/research/ApprovalCard";
 import Space3D from "@/components/research/Space3D";
+import RunVersions from "@/components/research/RunVersions";
+import YourCall from "@/components/research/YourCall";
 import {
 	buildResearchTree, comparabilityNote, criteriaInWords, experimentStatus, humanId, mapSummary, pathTo, versionsOf,
 	type MapNode, type Proposal, type Tone, type VersionInfo,
@@ -259,6 +261,9 @@ function ExperimentDetail({ app, e }: { app: string; e: MeExperiment }) {
 	), [series, seriesData?.runningMean, e.id, e.min_samples, hib, e.criteria_met, e.best_variant, e.comparable]);
 	const loop = e.dispatch?.loop || e.loops?.[0];
 	const done = criteriaInWords(e.success_criteria);
+	// What the research is aiming for, when the experiment declares it.
+	const rawTarget = (e.metric as { target?: unknown } | undefined)?.target;
+	const target = typeof rawTarget === "number" && Number.isFinite(rawTarget) ? rawTarget : null;
 	const q = (e as { description?: string }).description;
 	return (
 		<div className="rounded-xl border border-ink-200 bg-card p-3 space-y-2.5 animate-lumen-rise">
@@ -271,6 +276,7 @@ function ExperimentDetail({ app, e }: { app: string; e: MeExperiment }) {
 			<dl className="grid gap-1 text-caption">
 				{e.hypothesis && e.hypothesis !== q && <div><dt className="inline text-ink-600">Expecting: </dt><dd className="inline text-ink-800">{e.hypothesis}</dd></div>}
 				{m && <div><dt className="inline text-ink-600">Measures: </dt><dd className="inline text-ink-800">{m.label}{m.unit ? ` (${m.unit})` : ""} — {e.higher_is_better === false || e.metric?.higher_is_better === false ? "lower" : "higher"} is better</dd></div>}
+				{target != null && <div><dt className="inline text-ink-600">Aiming for: </dt><dd className="inline text-ink-800">{fmtMetricValue(target, m?.unit ?? "", metric || "")}{m ? ` ${m.label.toLowerCase()}` : ""}</dd></div>}
 				{done && <div><dt className="inline text-ink-600">Done when: </dt><dd className="inline text-ink-800">{done}</dd></div>}
 			</dl>
 			{series === null ? (
@@ -278,7 +284,7 @@ function ExperimentDetail({ app, e }: { app: string; e: MeExperiment }) {
 			) : evolution && metric && e.comparable !== false ? (
 				// Comparable versions: Novix's best-so-far story on one axis.
 				<BestScoreChart evo={evolution} labelOf={labelOf} colorOf={colorOf} metricKey={metric} unit={m?.unit ?? ""}
-					higherIsBetter={hib} minSamples={Math.max(1, e.min_samples || 1)} />
+					higherIsBetter={hib} minSamples={Math.max(1, e.min_samples || 1)} target={target} />
 			) : evo.some((x) => x.points.length > 1) && metric ? (
 				// Measured differently: one small chart per version, never ranked.
 				<EvolutionChart series={evo} metricKey={metric} unit={m?.unit ?? ""} higherIsBetter={hib}
@@ -299,6 +305,8 @@ function ExperimentDetail({ app, e }: { app: string; e: MeExperiment }) {
 					))}
 				</ul>
 			)}
+			<YourCall app={app} e={e} />
+			<RunVersions app={app} e={e} />
 			<div className="flex items-center gap-2 flex-wrap pt-0.5">
 				{loop && (
 					<Button asChild size="sm" variant="secondary">

@@ -263,6 +263,8 @@ export default function Space3D({ nodes, edges, renderCard, describe, selected, 
 					<div
 						key={n.id}
 						ref={(el) => { if (el) cardEls.current.set(n.id, el); else cardEls.current.delete(n.id); }}
+						data-kind={n.kind}
+						data-dim={dim ? "" : undefined}
 						className="absolute left-0 top-0 will-change-transform"
 						style={{ opacity: 0 }}
 					>

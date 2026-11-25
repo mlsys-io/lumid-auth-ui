@@ -45,11 +45,13 @@ export function RollingNumber({ value, format, className }: { value: number | nu
 	return <span className={cn("tabular-nums transition-colors duration-700", flash && "text-gold-600", className)}>{shown == null ? "—" : format(shown)}</span>;
 }
 
-export default function BestScoreChart({ evo, labelOf, colorOf, metricKey, unit, higherIsBetter, minSamples }: {
+export default function BestScoreChart({ evo, labelOf, colorOf, metricKey, unit, higherIsBetter, minSamples, target }: {
 	evo: Evolution;
 	labelOf: (arm: string) => string;
 	colorOf: (arm: string) => number;
 	metricKey: string; unit: string; higherIsBetter: boolean; minSamples: number;
+	/** The value the research is aiming for (experiment metric.target), drawn as a labelled line. */
+	target?: number | null;
 }) {
 	const fmt = (v: number) => fmtMetricValue(v, unit, metricKey);
 	const clipId = `bs-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
@@ -67,11 +69,12 @@ export default function BestScoreChart({ evo, labelOf, colorOf, metricKey, unit,
 		const vs: number[] = [];
 		for (const p of evo.points) { const k = (seen.get(p.arm) ?? 0) + 1; seen.set(p.arm, k); if (k > 2 || p.counted) vs.push(p.mean); }
 		if (!vs.length) vs.push(...evo.points.map((p) => p.mean));
+		if (target != null && Number.isFinite(target)) vs.push(target);
 		let v0 = Math.min(...vs), v1 = Math.max(...vs);
 		const pad = (v1 - v0) * 0.15 || Math.abs(v1) * 0.1 || 1;
 		v0 -= pad; v1 += pad;
 		return { v0, v1, t0: evo.t0, t1: tEnd === evo.t0 ? evo.t0 + 1 : tEnd };
-	}, [evo, tEnd]);
+	}, [evo, tEnd, target]);
 	const ticks = [dom.v0 + (dom.v1 - dom.v0) * 0.1, (dom.v0 + dom.v1) / 2, dom.v1 - (dom.v1 - dom.v0) * 0.1];
 	const PAD_L = Math.max(40, Math.max(...ticks.map((v) => fmt(v).length)) * 6 + 10);
 	const x = (t: number) => PAD_L + ((t - dom.t0) / (dom.t1 - dom.t0)) * (W - PAD_L - PAD_R);
@@ -141,6 +144,12 @@ export default function BestScoreChart({ evo, labelOf, colorOf, metricKey, unit,
 						<path d={stepPath(evo.frontier)} fill="none" className="stroke-gold-500 evo-dot-in" strokeWidth={1.25} strokeDasharray="4 3" />
 						<path d={stepPath(evo.best)} fill="none" pathLength={100} className="stroke-ink-800 evo-line-draw" strokeWidth={2} />
 					</g>
+					{target != null && Number.isFinite(target) && (
+						<g>
+							<line x1={PAD_L} x2={W - PAD_R} y1={y(target)} y2={y(target)} className="stroke-lagoon-600" strokeWidth={1.25} strokeDasharray="6 4" />
+							<text x={W - PAD_R - 4} y={y(target) - 5} textAnchor="end" className="fill-lagoon-700 text-nano font-medium">target {fmt(target)}</text>
+						</g>
+					)}
 					{takeovers.map((s, i) => (
 						<text key={i} x={x(s.t) + 4} y={y(s.value) - 6} className="fill-ink-800 text-nano font-medium">v{indexOf(s.arm)}</text>
 					))}

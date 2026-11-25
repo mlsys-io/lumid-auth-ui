@@ -141,7 +141,8 @@ simplicity — label it.
 | Activity (`/studio/runs`) + app home band | Is anything running? Is anything broken? | `components/activity/`, `lib/activity.ts` |
 | Workflow header | When does it run? Run it now. (⋯ = "This workflow" / "This app") | `ScheduleChip.tsx`, `WorkflowObservabilityPanel.tsx` |
 | Run page | Did it work? If not, where and why? | `RunAnswerCard.tsx` + `lib/run-answer.ts`, `RunTimeline.tsx` + `lib/run-timeline.ts` |
-| Research map (app home) | What is it exploring, what came from what, what's next? | `components/research/`, `lib/research-map.ts` |
+| Research map (app home) | What is it exploring, what came from what, what's next? | `components/research/` (`Space3D.tsx`, geometry in `lib/space3d.ts`), `lib/research-map.ts` |
+| Compute (app home, beside the map) | Where are my runs, and how busy are the machines? | `components/compute/ComputePanel.tsx`, `lib/compute.ts` |
 | Experiment detail / evolution chart | Which version wins? Can I trust it yet? Is it improving? | `ResearchMap.tsx` `ExperimentDetail`, `EvolutionChart.tsx` |
 
 - **Two things to manage:** a **workflow** is a job that repeats — you *operate* it (header).
@@ -165,6 +166,31 @@ simplicity — label it.
   (`.research-edge-draw`, pathLength=100) and the selected path flows
   (`.research-edge-flow`), evolution lines draw once (`.evo-line-draw`). Motion signals
   live / changed / selected — never decoration.
+
+### Round 5 (2026-11-25): the research loop, generically
+
+Every research app does the same thing: **experiment → runs on compute → feedback → judgement →
+next experiment.** Compute is limited, so runs wait; every result should say what it was measured
+on. (Simulator vs real GPU, backtest vs forward test are app details, not UI structure.)
+
+- **3D research map** (`Space3D`): Novix's exploration space rebuilt — their technique, not their
+  code, and no 3D library. App at the centre, experiments on a ring, versions in columns further
+  out; perspective camera turns when idle (paused on hover), drag/⌘-scroll/arrows; clicking a card
+  turns its branch to face you and frames the path. Cards are DOM, edges SVG, ONE rAF loop writes
+  transforms (React never re-renders per frame; the loop stops when idle/hidden). Reduced motion:
+  no turning, no fly-to, no flow. Test hooks: `[data-kind]`, `[data-dim]`, `aria-pressed`.
+- **Compute panel**: machines from `GET /me/compute` (identity, counts only), the app's queue from
+  `GET /me/apps/:app/queue` (scheduler `queue_read`), running/finished from the runs feed. Beside
+  the map when the column is ≥980px, else a one-line strip above it. A source that isn't there is
+  left out, never faked.
+- **Experiments start from the UI**: "Run the N untried versions" (`RunVersions`) queues one run per
+  version with `experiment_id`; **Your call** (`YourCall`) asks for a prediction + reason first and
+  sends it to the chat for critique, then shows it against the leader.
+- **App output conventions the run page reads** (any app can adopt them): `constraints:
+  [{metric, op, value, observed, met}]` → the "Limits" block, shown before the numbers;
+  `measured_on: "<words>"` → "Measured on: …". Experiments may declare `metric.target` → an
+  "Aiming for" line and a target line on the best-score chart.
+- The app's own pages (`ui.nav`) are named at the top of its home ("This app's pages: …").
 
 ### Where runs live
 

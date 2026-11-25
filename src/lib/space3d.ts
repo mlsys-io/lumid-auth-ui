@@ -52,9 +52,9 @@ export function coneDirections(axis: Vec3, count: number, half: number): Vec3[] 
 
 /** Vertical gap between stacked sibling cards, and the step outward per depth. */
 export const ROW = 64;
-export const STEP = 230;
+export const STEP = 200;
 /** Radius of the first ring: wide enough that neighbouring branches don't touch. */
-export function firstRing(n: number): number { return Math.max(240, n * 58); }
+export function firstRing(n: number): number { return Math.max(200, n * 48); }
 
 /**
  * Positions for a research tree. Dot-node spaces (Novix) spread children on

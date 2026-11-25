@@ -52,6 +52,9 @@ export function experimentStatus(e: MeExperiment): { tone: Tone; text: string } 
 	if (!e.n_results) {
 		if (e.unfed) return { tone: "attention", text: "Can't start — no workflow feeds it" };
 		if (e.starved) return { tone: "failing", text: "Stuck — the workflow that feeds it is failing" };
+		// The workflow ran, but never AS one of these versions (runs started by
+		// hand) — so the honest next step is to run the versions, not to debug.
+		if (e.unrecorded && (e.arms?.length ?? 0) > 0 && !Object.keys(e.variants || {}).length) return { tone: "idle", text: "None of its versions has run yet" };
 		if (e.unrecorded) return { tone: "attention", text: "Its workflow runs but records no results" };
 		return { tone: "idle", text: "Not started yet" };
 	}
@@ -70,6 +73,22 @@ export function experimentStatus(e: MeExperiment): { tone: Tone; text: string } 
 	if (min && vs.length >= declared && vs.every((v) => v.n >= min)) return { tone: "idle", text: "Enough results — too close to call so far" };
 	const need = min * declared;
 	return { tone: "running", text: need ? `Collecting results: ${Math.min(e.n_results, need)} of ${need}` : `Collecting results: ${e.n_results} so far` };
+}
+
+/** The workflow an experiment's runs come from: its declared dispatch loop
+ *  when that loop is attached, else the first attached loop. */
+export function experimentLoop(e: MeExperiment): string {
+	const hinted = e.dispatch?.loop;
+	return (hinted && e.loops?.includes(hinted) ? hinted : e.loops?.[0]) || "";
+}
+
+/** The versions a "Run" button should start: the untried ones, or — when
+ *  every version has run — all of them once more. */
+export function versionsToRun(e: MeExperiment): { ids: string[]; untried: boolean } {
+	const declared = (e.arms || []).map((a) => String(a.id));
+	const ran = new Set(Object.keys(e.variants || {}).filter((k) => (e.variants?.[k]?.n ?? 0) > 0));
+	const untried = declared.filter((id) => !ran.has(id));
+	return untried.length ? { ids: untried, untried: true } : { ids: declared, untried: false };
 }
 
 // ── a version (arm), in words ───────────────────────────────────────────
@@ -234,9 +253,12 @@ export function pathTo(nodes: MapNode[], id: string): Set<string> {
 
 /** The map's status line, in words. */
 export function mapSummary(exps: MeExperiment[], proposals: Proposal[]): string {
-	const versions = exps.reduce((a, e) => a + versionsOf(e).length, 0);
+	const all = exps.flatMap((e) => versionsOf(e));
+	const versions = all.length;
+	const tried = all.filter((v) => v.tag !== "not run yet").length;
 	const sug = proposals.filter((p) => !exps.some((e) => e.id === p.id)).length;
-	const parts = [`${exps.length} experiment${exps.length === 1 ? "" : "s"}`, `${versions} version${versions === 1 ? "" : "s"} tried`];
+	const triedWords = tried === versions ? `${versions} version${versions === 1 ? "" : "s"} tried` : tried === 0 ? `${versions} version${versions === 1 ? "" : "s"}, none tried yet` : `${tried} of ${versions} versions tried`;
+	const parts = [`${exps.length} experiment${exps.length === 1 ? "" : "s"}`, triedWords];
 	if (sug) parts.push(`${sug} suggested`);
 	return parts.join(" · ");
 }

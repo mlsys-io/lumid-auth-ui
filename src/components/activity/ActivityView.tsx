@@ -279,7 +279,7 @@ function AppGroup({ a, now, showHeader }: { a: AppActivity; now: number; showHea
 
 // ── The view ───────────────────────────────────────────────────────────────
 
-export function ActivityView({ runs, app, days, entrance = false, compact = false, asOf, truncated = false }: {
+export function ActivityView({ runs, app, days, entrance = false, compact = false, asOf, truncated = false, skipRunning = false }: {
 	runs: MeRunRow[];
 	/** The API capped the window: only the newest runs are here. */
 	truncated?: boolean;
@@ -290,6 +290,8 @@ export function ActivityView({ runs, app, days, entrance = false, compact = fals
 	entrance?: boolean;
 	/** App home: running + needs fixing only, workflows live in their own tab. */
 	compact?: boolean;
+	/** Running runs are shown elsewhere (the app home's Compute panel). */
+	skipRunning?: boolean;
 	asOf?: number;
 }) {
 	const act = groupActivity(runs, { app });
@@ -310,7 +312,7 @@ export function ActivityView({ runs, app, days, entrance = false, compact = fals
 
 	return (
 		<div className="space-y-6">
-			{(act.running.length > 0 || finishing.length > 0) && (
+			{!skipRunning && (act.running.length > 0 || finishing.length > 0) && (
 				<Section label="Running now" count={act.running.length} className={enter} style={stagger(0)}>
 					<div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
 						{act.running.map((it) => <RunningCard key={it.run.run_id} item={it} now={nowSec} showApp={showApp} />)}
