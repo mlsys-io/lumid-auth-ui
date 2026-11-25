@@ -342,7 +342,7 @@ function ResearchList({ app, exps, onPick }: { app: string; exps: MeExperiment[]
 	);
 }
 
-export default function ResearchMap({ app }: { app: string }) {
+export default function ResearchMap({ app, aside }: { app: string; aside?: React.ReactNode }) {
 	const { data } = useResearchData(app);
 	const wide = useWide();
 	const grow = useOncePerSession(`research-map:${app}`);
@@ -359,10 +359,11 @@ export default function ResearchMap({ app }: { app: string }) {
 		if (data.proposals.some((p) => p.id === wanted)) setSelected(`sug:${wanted}`);
 	}, [wanted, data]);
 
-	if (!data) return null;
+	if (!data) return aside ? <>{aside}</> : null;
 	const { exps, proposals } = data;
 	const pending = proposals.filter((p) => !exps.some((e) => e.id === p.id) && !notNow.includes(p.id));
-	if (exps.length === 0 && pending.length === 0) return null;
+	// Nothing to explore: the aside (Compute) still has something to say.
+	if (exps.length === 0 && pending.length === 0) return aside ? <>{aside}</> : null;
 
 	const selKind = selected?.split(":")[0];
 	const selExp = selKind === "exp" ? exps.find((e) => `exp:${e.id}` === selected)
@@ -383,7 +384,15 @@ export default function ResearchMap({ app }: { app: string }) {
 		<section aria-label="Research" className={cn("space-y-2", grow && "lumen-hero-in")}>
 			<h2 className="eyebrow flex items-center gap-2">Research <span className="normal-case tracking-normal text-ink-600 font-normal">what this app is exploring, and what to try next</span></h2>
 			{wide ? (
-				<MapCanvas app={app} exps={exps} proposals={pending} selected={selected} onSelect={setSelected} grow={grow} />
+				aside ? (
+					// The map and Compute share one row: same top, same height.
+					<div className="grid grid-cols-[minmax(0,1fr)_19rem] gap-4 items-stretch">
+						<MapCanvas app={app} exps={exps} proposals={pending} selected={selected} onSelect={setSelected} grow={grow} />
+						<div className="min-h-0 relative"><div className="absolute inset-0">{aside}</div></div>
+					</div>
+				) : (
+					<MapCanvas app={app} exps={exps} proposals={pending} selected={selected} onSelect={setSelected} grow={grow} />
+				)
 			) : (
 				<ResearchList app={app} exps={exps} onPick={setSelected} />
 			)}

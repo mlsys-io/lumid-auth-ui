@@ -1,20 +1,19 @@
 // ResearchHome — the top of an app's home:
 //
-//   This app's pages: Start · Designs · Experiments · Grade · Exercises
-//   ┌──────────── research map (3D) ────────────┐ ┌── Compute ──┐
-//   │ experiments → versions, suggestions        │ │ machines    │
-//   └────────────────────────────────────────────┘ │ running     │
-//   For your approval …                            │ waiting     │
-//                                                  └─────────────┘
+//   [Start] [Designs] [Experiments] [Grade] [Exercises]        ← the app's own pages, once
+//   RESEARCH  what this app is exploring, and what to try next
+//   ┌──────────── research map (3D) ────────────┐┌── Compute ──┐   ← one row: same top,
+//   │ experiments → versions, suggestions        ││ machines …  │     same height
+//   └────────────────────────────────────────────┘└─────────────┘
+//   For your approval …  /  the selected experiment            ← full width
 //
-// The app's own pages are named FIRST so they are never buried under the map
-// (MLSys Research's Start page used to sit a screen below 20 "not run yet"
-// cards). Compute sits beside the map when the column is wide enough (it is
-// measured, not the viewport: the chat rail takes ~430px), else above it.
+// The app's pages are named FIRST so they are never buried under the map, and
+// only here: the surface below hides its own copy of the same tabs. Compute
+// sits in the map's row when the column is wide enough (measured, not the
+// viewport: the chat rail takes ~430px), else as a one-line strip above it.
 
 import { lazy, Suspense, useLayoutEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { cn } from "@/lib/utils";
 
 const ResearchMap = lazy(() => import("@/components/research/ResearchMap"));
 const ComputePanel = lazy(() => import("@/components/compute/ComputePanel"));
@@ -36,31 +35,26 @@ export default function ResearchHome({ app, pages }: { app: string; pages?: Arra
 	return (
 		<div ref={ref} className="space-y-3">
 			{named.length > 1 && (
-				<nav aria-label="This app's pages" className="flex items-center gap-x-1 gap-y-1 flex-wrap text-meta">
-					<span className="text-ink-600 mr-1">This app's pages:</span>
-					{named.map((p, i) => (
-						<span key={p.surface} className="inline-flex items-center gap-1">
-							{i > 0 && <span className="text-ink-300" aria-hidden>·</span>}
-							<Link to={`/studio/apps/${encodeURIComponent(app)}?surface=${encodeURIComponent(p.surface)}`} className="text-gold-700 hover:underline font-medium">
-								{p.label || p.surface}
-							</Link>
-						</span>
+				// Same pills as the app's own tab bar (AppSurface), which the home hides.
+				<nav aria-label="This app's pages" className="flex flex-wrap gap-1 -ml-2.5">
+					{named.map((p) => (
+						<Link key={p.surface} to={`/studio/apps/${encodeURIComponent(app)}?surface=${encodeURIComponent(p.surface)}`}
+							className="px-2.5 py-1 rounded-lg text-caption text-ink-700 hover:text-ink-900 hover:bg-ink-100 transition-colors">
+							{p.label || p.surface}
+						</Link>
 					))}
 				</nav>
 			)}
-			<div className={cn("grid gap-4 items-start", side ? "grid-cols-[minmax(0,1fr)_19rem]" : "grid-cols-1")}>
-				{side ? (
-					<>
-						<Suspense fallback={null}><ResearchMap app={app} /></Suspense>
-						<Suspense fallback={null}><ComputePanel app={app} className="sticky top-2" /></Suspense>
-					</>
-				) : (
-					<>
-						<Suspense fallback={null}><ComputePanel app={app} compact /></Suspense>
-						<Suspense fallback={null}><ResearchMap app={app} /></Suspense>
-					</>
-				)}
-			</div>
+			{side ? (
+				<Suspense fallback={null}>
+					<ResearchMap app={app} aside={<Suspense fallback={null}><ComputePanel app={app} className="h-full overflow-y-auto" /></Suspense>} />
+				</Suspense>
+			) : (
+				<div className="space-y-3">
+					<Suspense fallback={null}><ComputePanel app={app} compact /></Suspense>
+					<Suspense fallback={null}><ResearchMap app={app} /></Suspense>
+				</div>
+			)}
 		</div>
 	);
 }
