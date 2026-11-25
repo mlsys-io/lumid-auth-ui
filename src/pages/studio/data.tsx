@@ -8,9 +8,8 @@
 //   • Explorer — the generic data-app endpoint browser (point at any
 //                allowlisted data-app, run its declared endpoints).
 //   • Query    — ad-hoc SELECT through the same path chat's data_query uses.
-//   • Jobs     — the lum.id/data jobs entrance: sources (mine / shared /
-//                public), a spec → plan → Run flow, and your jobs with their
-//                events. `?tab=jobs&job=<id>` opens one (the Runs list links here).
+//   (Jobs — the lum.id/data jobs entrance — is reachable at ?tab=jobs but not
+//    a tab: people meet data at workflow setup, results and inspection.)
 // …plus a docked chat rail, grounded on DATA_KEY.
 //
 // Both were previously separate marketplace cards (lumid-data-lake +
@@ -29,7 +28,7 @@
 
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Database, PlayCircle, TableProperties, Terminal } from "lucide-react";
+import { Database, TableProperties, Terminal } from "lucide-react";
 import ChatRail from "@/components/ChatRail";
 import RunningNow from "@/components/RunningNow";
 import { DATA_KEY } from "@/components/StudioChat";
@@ -47,8 +46,9 @@ const TABS: { id: Tab; label: string; icon: typeof Database }[] = [
 	// Query runs ad-hoc SELECT through the same path chat's data_query uses.
 	// After Catalog on purpose: Catalog is how you find out what to query.
 	{ id: "query", label: "Query", icon: Terminal },
-	// Run work where the data is: sources, plan, Run, and your jobs.
-	{ id: "jobs", label: "Jobs", icon: PlayCircle },
+	// No Jobs tab: people meet data when they set up a workflow, harvest its
+	// results, or inspect what's there — not by writing job specs. `?tab=jobs`
+	// still renders (old links), it just isn't advertised.
 	// The raw data-app endpoint browser. Last and labelled as such: it lists
 	// HTTP routes, not datasets, and read as a second catalog when it sat
 	// second.
@@ -152,7 +152,7 @@ export default function StudioData() {
 
 			{/* RIGHT — grounded chat (collapsible; auto-hidden on narrow, where it
 			    takes over full width when opened). Same rail as the app workspace. */}
-			<ChatRail groundApp={DATA_KEY} openKey={CHAT_OPEN_KEY} top={<RunningNow runs={false} />} />
+			<ChatRail groundApp={DATA_KEY} openKey={CHAT_OPEN_KEY} top={<RunningNow />} />
 		</div>
 	);
 }

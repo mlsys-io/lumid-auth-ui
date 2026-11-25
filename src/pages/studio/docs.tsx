@@ -243,7 +243,10 @@ const DOCS: DocEntry[] = [
 		md: 'data-jobs.md',
 		group: 'Guides',
 		icon: Database,
-		companion: { to: '/studio/data-warehouse?tab=jobs', label: 'Open Jobs' },
+		companion: { to: '/studio/data-warehouse', label: 'Open the catalog' },
+		// Off the index: written around job specs, which aren't how people meet
+		// data (workflow setup, results, inspection). Route kept for links.
+		hidden: true,
 	},
 	{
 		slug: 'findata-sql',

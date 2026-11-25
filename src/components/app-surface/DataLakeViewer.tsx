@@ -11,10 +11,8 @@
 
 import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { toast } from "sonner";
 import {
   LAKE_INSTANCES,
-  jobRefFor,
   fetchInstanceCatalog,
   peekInstanceCatalog,
   peekTables,
@@ -37,50 +35,20 @@ import { PickATable } from "@/components/illustrations/scenes";
 // like a feature of the whole warehouse).
 const PredictionMarketsBrowser = lazy(() => import("@/components/app-surface/PredictionMarketsBrowser"));
 
-/** Where a table lives and how to use it — the two questions a person browsing
- *  a catalog actually has. */
-function WhereAndUse({ sel }: { sel: Selection }) {
-  const ref = jobRefFor(sel.inst, sel.schema, sel.table.table);
-  const copy = () => {
-    if (!ref) return;
-    navigator.clipboard?.writeText(ref).then(
-      () => toast.success("Copied"),
-      () => toast.message(ref),
-    );
-  };
+/** Where a table lives — the first question a person inspecting a catalog
+ *  has — plus the other way in, where there is one (FinData: SQL). */
+function WhereItLives({ sel }: { sel: Selection }) {
   return (
-    <div className="mt-2 rounded border border-ink-200 bg-ink-50 px-2.5 py-2 text-micro text-ink-700 space-y-1">
-      <div>
-        <span className="text-ink-600">Where it lives: </span>
-        {sel.inst.where}
-      </div>
-      {ref ? (
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-ink-600">Use in a job:</span>
-          <code className="font-mono text-ink-800 bg-white border border-ink-200 rounded px-1.5 py-0.5">{ref}</code>
-          <button onClick={copy} className="text-plum-700 hover:underline">Copy</button>
-          <Link
-            to={`/studio/data-warehouse?tab=jobs&source=${encodeURIComponent(ref)}`}
-            className="text-plum-700 hover:underline"
-          >
-            Start a job with it →
+    <div className="mt-2 rounded border border-ink-200 bg-ink-50 px-2.5 py-2 text-micro text-ink-700">
+      <span className="text-ink-600">Where it lives: </span>
+      {sel.inst.where}
+      {sel.inst.otherAccess && (
+        <>
+          {" "}
+          <Link to={sel.inst.otherAccess.to} className="text-plum-700 hover:underline">
+            {sel.inst.otherAccess.label}
           </Link>
-          <Link to="/studio/docs/data-jobs" className="text-ink-600 hover:underline">How jobs use data</Link>
-        </div>
-      ) : (
-        <div>
-          <span className="text-ink-600">Jobs: </span>
-          jobs can’t read {sel.inst.label} yet.
-          {sel.inst.otherAccess && (
-            <>
-              {" "}
-              <Link to={sel.inst.otherAccess.to} className="text-plum-700 hover:underline">
-                {sel.inst.otherAccess.label}
-              </Link>
-              .
-            </>
-          )}
-        </div>
+        </>
       )}
     </div>
   );
@@ -254,7 +222,7 @@ function TableDetail({ sel }: { sel: Selection }) {
           {t.is_hypertable && <span className="text-plum-600">hypertable</span>}
           {t.comment && <span className="italic truncate max-w-[360px]" title={t.comment}>{t.comment}</span>}
         </div>
-        <WhereAndUse sel={sel} />
+        <WhereItLives sel={sel} />
       </div>
 
       <div className="flex gap-1 border-b border-ink-200 mb-2">
