@@ -102,7 +102,7 @@ const TAG_CLS: Record<string, string> = {
 
 const cardBase = (selected: boolean) => cn(
 	"relative rounded-xl border bg-card px-2.5 py-1.5 shadow-e1 transition-shadow",
-	selected && "ring-2 ring-gold-400 shadow-e2",
+	selected && "ring-2 ring-plum-400 shadow-e3",
 );
 
 function AppCard3D({ app, running, count, selected }: { app: string; running: boolean; count: number; selected: boolean }) {
@@ -166,24 +166,32 @@ function SuggestedCard3D({ p, selected }: { p: Proposal; selected: boolean }) {
 // so edges meet it; the name hangs to its right, outside the box.
 
 // The same states as VERSION_DOT, for SVG particles.
+// One hue for the space (plum = knowledge), stepped by how sure we are —
+// Novix's single-accent look; the state is also said in words beside it.
 const VERSION_FILL: Record<string, string> = {
-	winning: "fill-gold-600", leading: "fill-gold-400", current: "fill-ink-500", trying: "fill-lagoon-500", "can't tell apart": "fill-ember-500",
+	winning: "fill-plum-700", leading: "fill-plum-600", current: "fill-plum-400", trying: "fill-plum-400", "can't tell apart": "fill-plum-300",
 };
 const VERSION_DOT: Record<string, string> = {
-	winning: "bg-gold-600", leading: "bg-gold-400", current: "bg-ink-500",
-	trying: "bg-lagoon-500", "can't tell apart": "bg-ember-500", "not run yet": "bg-card border border-dashed border-ink-400",
+	winning: "bg-plum-700", leading: "bg-plum-600", current: "bg-plum-400",
+	trying: "bg-plum-400", "can't tell apart": "bg-plum-300", "not run yet": "bg-card border border-dashed border-plum-400",
 };
 
-function Dot({ size, className, label, labelClass, sub, subClass, rings }: { size: number; className: string; label: string; labelClass: string; sub?: string; subClass?: string; rings?: boolean }) {
+function Dot({ size, className, label, labelClass, sub, subClass, rings }: { size: number; className: string; label: string; labelClass: string; sub?: string; subClass?: string; rings?: boolean | "live" }) {
 	return (
 		<span className="relative flex items-center justify-center" style={{ width: Math.max(18, size + 8), height: Math.max(18, size + 8) }}>
 			{rings && (
 				<>
-					<span aria-hidden className="absolute rounded-full border border-gold-300 animate-lumen-breathe" style={{ width: size + 18, height: size + 18 }} />
-					<span aria-hidden className="absolute rounded-full border border-gold-200" style={{ width: size + 34, height: size + 34 }} />
+					{/* Novix's root: still rings, and while it works, rings radiating out. */}
+					<span aria-hidden className="absolute rounded-full bg-plum-100/70" style={{ width: size + 22, height: size + 22 }} />
+					<span aria-hidden className="absolute rounded-full border border-plum-300/70" style={{ width: size + 12, height: size + 12 }} />
+					<span aria-hidden className="absolute rounded-full border border-plum-200" style={{ width: size + 38, height: size + 38 }} />
+					{rings === "live" && <>
+						<span aria-hidden className="absolute rounded-full border border-plum-400 space3d-ping" style={{ width: size + 12, height: size + 12 }} />
+						<span aria-hidden className="absolute rounded-full border border-plum-300 space3d-ping [animation-delay:1.1s]" style={{ width: size + 12, height: size + 12 }} />
+					</>}
 				</>
 			)}
-			<span className={cn("rounded-full shadow-e1", className)} style={{ width: size, height: size }} />
+			<span className={cn("rounded-full ring-[3px] ring-plum-200/60", className)} style={{ width: size, height: size }} />
 			<span className="absolute left-full ml-1 flex flex-col leading-tight space3d-label">
 				<span className={cn("whitespace-nowrap max-w-[13rem] truncate", labelClass)}>{label}</span>
 				{sub && <span className={cn("whitespace-nowrap max-w-[13rem] truncate text-nano", subClass ?? "text-ink-600")}>{sub}</span>}
@@ -258,23 +266,23 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow }: {
 		return p ? <SuggestedCard3D p={p} selected={st.selected} /> : null;
 	}, [app, running, exps.length, expById, propById, versionOf, feedsOf]);
 	const renderDot = useCallback((n: MapNode) => {
-		if (n.kind === "app") return <Dot size={14} rings className={running ? "bg-lagoon-500" : "bg-gold-600"} label={appTitle(app)} labelClass="text-meta font-semibold text-ink-900"
+		if (n.kind === "app") return <Dot size={12} rings={running ? "live" : true} className="bg-plum-600" label={appTitle(app)} labelClass="text-meta font-semibold text-ink-900"
 			sub={`${exps.length} experiment${exps.length === 1 ? "" : "s"}${running ? " · running now" : ""}`} />;
 		if (n.kind === "experiment") {
 			const e = expById.get(n.ref);
 			const st = e ? experimentStatus(e) : null;
-			return <Dot size={10} className={TONES[st?.tone ?? "idle"].dot} label={e ? humanId(e.id) : n.ref} labelClass="text-caption font-medium text-ink-800"
+			return <Dot size={9} className={st?.tone === "failing" ? "bg-brick-500" : "bg-plum-500"} label={e ? humanId(e.id) : n.ref} labelClass="text-caption font-medium text-ink-900"
 				sub={st?.text} subClass={st?.tone === "ok" ? "text-gold-700" : st?.tone === "failing" ? "text-brick-700" : "text-ink-600"} />;
 		}
 		if (n.kind === "version") {
 			const v = versionOf(n.id);
 			// The version's state in a word when it has one worth saying.
-			const tag = v && v.tag !== "current" && v.tag !== "not run yet" ? v.tag : undefined;
-			return <Dot size={7} className={VERSION_DOT[v?.tag ?? "current"] ?? "bg-ink-500"} label={v?.label ?? n.ref} labelClass="text-micro text-ink-700" sub={tag} />;
+			const tag = v && (v.tag === "winning" || v.tag === "leading" || v.tag === "can't tell apart") ? v.tag : undefined;
+			return <Dot size={6} className={VERSION_DOT[v?.tag ?? "current"] ?? "bg-ink-500"} label={v?.label ?? n.ref} labelClass="text-micro text-ink-700" sub={tag} />;
 		}
 		if (n.kind === "workflow") {
 			const k = feedsOf(n.ref);
-			return <Dot size={9} className="bg-lagoon-500 rounded-sm" label={loopLabel("", n.ref)} labelClass="text-micro font-medium text-lagoon-800"
+			return <Dot size={7} className="bg-lagoon-500 !rounded-[2px] !ring-lagoon-100" label={loopLabel("", n.ref)} labelClass="text-micro font-medium text-ink-800"
 				sub={`workflow · feeds ${k}`} subClass="text-lagoon-700" />;
 		}
 		return <Dot size={8} className="bg-card border border-dashed border-gold-500" label={`Suggested: ${humanId(n.ref)}`} labelClass="text-micro text-gold-700" />;
@@ -283,7 +291,7 @@ function MapCanvas({ app, exps, proposals, selected, onSelect, grow }: {
 	// compute) and the approval card under it stay on the first screen.
 	const vh = useViewportHeight();
 	// …and to what's in it: a two-experiment space doesn't need a tall stage.
-	const height = Math.round(Math.max(320, Math.min(600, vh - (proposals.length ? 520 : 400), 240 + tree.nodes.length * 16)));
+	const height = Math.round(Math.max(320, Math.min(600, vh - (proposals.length ? 470 : 400), 240 + tree.nodes.length * 16)));
 	return (
 		<Space3D nodes={tree.nodes} edges={tree.edges} renderCard={renderCard} renderDot={renderDot} describe={describe}
 			selected={selected} lit={lit} grow={grow} order={order} height={height} evidence={evidence}
@@ -435,6 +443,7 @@ function ResearchList({ app, exps, onPick }: { app: string; exps: MeExperiment[]
 export default function ResearchMap({ app, aside }: { app: string; aside?: React.ReactNode }) {
 	const { data } = useResearchData(app);
 	const wide = useWide();
+	const live = useShellActivity()?.runningApps.includes(app) ?? false;
 	const grow = useOncePerSession(`research-map:${app}`);
 	const [selected, setSelected] = useState<string | null>(null);
 	const [notNow, setNotNow] = useState<string[]>(() => readNotNow(app));
@@ -468,11 +477,18 @@ export default function ResearchMap({ app, aside }: { app: string; aside?: React
 		setSelected(null);
 	};
 	const selProposalIdx = selKind === "sug" ? pending.findIndex((p) => `sug:${p.id}` === selected) : -1;
-	const updated = new Date(data.asOf).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
+	const updated = new Date(data.asOf).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false });
 
 	return (
 		<section aria-label="Research" className={cn("space-y-2", grow && "lumen-hero-in")}>
-			<h2 className="eyebrow flex items-center gap-2">Research <span className="normal-case tracking-normal text-ink-600 font-normal">what this app is exploring, and what to try next</span></h2>
+			{/* Novix's space header: a name, Live while it works, the counts in words. */}
+			<div className="flex items-center gap-2 px-0.5">
+				<Sparkles className="h-3.5 w-3.5 text-plum-500" aria-hidden />
+				<h2 className="whitespace-nowrap text-meta font-medium text-ink-800">Research space</h2>
+				{live && <span className="inline-flex items-center gap-1 rounded-md bg-plum-50 px-1.5 py-px text-nano font-medium text-plum-700"><span className="h-1.5 w-1.5 rounded-full bg-plum-500 animate-lumen-breathe" aria-hidden />Live</span>}
+				<span className="hidden min-w-0 truncate text-micro text-ink-600 xl:inline">what it is exploring, and what to try next</span>
+				<span className="ml-auto min-w-0 truncate whitespace-nowrap font-mono text-nano uppercase tracking-wider text-ink-600">{mapSummary(exps, pending)}</span>
+			</div>
 			{wide ? (
 				aside ? (
 					// The map and Compute share one row: same top, same height.
@@ -486,12 +502,15 @@ export default function ResearchMap({ app, aside }: { app: string; aside?: React
 			) : (
 				<ResearchList app={app} exps={exps} onPick={setSelected} />
 			)}
-			{selExp && <ExperimentDetail app={app} e={selExp} />}
 			{pending.length > 0 && (
-				<ApprovalCard app={app} list={pending} index={selProposalIdx >= 0 ? selProposalIdx : Math.min(pIndex, pending.length - 1)}
-					onIndex={showProposal} onDone={dismiss} />
+				// Docked over the foot of the space, the way Novix's approval card sits.
+				<div className={cn("relative z-10", wide && "!-mt-14 mx-5")}>
+					<ApprovalCard app={app} list={pending} index={selProposalIdx >= 0 ? selProposalIdx : Math.min(pIndex, pending.length - 1)}
+						onIndex={showProposal} onDone={dismiss} />
+				</div>
 			)}
-			<div className="text-nano font-mono text-ink-600">{mapSummary(exps, pending)} · updated {updated}</div>
+			{selExp && <ExperimentDetail app={app} e={selExp} />}
+			<div className="font-mono text-nano text-ink-600">[{updated}] {mapSummary(exps, pending)} · research tree</div>
 		</section>
 	);
 }

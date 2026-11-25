@@ -60,7 +60,7 @@ function Section({ label, count, children, className, style }: {
 // The steps the workflow's LAST run took — the template a running card
 // estimates its progress against. One fetch per workflow per session.
 const lastStepsCache = new Map<string, MeRunStepEvent[] | null>();
-function useLastRunSteps(wf: WorkflowActivity): MeRunStepEvent[] | null {
+export function useLastRunSteps(wf: WorkflowActivity): MeRunStepEvent[] | null {
 	const ts = wf.latestFinished ? parseScheduledRunId(wf.latestFinished.run_id)?.runId : undefined;
 	const key = `${wf.app}:${wf.loop}:${ts ?? ""}`;
 	const [ev, setEv] = useState<MeRunStepEvent[] | null>(() => lastStepsCache.get(key) ?? null);
