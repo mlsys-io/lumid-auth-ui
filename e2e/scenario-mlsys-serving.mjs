@@ -18,6 +18,9 @@
 // A chat answer that invents a number, or a run that dispatches without a
 // press, fails the scenario.
 
+// Run it with e2e/in-container.sh on a box that is also a k3s node: pod churn
+// there makes Chrome abort long chat streams (net::ERR_NETWORK_CHANGED).
+
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
@@ -113,11 +116,12 @@ async function chat(prompt, { timeout = 240000 } = {}) {
 	// multi-step tool turns pause for several seconds between steps.
 	// "Thinking…" (still thinking) vs "Thought for 4s" (done): the send button
 	// does not change while the model thinks, so read the words too.
+	// The chat's activity line ("Running <tool>" / "Thinking…" / "Working…",
+	// aria-live) is on screen exactly while a turn streams — including boot
+	// and the gaps between tool steps, when no text arrives.
 	const busyNow = async () => (await page.getByRole('button', { name: 'Stop generating' }).count())
 		+ (await page.getByRole('button', { name: 'Queue message' }).count())
-		// "Working…" is the status line while a turn boots (sandbox spawn,
-		// API latency) or sits between tool steps — no text streams then.
-		+ (/Thinking…|Thinking\.\.\.|Working…|Working\.\.\./.test(((await scope.innerText().catch(() => '')) || '').slice(-600)) ? 1 : 0);
+		+ (await page.locator('[aria-live="polite"]').filter({ hasText: /^(Running |Thinking…|Working…)/ }).count());
 	const tail = prompt.slice(-40);
 	const replyOf = (t) => { const at = t.lastIndexOf(tail); return at >= 0 ? t.slice(at + tail.length) : t.replace(before, ''); };
 	await page.waitForFunction(() => !!document.querySelector('button[aria-label="Queue message"], button[aria-label="Stop generating"]'), null, { timeout: 30000 }).catch(() => {});
