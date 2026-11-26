@@ -47,6 +47,7 @@ import { useShellActivity } from "@/components/activity/useShellActivity";
 import { useOncePerSession } from "@/components/activity/hooks";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 import { cn } from "@/lib/utils";
+import { sharedLine } from "@/lib/measure";
 
 const TONE_TEXT: Record<Tone, string> = {
 	ok: "text-gold-700", running: "text-lagoon-700", failing: "text-brick-700", attention: "text-ember-700", idle: "text-ink-600",
@@ -506,6 +507,7 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare }: 
 			<div className={cn("flex items-start gap-1.5 font-medium leading-snug", panel ? "text-caption" : "text-meta", TONE_TEXT[st.tone])}>
 				<span className={cn(dot(st.tone), "mt-[0.4em] flex-shrink-0")} />{st.text}
 			</div>
+			{sharedLine(e) && <p className={cn("text-plum-700", panel ? "text-caption" : "text-micro")}>{sharedLine(e)}</p>}
 		</>
 	);
 	const chart = series === null ? (

@@ -49,3 +49,12 @@ export function instrumentChoices(registry?: MeasureInstrument[] | null): Array<
 	const names = registry?.length ? registry.map((i) => i.name) : Object.keys(NAMES);
 	return names.map((n) => ({ value: n, label: instrumentName(n) }));
 }
+
+/**
+ * The line a shared experiment carries (`shared: true` in the app's spec): its
+ * numbers come from one central run every install reads, so the reader knows
+ * they are not their own runs and that there is nothing for them to start.
+ */
+export function sharedLine(e: { shared?: boolean } | null | undefined): string | null {
+	return e?.shared ? "Measured once for everyone: every install reads the same central runs, so there is nothing you need to run." : null;
+}

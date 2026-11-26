@@ -1,5 +1,5 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
-import { instrumentChoices, instrumentName, measuredBy } from "./measure";
+import { instrumentChoices, instrumentName, measuredBy, sharedLine } from "./measure";
 import { measuredLine } from "./run-answer";
 import { readAppSpec, setFeedback } from "./app-spec";
 
@@ -50,6 +50,13 @@ check("a feedback step's service survives a parse and an edit", () => {
 	eq(again.workflows[0].feedback[0].metrics[0].target, 30);
 	const dropped = setFeedback(text, "simulate", [{ step: "simulator", metrics: [{ name: "objective", better: "higher" }] }]);
 	eq(readAppSpec(dropped).workflows[0].feedback[0].service, undefined, "service removed");
+});
+
+check("a shared experiment says it is measured once for everyone; others say nothing", () => {
+	eq(sharedLine({ shared: true })?.startsWith("Measured once for everyone"), true);
+	eq(sharedLine({ shared: false }), null);
+	eq(sharedLine({}), null);
+	eq(sharedLine(null), null);
 });
 
 export function run(): number {
