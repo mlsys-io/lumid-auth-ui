@@ -67,6 +67,41 @@ check("versions sit near their own experiment, not another's", () => {
 	for (const v of ["v1", "v2", "v3", "v4"]) ok(d(`ver:e1:${v}`, "exp:e1") < d(`ver:e1:${v}`, "exp:e2"), `${v} near e1`);
 });
 
+check("a lopsided app still lays out balanced: no wall on one side, no tall column", () => {
+	// MLSys's shape: one workflow carrying 15 variants (some with setups), four empty ones.
+	const t: MapNode[] = [
+		{ id: "app:m", kind: "app", depth: 0, ref: "m" },
+		...["sim", "coach", "assess", "sandbox", "grade"].map((w) => ({ id: `wf:${w}`, kind: "workflow" as const, depth: 1, ref: w, parent: "app:m" })),
+		...Array.from({ length: 15 }, (_, i) => ({ id: `wf:v${i}`, kind: "workflow" as const, depth: 2, ref: `v${i}`, parent: "wf:sim" })),
+		...Array.from({ length: 6 }, (_, i) => ({ id: `ver:v0:${i}`, kind: "version" as const, depth: 3, ref: `s${i}`, parent: "wf:v0" })),
+	];
+	const pos = layoutSpace(t);
+	const pts = [...pos.values()];
+	const cx = pts.reduce((s, p) => s + p.x, 0) / pts.length, cz = pts.reduce((s, p) => s + p.z, 0) / pts.length;
+	const rmax = Math.max(...pts.map((p) => Math.hypot(p.x, p.z)));
+	ok(Math.hypot(cx, cz) < rmax * 0.35, `centre of mass near the app (${Math.hypot(cx, cz).toFixed(0)} of ${rmax.toFixed(0)})`);
+	const ys = pts.map((p) => p.y);
+	ok(Math.max(...ys) - Math.min(...ys) < 260, `no tall column (height span ${(Math.max(...ys) - Math.min(...ys)).toFixed(0)})`);
+	for (let i = 0; i < pts.length; i++) for (let j = i + 1; j < pts.length; j++) {
+		ok(Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y, pts[i].z - pts[j].z) > 40, "dots apart");
+	}
+});
+
+check("one workflow carrying nearly everything still rings the app (no empty side)", () => {
+	// The live MLSys tree: the app has two children, and `simulate` holds 62 of 64 nodes.
+	const t: MapNode[] = [
+		{ id: "app:m", kind: "app", depth: 0, ref: "m" },
+		{ id: "node:other", kind: "node", depth: 1, ref: "other", parent: "app:m" },
+		{ id: "wf:sim", kind: "workflow", depth: 1, ref: "sim", parent: "app:m" },
+		...Array.from({ length: 12 }, (_, i) => ({ id: `wf:v${i}`, kind: "workflow" as const, depth: 2, ref: `v${i}`, parent: "wf:sim" })),
+		...Array.from({ length: 36 }, (_, i) => ({ id: `ver:${i}`, kind: "version" as const, depth: 3, ref: `s${i}`, parent: `wf:v${i % 12}` })),
+	];
+	const pos = layoutSpace(t);
+	const sectors = new Array(6).fill(0);
+	for (const [id, p] of pos) if (id !== "app:m") sectors[Math.floor(((Math.atan2(p.z, p.x) + Math.PI) / (2 * Math.PI)) * 6) % 6]++;
+	ok(sectors.every((c) => c > 0), `every 60° sector holds a node (${sectors.join(" ")})`);
+});
+
 check("projection: origin lands at the centre; nearer is larger", () => {
 	const p = project({ x: 0, y: 0, z: 0 }, HOME, 800, 600);
 	ok(near(p.x, 400) && near(p.y, 300), "centre");

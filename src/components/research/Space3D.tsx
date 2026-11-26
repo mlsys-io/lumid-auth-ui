@@ -75,8 +75,10 @@ const SPOKES = 24;
 
 // Framing for the whole space: dots are small, so the margin only has to
 // leave room for a label to the right of the outermost dot.
-const HOME_BOX = { top: 40, bottom: 0.95, margin: 80 };
-const boxAbove = (box: { top: number; bottom: number; margin: number }, H: number, inset: number, right = 0) => ({
+// top: room for the labels above the highest dots; bottom: the floor's band.
+// minZoom: a big app's whole space still fits (dots + labels read small; cards show on hover).
+const HOME_BOX = { top: 64, bottom: 0.86, margin: 80, maxZoom: 2, minZoom: 0.35 };
+const boxAbove = (box: { top: number; bottom: number; margin: number; maxZoom?: number; minZoom?: number }, H: number, inset: number, right = 0) => ({
 	...box, right,
 	bottom: inset > 0 ? Math.min(H * (box.bottom <= 1 ? box.bottom : box.bottom / H), H - inset - 20) : box.bottom,
 });
@@ -132,9 +134,12 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 	// The stage: floor, its rings and spokes, shadows, stems, dust.
 	const floor = useMemo(() => sceneFloor(pos), [pos]);
 	const dust = useMemo(() => dustField(Math.min(90, Math.round(floor.rim / 9)), floor.rim * 1.15, -floor.y - 120, floor.y), [floor]);
-	// What the whole-space view frames: every node AND its shadow, so the
-	// floor reads under the space instead of falling off the bottom.
-	const hullPts = useMemo(() => turnHull([...pos.values()].flatMap((p) => [p, { ...p, y: floor.y }])), [pos, floor]);
+	// What the whole-space view frames: the NODES through a whole turn. Framing
+	// their floor shadows too centred the view between the nodes and the near
+	// edge of an empty floor, so the space sat crowded at the top with the lower
+	// half bare (2026-11-26, "should be more balanced"). HOME_BOX leaves the
+	// bottom band for the floor instead.
+	const hullPts = useMemo(() => turnHull([...pos.values()]), [pos]);
 	const floorEl = useRef<SVGPathElement>(null);
 	const ringEls = useRef<Array<SVGPathElement | null>>([]);
 	const spokeEls = useRef<Array<SVGPathElement | null>>([]);

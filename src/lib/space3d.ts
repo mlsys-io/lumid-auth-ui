@@ -56,6 +56,10 @@ export function coneDirections(axis: Vec3, count: number, half: number): Vec3[] 
 /** Vertical gap between stacked sibling cards, and the step outward per depth. */
 export const ROW = 68;
 export const STEP = 200;
+/** Arc between neighbouring leaves on one orbit, in layout units. */
+export const LEAF_GAP = 80;
+/** Share of its slice a branch spreads its children over (the rest is a gutter). */
+export const SLICE_FILL = 0.92;
 /** Radius of the first ring: wide enough that neighbouring branches don't touch. */
 export function firstRing(n: number): number { return Math.max(200, n * 48); }
 
@@ -79,41 +83,61 @@ const jit = (id: string, salt: number) => hash01(id, salt) - 0.5;
 
 export function layoutSpace(nodes: MapNode[]): Map<string, Vec3> {
 	const pos = new Map<string, Vec3>();
-	const bearing = new Map<string, number>();
 	const kids = new Map<string, MapNode[]>();
 	for (const n of nodes) if (n.parent) kids.set(n.parent, [...(kids.get(n.parent) ?? []), n]);
 	const roots = nodes.filter((n) => !n.parent);
-	// Workflows are the first ring (2026-11-25): they ARE the tree's first
-	// layer now, with experiments, variants and child nodes under each.
+	// Balanced radial tree (2026-11-26, "the graph should be more balanced"):
+	// every branch reserves a slice of the circle in proportion to its size
+	// (leaf count, damped so a small workflow still gets room) and its children
+	// split that slice the same way. One big workflow used to get the same slice
+	// as an empty one and stack its variants in a tall column on one bearing —
+	// a wall on one side, an empty canvas on the other.
+	const leaves = new Map<string, number>();
+	const leafCount = (n: MapNode): number => {
+		const hit = leaves.get(n.id);
+		if (hit != null) return hit;
+		const ch = kids.get(n.id) ?? [];
+		const c = ch.length ? ch.reduce((s, k) => s + leafCount(k), 0) : 1;
+		leaves.set(n.id, c);
+		return c;
+	};
+	const share = (n: MapNode) => Math.pow(leafCount(n), 0.7);
 	const ring1 = roots.flatMap((r) => kids.get(r.id) ?? []).length;
 	const R1 = firstRing(ring1);
-	const radius = (d: number) => (d <= 0 ? 0 : R1 + (d - 1) * STEP);
+	const maxDepth = nodes.reduce((m, n) => Math.max(m, n.depth), 0);
+	const totalLeaves = roots.reduce((s, r) => s + leafCount(r), 0);
+	// Room for every leaf on the outer orbit (~LEAF_GAP apart): stretch the step
+	// only when the tree needs it, so small apps keep their compact look.
+	const needOuter = (totalLeaves * LEAF_GAP) / (2 * Math.PI);
+	const step = maxDepth > 1 ? Math.max(STEP, (needOuter - R1) / (maxDepth - 1)) : STEP;
+	const radius = (d: number) => (d <= 0 ? 0 : R1 + (d - 1) * step);
 	const at = (theta: number, r: number, y: number) => v(r * Math.cos(theta), y, r * Math.sin(theta));
-	// `rf`: this branch's own radius factor (a little in or out), kept by its children.
-	const place = (n: MapNode, theta: number, y: number, rf = 1, dr = 0) => {
-		pos.set(n.id, at(theta, radius(n.depth) * rf + dr, y));
-		bearing.set(n.id, theta);
+	// Each child fills its share of the parent's slice, so leaves spread over the
+	// whole circle — even when one workflow carries nearly everything (MLSys:
+	// 62 of 64 nodes under `simulate`), its variants ring the app instead of
+	// fanning out on one side.
+	const place = (n: MapNode, a0: number, a1: number, y: number, rf: number, slot: number) => {
+		const mid = (a0 + a1) / 2;
+		const theta = n.depth === 0 ? 0 : mid + jit(n.id, 1) * Math.min(a1 - a0, 0.3) * 0.25;
+		// A little in or out (alternating for neighbouring leaves, so labels on one
+		// orbit don't collide), at a gentle seeded height — never a tall column.
+		const rr = n.depth === 0 ? 0 : radius(n.depth) * rf + (n.depth >= 2 ? (slot % 2 ? 1 : -1) * 18 : 0);
+		pos.set(n.id, at(theta, rr, y));
 		const ch = kids.get(n.id) ?? [];
 		if (!ch.length) return;
-		if (n.depth === 0) {
-			// The first ring: even bearings, each nudged off its slot, a little in or
-			// out and up or down (seeded by the id, so it never jumps between
-			// renders) — an organic cloud with real height, not a turntable.
-			const gap = (2 * Math.PI) / ch.length;
-			ch.forEach((c, i) => place(c, i * gap + jit(c.id, 1) * gap * 0.4, jit(c.id, 3) * 110, 1 + jit(c.id, 2) * 0.16));
-			return;
-		}
-		// Deeper: a column centred on the parent's height, nudged around the
-		// bearing and in or out so it reads as a loose fan rather than a wall.
-		// A workflow's children (experiments, variants, nodes) fan wider: they
-		// are whole branches, not leaves.
-		const spread = n.depth === 1 ? Math.min(0.14, 0.9 / ch.length) : 0.025;
-		ch.forEach((c, j) => {
-			const k = j - (ch.length - 1) / 2;
-			place(c, theta + k * spread + jit(c.id, 4) * 0.05, y + k * ROW * (n.depth === 1 ? 0.7 : 1) + jit(c.id, 5) * 10, rf, jit(c.id, 6) * 36);
+		const total = ch.reduce((s, c) => s + share(c), 0);
+		// A margin at the slice edges keeps a branch visibly apart from its neighbour.
+		const want = n.depth === 0 ? 2 * Math.PI : (a1 - a0) * SLICE_FILL;
+		let a = n.depth === 0 ? 0 : theta - want / 2;
+		ch.forEach((c, i) => {
+			const span = (want * share(c)) / total;
+			const cy = n.depth === 0 ? jit(c.id, 3) * 110 : y * 0.6 + jit(c.id, 5) * 40;
+			const crf = n.depth === 0 ? 1 + jit(c.id, 2) * 0.16 : rf;
+			place(c, a, a + span, cy, crf, i);
+			a += span;
 		});
 	};
-	roots.forEach((r, i) => place(r, (i / Math.max(1, roots.length)) * 2 * Math.PI, 0));
+	roots.forEach((r, i) => place(r, 0, 2 * Math.PI, 0, 1, i));
 	return pos;
 }
 
@@ -189,7 +213,7 @@ export function depthCue(scaleNow: number, zoom: number): { near: number; alpha:
  * The camera that frames `points` inside the box [margin, W-margin] ×
  * [top, bottom] at the current yaw/pitch — used to follow a selected path.
  */
-export function frameCamera(points: Vec3[], cam: Camera, W: number, H: number, box: { top: number; bottom: number; margin: number; right?: number } = { top: 56, bottom: 0.92, margin: 70 }): Camera {
+export function frameCamera(points: Vec3[], cam: Camera, W: number, H: number, box: { top: number; bottom: number; margin: number; right?: number; maxZoom?: number; minZoom?: number } = { top: 56, bottom: 0.92, margin: 70 }): Camera {
 	if (!points.length || !W || !H) return cam;
 	const base = { ...cam, zoom: 1, focusX: 0, focusY: 0 };
 	const ps = points.map((p) => project(p, base, W, H));
@@ -200,7 +224,8 @@ export function frameCamera(points: Vec3[], cam: Camera, W: number, H: number, b
 	const right = box.right ?? 0;
 	const availW = W - 2 * box.margin - right, availH = bottom - box.top;
 	const spanW = Math.max(1, maxX - minX), spanH = Math.max(1, maxY - minY);
-	const zoom = Math.max(0.55, Math.min(1.6, Math.min(availW / spanW, availH / spanH)));
+	// maxZoom: a small app's whole space may fill the box (overview); a path keeps 1.6.
+	const zoom = Math.max(box.minZoom ?? 0.55, Math.min(box.maxZoom ?? 1.6, Math.min(availW / spanW, availH / spanH)));
 	const cx = (minX + maxX) / 2 - W / 2, cyy = (minY + maxY) / 2 - H / 2;
 	return { ...cam, zoom, focusX: (W - right) / 2 - (W / 2 + cx * zoom), focusY: (box.top + bottom) / 2 - (H / 2 + cyy * zoom) };
 }
