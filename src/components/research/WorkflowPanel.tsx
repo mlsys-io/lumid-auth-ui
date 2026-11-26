@@ -22,7 +22,7 @@ import { addNode, removeNode, renameNode, setFeedback, setWorkflowNode, addWorkf
 import { compareVerdict, sideStats, type SideStats } from "@/lib/compare";
 import { workflowStatusLine, fmtAgo, fmtDuration, dirIdToSec } from "@/lib/activity";
 import { humanId, versionsOf } from "@/lib/research-map";
-import { humanMetric, fmtMetricValue } from "@/lib/run-answer";
+import { humanMetric, fmtMetricValue, measuredLine } from "@/lib/run-answer";
 
 const mLabel = (name: string) => humanMetric(name).label;
 /** A metric value with its unit, the way the run page writes it. */
@@ -267,6 +267,7 @@ function OverviewView({ app, wf, spec, row, cycles, variants, helpers, exps, onS
 	variants: SpecWorkflow[]; helpers: SpecWorkflow[]; exps: MeExperiment[]; onSelect: (id: string) => void;
 }) {
 	const latest = useLatestMetrics(app, wf.id, cycles);
+	const measured = measuredLine(latest);
 	const steps = wf.feedback.length ? wf.feedback : wf.primary ? [{ step: "result", metrics: [{ name: wf.primary, better: "higher" as const }] }] : [];
 	const compute = { ...spec.compute, ...wf.compute };
 	return (
@@ -292,6 +293,9 @@ function OverviewView({ app, wf, spec, row, cycles, variants, helpers, exps, onS
 						})}
 					</div>
 				))}
+				{measured && (
+					<p className={cn("text-caption", measured.measured ? "text-ink-700" : "text-ember-700")}>{measured.text}</p>
+				)}
 			</section>
 			{(exps.length > 0 || variants.length > 0) && (
 				<section aria-label="Under it" className="space-y-1">

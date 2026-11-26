@@ -339,6 +339,24 @@ export function runLimits(d: MeCycleDetail | null): RunLimit[] {
 	return out;
 }
 
+/**
+ * What a run's numbers were measured on, from its metrics, in one line — or
+ * that it could not be measured. `measured_on: "<words>"` (any app) reads
+ * "Measured on <words>"; `status: "not_measured"` reads the app's own summary
+ * when it says why ("Not measured on a GPU: every GPU was busy."), else "Not
+ * measured". A run that says neither gets no line: never guess the instrument.
+ */
+export function measuredLine(m: Record<string, unknown> | null | undefined): { measured: boolean; text: string } | null {
+	if (!m) return null;
+	const on = m.measured_on;
+	if (typeof on === "string" && on.trim()) return { measured: true, text: `Measured on ${on.trim()}` };
+	if (m.status === "not_measured") {
+		const why = typeof m.summary === "string" && /^not measured/i.test(m.summary.trim()) ? m.summary.trim() : "Not measured";
+		return { measured: false, text: why };
+	}
+	return null;
+}
+
 /** Where the result was measured, when the app says (`measured_on` in the run's output). */
 export function measuredOn(d: MeCycleDetail | null): string | null {
 	const v = runField(d, "measured_on");
