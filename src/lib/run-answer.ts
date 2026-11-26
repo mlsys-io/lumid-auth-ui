@@ -63,6 +63,9 @@ export function fmtMetricValue(v: number, unit: string, key = ""): string {
 // Bookkeeping, not findings: ids, hashes, seeds, versions, flags.
 const NOT_A_FINDING = /(^|_)(seed|hash|id|ts|version|index|task|tag|recorded|validated|cycle)$|^(objective|config_hash|cycle_ts|holdouts_run)$/;
 
+/** Counts of what a run did (not what it found): listed after the findings. */
+const BOOKKEEPING = /(^|_)(open|resolved|submitted|refused|errors?|count|rows|scanned|matched|replayed|evaluated|actions|secs|steps|attempts|retries|skipped)$|^(results|backtests|experiment|rows)_/;
+
 export interface RunMetric { key: string; label: string; unit: string; value: number; text: string }
 
 function flatMetrics(d: MeCycleDetail | null): Record<string, unknown> {
@@ -93,7 +96,11 @@ export function runMetrics(d: MeCycleDetail | null, max = 8): RunMetric[] {
 	const m = flatMetrics(d);
 	const primary = primaryMetricKey(d);
 	const keys = Object.keys(m).filter((k) => typeof m[k] === "number" && isFinite(m[k] as number) && !NOT_A_FINDING.test(k));
-	const ordered = primary ? [primary, ...keys.filter((k) => k !== primary)] : keys;
+	// Findings before bookkeeping: a cap of 6 used to fill with counters
+	// (backtests_open, prints_replayed, …) and drop the P&L.
+	const rest = keys.filter((k) => k !== primary);
+	const ranked = [...rest.filter((k) => !BOOKKEEPING.test(k)), ...rest.filter((k) => BOOKKEEPING.test(k))];
+	const ordered = primary ? [primary, ...ranked] : ranked;
 	const seen = new Set<string>();
 	const out: RunMetric[] = [];
 	for (const k of ordered) {
@@ -191,7 +198,9 @@ export function runAnswer(d: MeCycleDetail | null, opts: { ok?: boolean; running
 		return { tone: "failed", headline: dur ? `Failed after ${dur}` : "Failed", sentence, raw: raw || undefined };
 	}
 	if (ok === true) {
-		const said = typeof m.summary === "string" ? m.summary : typeof s.insight === "string" ? s.insight : "";
+		// The command's own verdict sentence first: quant writes `result_summary`
+		// ("made 35,140,000 ticks (+3,820 per lot) on …"), mlsys `summary`.
+		const said = typeof m.result_summary === "string" ? m.result_summary : typeof m.summary === "string" ? m.summary : typeof s.insight === "string" ? s.insight : "";
 		const outcome = typeof s.outcome === "string" && !QUIET_OUTCOMES.has(s.outcome) ? plainCause(s.outcome) : "";
 		const sentence = said ? said.charAt(0).toUpperCase() + said.slice(1) : outcome;
 		return { tone: "ok", headline: dur ? `Succeeded in ${dur}` : "Succeeded", sentence };
@@ -224,10 +233,25 @@ export interface RunOutputs {
 
 const OUTPUT_NOISE = /^(ok|error|outcome|metrics|expanded_args|undeclared_args|module|started_at|ended_at|duration_s|steps|flags|results|performance|claim_id|strategy_id|request_id|program_hash|cycle_ts|config_hash|measured_on|constraints|constraint_rows|workload_rows|summary)$/;
 
+/** Which long string is the run's own verdict: result_summary, then summary,
+ *  thesis, any *_summary, then notes (a replay_note is provenance, not the answer). */
+function sentenceRank(k: string): number {
+	if (k === "result_summary") return 0;
+	if (k === "summary") return 1;
+	if (k === "thesis") return 2;
+	if (/summary/.test(k)) return 3;
+	if (/result/.test(k)) return 4;
+	if (/note/.test(k)) return 5;
+	return 99;
+}
+
 export function runOutputs(d: MeCycleDetail | null): RunOutputs {
 	const out: RunOutputs = { text: null, fields: [], memories: [] };
 	if (!d) return out;
+	let textRank = 99;
 	const shown = new Set(runMetrics(d, 99).map((m) => m.key));
+	// The answer card already says the run's result_summary when it is in metrics.
+	if (typeof flatMetrics(d).result_summary === "string") shown.add("result_summary");
 	const step = (d.steps || []).find((s) => s.output && typeof s.output === "object");
 	const inner = ((step?.output as Record<string, unknown> | undefined)?.out ?? step?.output) as Record<string, unknown> | undefined;
 	const s = (d.summary || {}) as Record<string, unknown>;
@@ -239,7 +263,7 @@ export function runOutputs(d: MeCycleDetail | null): RunOutputs {
 			if (typeof v === "string") {
 				const t = v.trim();
 				if (!t) continue;
-				if (t.length > 60 && /\s/.test(t)) { if (!out.text && /summary|thesis|note|result/.test(k)) out.text = t; continue; }
+				if (t.length > 60 && /\s/.test(t)) { const r = sentenceRank(k); if (r < textRank) { out.text = t; textRank = r; } continue; }
 				const label = humanMetric(k.replace(/_text$/, "")).label;
 				if (out.fields.some((f) => f.label === label)) continue;
 				if (/^[0-9a-f-]{20,}$/i.test(t) || /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-/i.test(t)) continue; // ids, and values that embed one
