@@ -244,7 +244,7 @@ function rowStatus(row?: MeWorkflowRow): { text: string; tone: "ok" | "failing" 
 	return row.last_run_ok === false ? { text: `Last run failed ${ago}`, tone: "failing" } : { text: `Last run succeeded ${ago}`, tone: "ok" };
 }
 
-function MapCanvas({ app, exps, proposals, workflows, groups, rows, marks, selected, onSelect, grow, insetBottom = 0, insetRight = 0 }: {
+function MapCanvas({ app, exps, proposals, workflows, groups, rows, marks, selected, onSelect, grow, insetBottom = 0, insetRight = 0, ready = true }: {
 	app: string; exps: MeExperiment[]; proposals: Proposal[];
 	/** The app's workflows (from its spec) and the child nodes a user made. */
 	workflows: SpecWorkflow[]; groups: SpecNode[];
@@ -256,6 +256,9 @@ function MapCanvas({ app, exps, proposals, workflows, groups, rows, marks, selec
 	insetBottom?: number;
 	/** Pixels the panel covers at the right. */
 	insetRight?: number;
+	/** False until the spec AND the experiments have answered: the space is
+	 *  laid out once, not as a skeleton that rebuilds itself seconds later. */
+	ready?: boolean;
 }) {
 	const running = useShellActivity()?.runningApps.includes(app) ?? false;
 	// The graph (2026-11-25): app → workflows → experiments (setups) /
@@ -380,6 +383,13 @@ function MapCanvas({ app, exps, proposals, workflows, groups, rows, marks, selec
 	// docks over its foot, so it doesn't need room taken off.
 	const vh = useViewportHeight();
 	const height = Math.round(Math.max(520, Math.min(680, vh - 300)));
+	// Draw once. The spec answers first (a handful of workflow nodes) and the
+	// experiments seconds later (tens of setups); drawing the first and then
+	// the second re-divided the whole circle mid-turn, so everything on screen
+	// jumped (2026-11-26, "rotate a while and then change a lot").
+	if (!ready) {
+		return <div style={{ height }} className="lumen-skeleton rounded-xl" role="status" aria-label="Reading the map…" />;
+	}
 	return (
 		<Space3D nodes={tree.nodes} edges={tree.edges} renderCard={renderCard} renderDot={renderDot} describe={describe} edgeClass={edgeClass}
 			// Workflows carry an overview panel: hovering lights it up, no card swap.
@@ -625,6 +635,15 @@ const PANEL_PX = 352, PANEL_PX_2XL = 416;
 export default function ResearchMap({ app }: { app: string }) {
 	const { data } = useResearchData(app);
 	const { graph, save } = useAppGraph(app);
+	// The space waits for both the spec and the experiments — or 8 s, so a slow
+	// experiments read never leaves the map blank.
+	const [waited, setWaited] = useState(false);
+	useEffect(() => {
+		setWaited(false);
+		const t = window.setTimeout(() => setWaited(true), 8000);
+		return () => window.clearTimeout(t);
+	}, [app]);
+	const mapReady = !!graph && (!!data || waited);
 	const wide = useWide();
 	const panelPx = useMedia("(min-width: 1536px)") ? PANEL_PX_2XL : PANEL_PX;
 	const live = useShellActivity()?.runningApps.includes(app) ?? false;
@@ -737,7 +756,7 @@ export default function ResearchMap({ app }: { app: string }) {
 	const mapWithPanel = (
 		<div className="relative min-w-0">
 			<MapCanvas app={app} exps={exps} proposals={pending} workflows={workflows} groups={groups} rows={rows} marks={marks}
-				selected={selected} onSelect={onSelect} grow={grow}
+				selected={selected} onSelect={onSelect} grow={grow} ready={mapReady}
 				insetBottom={pending.length ? DOCK_PX : 0} insetRight={panelOpen ? panelPx + 12 : 0} />
 			{picking && (
 				<div role="status" className="absolute left-1/2 top-3 z-[6200] -translate-x-1/2 rounded-full border border-plum-200 bg-card px-3 py-1 text-caption text-plum-800 shadow-e2">
