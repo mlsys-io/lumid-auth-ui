@@ -81,7 +81,11 @@ export function keyValue(c: MeCycleListItem, metric?: string): number | null {
 
 const detailCache = new Map<string, MeCycleDetail>();
 function useLatestMetrics(app: string, loop: string, cycles: MeCycleListItem[] | null) {
-	const last = cycles?.find((c) => !c.running && c.ok !== undefined);
+	// The newest run that MEASURED something (list rows carry key_metric when it
+	// did): a poll with nothing to resolve is still a run, and used to blank the
+	// feedback block although the run before it had a P&L.
+	const done = cycles?.filter((c) => !c.running && c.ok !== undefined) ?? [];
+	const last = done.find((c) => c.key_metric != null) ?? done[0];
 	const [m, setM] = useState<Record<string, unknown> | null>(null);
 	useEffect(() => {
 		if (!last) { setM(null); return; }
@@ -157,7 +161,10 @@ export default function WorkflowPanel({ app, wf, spec, row, exps, view, onView, 
 	page?: boolean;
 }) {
 	const { cycles, reload } = useCycles(app, wf.id);
-	const status = useMemo(() => workflowStatusLine((cycles || []).map((c) => ({ ts: c.ts, ok: c.ok, running: c.running, duration_s: c.duration_s }))), [cycles]);
+	// null = still reading: never say "Hasn't run yet" about a list we haven't read.
+	const status = useMemo(() => (cycles === null
+		? { tone: "none" as const, text: "Reading its runs…" }
+		: workflowStatusLine(cycles.map((c) => ({ ts: c.ts, ok: c.ok, running: c.running, duration_s: c.duration_s })))), [cycles]);
 	const running = !!cycles?.some((c) => c.running) || !!row?.running;
 	const [busy, setBusy] = useState(false);
 	const runNow = async () => {

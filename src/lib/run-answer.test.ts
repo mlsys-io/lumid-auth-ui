@@ -51,6 +51,28 @@ check("limits: what the run was held to, in words, met or missed", () => {
 	eq(L.map((l) => [l.label, l.rule, l.met]), [["TTFT p99", "≤ 2,000 ms", true], ["Completion rate", "≥ 99%", false], ["TPOT p99", "no limit set", null]]);
 	eq(runLimits(null), []);
 });
+check("a quant backtest: the P&L and the verdict sentence reach the answer, counters come after", () => {
+	const poll = {
+		ok: true,
+		steps: [{ step_id: "engine_command", ok: true, output: { module: "backtest", out: { ok: true } } }],
+		summary: {
+			ok: true, duration_s: 34.5, primary_metric: { name: "real_tape", value: 1 },
+			metrics: {
+				all_axes_real: 1, backtests_open: 0, backtests_resolved: 1, experiment_rows: 2, prints_replayed: 1783,
+				real_tape: 1, realized_pnl_ticks_per_lot: 3819.565, results_count: 1, results_real_tape: 1, tape_window_secs: 604800,
+				replay_note: "replay=pg_tape, signals=recorded, settlement=resolved: recorded prices, recorded signals, realised payoff",
+				result_summary: "Real on all three axes: traded 9,200 lots and made 35,140,000 ticks (+3,820 per lot) on KXHIGHDEN-26SEP28-T73.",
+			},
+		},
+	} as unknown as MeCycleDetail;
+	const tiles = runMetrics(poll, 6).map((m) => m.key);
+	eq(tiles[0], "real_tape", "the declared primary leads");
+	eq(tiles.includes("realized_pnl_ticks_per_lot"), true, "the P&L is not crowded out by counters");
+	eq(tiles.indexOf("realized_pnl_ticks_per_lot") < tiles.indexOf("backtests_open") || !tiles.includes("backtests_open"), true);
+	eq(runAnswer(poll).sentence.startsWith("Real on all three axes"), true, "the verdict sentence is the answer");
+	eq(runOutputs(poll).text?.startsWith("replay=pg_tape"), true, "provenance goes to what it produced, not the answer");
+});
+
 check("measured line: the instrument in words, or why it was not measured", () => {
 	eq(measuredLine({ measured_on: "NVIDIA GeForce RTX 5080 at office", status: "measured" }), { measured: true, text: "Measured on NVIDIA GeForce RTX 5080 at office" });
 	eq(measuredLine({ status: "not_measured", measured_on: null, summary: "Not measured on a GPU: every RTX 5080 was busy." }), { measured: false, text: "Not measured on a GPU: every RTX 5080 was busy." });
