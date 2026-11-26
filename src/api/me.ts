@@ -1281,6 +1281,9 @@ export interface MeStudyDefinition {
 
 export interface MeExperiment {
   id: string; hypothesis: string; kind: "explore" | "arms" | "regression";
+  /** Measured once centrally for every install (the spec's `shared: true`):
+   *  identity serves the operator's state, so these runs are not this user's own. */
+  shared?: boolean;
   status: string; dataset_id?: string;
   // DECLARED arms (experiments[].arms[]), as opposed to `variants`, which is
   // what has actually been OBSERVED. An arm present here and absent there has
