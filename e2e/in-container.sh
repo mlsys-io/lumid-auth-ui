@@ -22,5 +22,5 @@ exec docker run --rm --init --shm-size=1g \
   -e PLAYWRIGHT_BROWSERS_PATH=/ms ${CHROME_IN:+-e CHROME="$CHROME_IN"} \
   -v "$NODE_HOME:/opt/node:ro" -v "$BROWSERS:/ms:ro" \
   -v "$REPO:$REPO" -v /tmp:/tmp \
-  -w "$REPO" mcr.microsoft.com/playwright/python:v1.49.0-jammy \
+  -w "$REPO" mcr.microsoft.com/playwright/python:v1.63.0-jammy \
   /opt/node/bin/node "$SCRIPT"
