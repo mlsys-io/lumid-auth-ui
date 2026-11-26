@@ -91,6 +91,8 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 	insetRef.current = insetBottom;
 	const rightRef = useRef(insetRight);
 	rightRef.current = insetRight;
+	// While the space is being moved (not turned): the cursor says so.
+	const [panning, setPanning] = useState(false);
 	const [hint, setHint] = useState(() => { try { return !sessionStorage.getItem(HINT_KEY); } catch { return true; } });
 	// The node under the pointer (or keyboard focus) opens into its full card.
 	const [hovered, setHovered] = useState<string | null>(null);
@@ -163,7 +165,10 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		cam: { ...HOME } as Camera,
 		tween: null as null | { from: Camera; to: Camera; t0: number; dur: number; spring?: boolean },
 		lastInput: 0, hover: false, rampT: 0, lastT: 0, dt: 16,
-		drag: null as null | { x: number; y: number; yaw: number; pitch: number; moved: boolean },
+		drag: null as null | { x: number; y: number; yaw: number; pitch: number; fx: number; fy: number; pan: boolean; moved: boolean },
+		// Touch: every finger down, and the two-finger gesture (move + pinch) when there are two.
+		pointers: new Map<number, { x: number; y: number }>(),
+		pinch: null as null | { mx: number; my: number; dist: number; fx: number; fy: number; zoom: number },
 		bornAt: 0, raf: 0, framed: false,
 	});
 	const [, force] = useState(0);
@@ -530,7 +535,21 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		s.current.cam = { ...c, yaw: c.yaw + dyaw, pitch: Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, c.pitch + dpitch)) };
 		touch();
 	};
-	const zoomBy = (f: number) => { const c = s.current.cam; s.current.cam = { ...c, zoom: Math.max(0.45, Math.min(2.2, c.zoom * f)) }; touch(); };
+	// Zoom about a point on screen (the cursor; the centre for keys and buttons):
+	// what's under it stays under it. The floor is below the overview's own
+	// minZoom, so zooming out from a big app's overview never snaps inward.
+	const zoomBy = (f: number, at?: { x: number; y: number }) => {
+		const st = s.current, c = st.cam;
+		const zoom = Math.max(0.25, Math.min(2.6, c.zoom * f)), k = zoom / c.zoom;
+		const px = at?.x ?? st.W / 2, py = at?.y ?? st.H / 2;
+		st.cam = { ...c, zoom, focusX: px - st.W / 2 - (px - st.W / 2 - c.focusX) * k, focusY: py - st.H / 2 - (py - st.H / 2 - c.focusY) * k };
+		touch();
+	};
+	const pan = (dx: number, dy: number) => { const c = s.current.cam; s.current.cam = { ...c, focusX: c.focusX + dx, focusY: c.focusY + dy }; touch(); };
+	const local = (e: { clientX: number; clientY: number }) => {
+		const r = boxRef.current?.getBoundingClientRect();
+		return { x: e.clientX - (r?.left ?? 0), y: e.clientY - (r?.top ?? 0) };
+	};
 	const reset = () => {
 		const st = s.current;
 		const to = frameCamera(hullPts, HOME, st.W, st.H, boxAbove(HOME_BOX, st.H, insetRef.current, rightRef.current));
@@ -539,24 +558,75 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		onSelect(null);
 		kick.current();
 	};
+	// Drag turns the space; shift-drag, the right or middle button, or two
+	// fingers move it (two fingers also pinch to zoom).
+	const startPinch = () => {
+		const st = s.current, [a, b] = [...st.pointers.values()];
+		st.pinch = { mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2, dist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), fx: st.cam.focusX, fy: st.cam.focusY, zoom: st.cam.zoom };
+	};
 	const onPointerDown = (e: React.PointerEvent) => {
-		if (e.button !== 0) return;
+		if (e.button > 2) return;
 		if (hint) { setHint(false); try { sessionStorage.setItem(HINT_KEY, "1"); } catch { /* private mode */ } }
-		const c = s.current.cam;
-		s.current.drag = { x: e.clientX, y: e.clientY, yaw: c.yaw, pitch: c.pitch, moved: false };
+		const st = s.current;
+		if (e.pointerType === "touch") {
+			st.pointers.set(e.pointerId, local(e));
+			if (st.pointers.size === 2) {
+				// The second finger turns a turn into a move: drop the drag, keep the click suppressed.
+				if (st.drag) st.drag.moved = true;
+				st.drag = null;
+				(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+				startPinch();
+				return;
+			}
+			if (st.pointers.size > 2) return;
+		}
+		const c = st.cam;
+		st.drag = { x: e.clientX, y: e.clientY, yaw: c.yaw, pitch: c.pitch, fx: c.focusX, fy: c.focusY, pan: e.button !== 0 || e.shiftKey, moved: false };
 	};
 	const onPointerMove = (e: React.PointerEvent) => {
-		const d = s.current.drag;
+		const st = s.current;
+		if (st.pointers.has(e.pointerId)) st.pointers.set(e.pointerId, local(e));
+		if (st.pinch && st.pointers.size >= 2) {
+			const [a, b] = [...st.pointers.values()], p = st.pinch;
+			const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+			const zoom = Math.max(0.25, Math.min(2.6, p.zoom * (Math.hypot(a.x - b.x, a.y - b.y) / p.dist))), k = zoom / p.zoom;
+			// Moved by the midpoint, scaled about it.
+			st.cam = { ...st.cam, zoom, focusX: mx - st.W / 2 - (p.mx - st.W / 2 - p.fx) * k, focusY: my - st.H / 2 - (p.my - st.H / 2 - p.fy) * k };
+			touch();
+			return;
+		}
+		const d = st.drag;
 		if (!d) return;
+		// Pressing the other button mid-drag (left + right together) switches the
+		// drag to a move from here on — a chord arrives as a move, not a down.
+		if (!d.pan && e.pointerType === "mouse" && (e.buttons & 3) === 3) {
+			Object.assign(d, { pan: true, x: e.clientX, y: e.clientY, fx: st.cam.focusX, fy: st.cam.focusY, moved: true });
+			(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+			setPanning(true);
+			return;
+		}
 		const dx = e.clientX - d.x, dy = e.clientY - d.y;
 		if (!d.moved && Math.hypot(dx, dy) < 5) return;
-		if (!d.moved) { d.moved = true; (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); }
-		s.current.cam = { ...s.current.cam, yaw: d.yaw + dx * 0.006, pitch: Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, d.pitch + dy * 0.004)) };
+		if (!d.moved) { d.moved = true; (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); setPanning(d.pan); }
+		st.cam = d.pan
+			? { ...st.cam, focusX: d.fx + dx, focusY: d.fy + dy }
+			: { ...st.cam, yaw: d.yaw + dx * 0.006, pitch: Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, d.pitch + dy * 0.004)) };
 		touch();
 	};
-	const endDrag = () => {
-		const d = s.current.drag;
-		s.current.drag = null;
+	const endDrag = (e?: React.PointerEvent) => {
+		const st = s.current;
+		if (e) st.pointers.delete(e.pointerId);
+		if (st.pinch) {
+			if (st.pointers.size < 2) {
+				st.pinch = null;
+				suppressClick.current = true; setTimeout(() => { suppressClick.current = false; }, 0);
+			}
+			touch();
+			return;
+		}
+		setPanning(false);
+		const d = st.drag;
+		st.drag = null;
 		// A drag that moved must not also click the card it started on.
 		if (d?.moved) { suppressClick.current = true; setTimeout(() => { suppressClick.current = false; }, 0); }
 		touch();
@@ -565,12 +635,14 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 	useEffect(() => {
 		const el = boxRef.current;
 		if (!el) return;
-		// ⌘/ctrl + wheel (and trackpad pinch, which arrives as ctrl+wheel) zooms;
-		// a plain wheel scrolls the page as usual.
+		// ⌘/ctrl + wheel (and trackpad pinch, which arrives as ctrl+wheel) zooms
+		// about the cursor; a plain wheel — a two-finger trackpad drag — moves the
+		// space (2026-11-26: asked for; the page scrolls from outside the map).
 		const onWheel = (e: WheelEvent) => {
-			if (!(e.ctrlKey || e.metaKey)) return;
 			e.preventDefault();
-			zoomBy(Math.exp(-e.deltaY * 0.0022));
+			if (e.ctrlKey || e.metaKey) { zoomBy(Math.exp(-e.deltaY * 0.0022), local(e)); return; }
+			const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? s.current.H : 1;
+			pan(-e.deltaX * unit, -e.deltaY * unit);
 		};
 		el.addEventListener("wheel", onWheel, { passive: false });
 		return () => el.removeEventListener("wheel", onWheel);
@@ -578,7 +650,9 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 	const onKeyDown = (e: React.KeyboardEvent) => {
 		if (e.target !== e.currentTarget) return; // cards handle their own keys
 		const k = e.key;
-		if (k === "ArrowLeft") turn(-0.12, 0); else if (k === "ArrowRight") turn(0.12, 0);
+		// Shift + arrows move the space; arrows alone turn it.
+		if (e.shiftKey && k.startsWith("Arrow")) pan(k === "ArrowLeft" ? 40 : k === "ArrowRight" ? -40 : 0, k === "ArrowUp" ? 40 : k === "ArrowDown" ? -40 : 0);
+		else if (k === "ArrowLeft") turn(-0.12, 0); else if (k === "ArrowRight") turn(0.12, 0);
 		else if (k === "ArrowUp") turn(0, -0.08); else if (k === "ArrowDown") turn(0, 0.08);
 		else if (k === "+" || k === "=") zoomBy(1.15); else if (k === "-") zoomBy(1 / 1.15);
 		else if (k === "0") reset(); else if (k === "Escape") onSelect(null);
@@ -593,17 +667,19 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		<div
 			ref={boxRef}
 			role="group"
-			aria-label="Research map in 3D. Drag to turn it, ⌘ or ctrl plus scroll to zoom, or use the arrow keys."
+			aria-label="Research map in 3D. Drag to turn it; drag with both mouse buttons, the right button or shift, or drag two fingers, to move it; ⌘ or ctrl plus scroll to zoom. Arrow keys turn it, shift plus arrows move it."
 			tabIndex={0}
 			onKeyDown={onKeyDown}
 			onPointerDown={onPointerDown}
 			onPointerMove={onPointerMove}
 			onPointerUp={endDrag}
 			onPointerCancel={endDrag}
+			// Right-drag moves the space; it must not open the browser menu.
+			onContextMenu={(e) => e.preventDefault()}
 			onPointerEnter={() => { s.current.hover = true; }}
 			onPointerLeave={() => { s.current.hover = false; s.current.lastInput = performance.now(); kick.current(); }}
 			onClick={(e) => { if (e.target === e.currentTarget && !suppressClick.current) onSelect(null); }}
-			className="space3d relative overflow-hidden rounded-xl border border-ink-200 select-none cursor-grab active:cursor-grabbing touch-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+			className={`space3d relative overflow-hidden rounded-xl border border-ink-200 select-none touch-none ${panning ? "cursor-move" : "cursor-grab active:cursor-grabbing"} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50`}
 			style={{ height }}
 		>
 			<svg className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden>
@@ -711,13 +787,65 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				<CtlButton label="Zoom in" onClick={() => zoomBy(1.2)}><Plus className="w-3.5 h-3.5" /></CtlButton>
 				<CtlButton label="Zoom out" onClick={() => zoomBy(1 / 1.2)}><Minus className="w-3.5 h-3.5" /></CtlButton>
 				<CtlButton label="Show everything" onClick={reset}><RotateCcw className="w-3.5 h-3.5" /></CtlButton>
+				<MouseHelp />
 			</div>
 			{/* How to use it — until the first time you do. */}
 			{hint && (
 				<div className="absolute left-3 top-2.5 z-[6000] text-nano text-ink-600 pointer-events-none transition-opacity">
-					Drag to turn · ⌘/ctrl + scroll to zoom · click a dot to open it
+					Drag to turn · two fingers or both buttons to move · pinch or ⌘/ctrl + scroll to zoom · click a dot to open it
 				</div>
 			)}
+		</div>
+	);
+}
+
+/** A mouse drawn small, with the parts a gesture uses filled in. */
+function MouseGlyph({ left, right, wheel, className = "w-3 h-4" }: { left?: boolean; right?: boolean; wheel?: boolean; className?: string }) {
+	return (
+		<svg viewBox="0 0 12 16" className={className} aria-hidden>
+			{left && <path d="M6 1 H5 A4 4 0 0 0 1 5 V6.5 H6 Z" className="fill-plum-500" />}
+			{right && <path d="M6 1 H7 A4 4 0 0 1 11 5 V6.5 H6 Z" className="fill-plum-500" />}
+			<rect x="1" y="1" width="10" height="14" rx="5" className="fill-none stroke-current" strokeWidth="1.2" />
+			<path d="M1 6.5 H11 M6 1 V6.5" className="stroke-current" strokeWidth="1.2" fill="none" />
+			<rect x={wheel ? 4.5 : 5} y="2.4" width={wheel ? 3 : 2} height={wheel ? 3.4 : 2.6} rx="1" className={wheel ? "fill-plum-500" : "fill-current"} />
+		</svg>
+	);
+}
+
+/** Two fingertips dragged down: the trackpad / touch move. */
+function TwoFingerGlyph({ className = "w-4 h-4" }: { className?: string }) {
+	return (
+		<svg viewBox="0 0 16 16" className={className} aria-hidden>
+			<circle cx="5" cy="4.5" r="2.4" className="fill-plum-500" />
+			<circle cx="11" cy="4.5" r="2.4" className="fill-plum-500" />
+			<path d="M5 8.5 V14 M3.4 12.4 L5 14 L6.6 12.4 M11 8.5 V14 M9.4 12.4 L11 14 L12.6 12.4" className="stroke-current" strokeWidth="1.2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+		</svg>
+	);
+}
+
+/** How to move around, behind a small mouse icon (hover or focus to read). */
+function MouseHelp() {
+	const rows: Array<[ReactNode, string]> = [
+		[<MouseGlyph left className="w-3.5 h-5" />, "Drag to turn"],
+		[<MouseGlyph left right className="w-3.5 h-5" />, "Both buttons (or right, or shift) + drag to move"],
+		[<MouseGlyph wheel className="w-3.5 h-5" />, "⌘/ctrl + scroll to zoom"],
+		[<TwoFingerGlyph />, "Two-finger drag to move · pinch to zoom"],
+	];
+	return (
+		<div className="relative group">
+			<button type="button" aria-label="How to move around the map" aria-describedby="space3d-help"
+				onClick={(e) => e.stopPropagation()}
+				className="w-7 h-7 inline-flex items-center justify-center rounded-lg border border-ink-200 bg-card/90 text-ink-700 hover:text-ink-900 hover:border-ink-300 shadow-e1">
+				<MouseGlyph left right />
+			</button>
+			<div id="space3d-help" role="tooltip"
+				className="invisible opacity-0 group-hover:visible group-hover:opacity-100 group-focus-within:visible group-focus-within:opacity-100 transition-opacity motion-reduce:transition-none absolute right-0 top-9 w-64 rounded-lg border border-ink-200 bg-card shadow-e2 p-2.5 grid gap-1.5">
+				{rows.map(([icon, words]) => (
+					<div key={words} className="flex items-center gap-2 text-caption text-ink-700">
+						<span className="w-5 inline-flex justify-center text-ink-600 shrink-0">{icon}</span>{words}
+					</div>
+				))}
+			</div>
 		</div>
 	);
 }
