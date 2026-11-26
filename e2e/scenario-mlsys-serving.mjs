@@ -327,7 +327,10 @@ await step('7 manage the node', async () => {
 	await nameBox.waitFor({ timeout: 30000 });
 	await nameBox.fill(`Sandbox ${RUN}`);
 	await p.getByRole('button', { name: 'Rename' }).click();
-	await page.waitForTimeout(8000);
+	// The save goes through the scheduler's intent queue; the button is busy
+	// until it lands. Wait for it, then for the graph to re-read the spec.
+	await page.waitForFunction(() => { const b = [...document.querySelectorAll('[role="dialog"] button')].find((x) => x.textContent?.trim() === 'Rename'); return !b || !b.disabled; }, null, { timeout: 90000 }).catch(() => {});
+	for (const until = Date.now() + 30000; Date.now() < until && !(await nodeButton('node', `Sandbox ${RUN}`).count());) await page.waitForTimeout(3000);
 	assert(await nodeButton('node', `Sandbox ${RUN}`).count() > 0, 'the node is renamed on the graph');
 });
 

@@ -39,3 +39,21 @@ export function compareVerdict(metric: string, a: SideStats | null, b: SideStats
 	const pct = a.mean !== 0 ? Math.abs(gap / a.mean) * 100 : null;
 	return { tone: "ok", ahead: bWins ? "b" : "a", text: `${who} ahead on ${metric} by ${fmt(Math.abs(gap))}${pct != null && pct < 1000 ? ` (${pct.toFixed(pct < 10 ? 1 : 0)}%)` : ""} — ${a.n} vs ${b.n} runs` };
 }
+
+/**
+ * Every numeric metric across runs, oldest first: `{metric: [values]}`. A
+ * true/false metric counts as 1/0 ("meets constraints" is comparable too).
+ * With `arm`, only runs of that version (`metrics.arm`) count — how a setup's
+ * runs are told apart from its workflow's other runs.
+ */
+export function runMetricValues(runs: Array<Record<string, unknown> | null | undefined>, arm?: string): Map<string, number[]> {
+	const by = new Map<string, number[]>();
+	for (const m of runs) {
+		if (!m || (arm != null && m.arm !== arm)) continue;
+		for (const [k, v] of Object.entries(m)) {
+			const x = typeof v === "number" ? v : typeof v === "boolean" ? (v ? 1 : 0) : NaN;
+			if (Number.isFinite(x)) by.set(k, [...(by.get(k) ?? []), x]);
+		}
+	}
+	return by;
+}
