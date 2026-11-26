@@ -176,7 +176,7 @@ await step('2 design: a variant through the UI', async () => {
 	await sheet.getByText('Same steps, other inputs').click();
 	const idField = sheet.locator('#variant-id-0');
 	if (await idField.count()) await idField.fill(TUNED);
-	const nodeName = sheet.locator('input[type="text"][aria-label="New node name"]');
+	const nodeName = sheet.locator('input[aria-label="New node name"]');
 	if (await nodeName.count()) await nodeName.fill(`SLA tuning ${RUN}`);
 	await sheet.getByRole('button', { name: /^Create/ }).click();
 	await sheet.waitFor({ state: 'detached', timeout: 120000 });
@@ -277,9 +277,17 @@ await step('6 sandbox: a real-GPU variant', async () => {
 	const code = sheet.getByLabel('Python code');
 	await code.waitFor({ timeout: 60000 });
 	if (process.env.SANDBOX_PY && fs.existsSync(process.env.SANDBOX_PY)) await code.fill(fs.readFileSync(process.env.SANDBOX_PY, 'utf8'));
+	// The sandbox step judges it on the real GPU: add it beside the simulator's.
+	await sheet.getByRole('button', { name: 'Add a feedback step' }).click();
+	await sheet.locator('input[id^="fb-step-"]').last().fill('sandbox');
+	const names = sheet.getByLabel('Metric name');
+	await names.last().fill('ttft_ms_p99');
+	await sheet.getByLabel('Which way is better').last().selectOption('lower');
+	await sheet.getByRole('button', { name: 'Add a metric' }).last().click();
+	await names.last().fill('goodput_tok_s');
 	const idField = sheet.locator('#variant-id-0');
 	if (await idField.count()) await idField.fill(SANDBOX);
-	const nodeName = sheet.locator('input[type="text"][aria-label="New node name"]');
+	const nodeName = sheet.locator('input[aria-label="New node name"]');
 	if (await nodeName.count()) await nodeName.fill(`On a real GPU ${RUN}`);
 	await sheet.getByRole('button', { name: /^Create/ }).click();
 	await sheet.waitFor({ state: 'detached', timeout: 120000 });
@@ -296,6 +304,12 @@ await step('6 sandbox: a real-GPU variant', async () => {
 		await page.waitForTimeout(60000);
 		await openApp();
 		await openWorkflow(label(SANDBOX));
+	}
+	// The header reads the workflow row; the feedback block reads the run's
+	// detail a moment later (the panel's runs list polls every 5 s).
+	for (const until = Date.now() + 30000; settled && Date.now() < until && !/measured on|not measured/i.test(t);) {
+		await page.waitForTimeout(3000);
+		t = await panel().innerText().catch(() => t);
 	}
 	assert(settled, 'the sandbox run settles');
 	assert(/not measured|measured on/i.test(t) || /Succeeded/.test(t), 'it reports real numbers, or says "not measured" in words');
