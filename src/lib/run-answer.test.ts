@@ -1,7 +1,7 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 // Fixtures are trimmed copies of real lum.id cycles (2026-11-24).
 import type { MeCycleDetail } from "@/api/me";
-import { humanMetric, fmtMetricValue, primaryMetricKey, runMetrics, stepFailed, stepLabel, stepLine, runAnswer, vsUsual, runOutputs, runLimits, measuredOn, runFiles } from "./run-answer";
+import { humanMetric, fmtMetricValue, primaryMetricKey, runMetrics, stepFailed, stepLabel, stepLine, runAnswer, vsUsual, runOutputs, runLimits, measuredOn, measuredLine, runFiles } from "./run-answer";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -50,6 +50,13 @@ check("limits: what the run was held to, in words, met or missed", () => {
 	const L = runLimits(limited);
 	eq(L.map((l) => [l.label, l.rule, l.met]), [["TTFT p99", "≤ 2,000 ms", true], ["Completion rate", "≥ 99%", false], ["TPOT p99", "no limit set", null]]);
 	eq(runLimits(null), []);
+});
+check("measured line: the instrument in words, or why it was not measured", () => {
+	eq(measuredLine({ measured_on: "NVIDIA GeForce RTX 5080 at office", status: "measured" }), { measured: true, text: "Measured on NVIDIA GeForce RTX 5080 at office" });
+	eq(measuredLine({ status: "not_measured", measured_on: null, summary: "Not measured on a GPU: every RTX 5080 was busy." }), { measured: false, text: "Not measured on a GPU: every RTX 5080 was busy." });
+	eq(measuredLine({ status: "not_measured", summary: "queued" }), { measured: false, text: "Not measured" });
+	eq(measuredLine({ objective: 22.4 }), null);
+	eq(measuredLine(null), null);
 });
 check("measured on, and outputs drop embedded ids and _text suffixes", () => {
 	eq(measuredOn(limited), "Simulator (RTX 5080 profile v1.21)");
