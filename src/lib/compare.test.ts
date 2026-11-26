@@ -1,5 +1,5 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
-import { sideStats, compareVerdict } from "./compare";
+import { sideStats, compareVerdict, runMetricValues } from "./compare";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -31,6 +31,22 @@ check("a clear gap names the side, the size and the runs; lower can be better", 
 	eq(w.ahead, "a");
 	const sim = compareVerdict("objective", sideStats([5, 5, 5]), sideStats([7, 7, 7]), "higher", names); // deterministic simulator
 	eq(sim.ahead, "b");
+});
+
+check("run metrics: every number per metric, true/false as 1/0, one version by arm", () => {
+	const runs = [
+		{ arm: "c8", goodput_tok_s: 22.4, ttft_ms_p99: 1374, meets_constraints: true, design_id: "baseline" },
+		{ arm: "c32", goodput_tok_s: 22.4, ttft_ms_p99: 1158, meets_constraints: false },
+		null,
+		{ goodput_tok_s: 20, objective: 20 },
+	];
+	const all = runMetricValues(runs);
+	eq(all.get("goodput_tok_s"), [22.4, 22.4, 20]);
+	eq(all.get("meets_constraints"), [1, 0]);
+	eq(all.has("design_id"), false, "strings are not metrics");
+	const c8 = runMetricValues(runs, "c8");
+	eq([...c8.keys()].sort(), ["goodput_tok_s", "meets_constraints", "ttft_ms_p99"]);
+	eq(c8.get("ttft_ms_p99"), [1374]);
 });
 
 export function run(): number {

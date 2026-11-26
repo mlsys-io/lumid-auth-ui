@@ -19,7 +19,7 @@ import { toast } from "sonner";
 import { me, type MeCycleDetail, type MeCycleListItem, type MeExperiment, type MeWorkflowRow } from "@/api/me";
 import type { AppSpec, FeedbackStep, SpecNode, SpecWorkflow } from "@/lib/app-spec";
 import { addNode, removeNode, renameNode, setFeedback, setWorkflowNode, addWorkflows } from "@/lib/app-spec";
-import { compareVerdict, sideStats, type SideStats } from "@/lib/compare";
+import { compareVerdict, runMetricValues, sideStats, type SideStats } from "@/lib/compare";
 import { workflowStatusLine, fmtAgo, fmtDuration, dirIdToSec } from "@/lib/activity";
 import { humanId, versionsOf } from "@/lib/research-map";
 import { humanMetric, fmtMetricValue, measuredLine } from "@/lib/run-answer";
@@ -385,10 +385,39 @@ function RunsView({ app, wf, cycles }: { app: string; wf: SpecWorkflow; cycles: 
 
 // ── Compare ───────────────────────────────────────────────────────────────
 
-/** Values per metric for one side: a workflow's runs, or a version's results. */
+/** The workflow a side's runs come from: itself, or its experiment's dispatch workflow. */
+function sideLoop(side: CompareSide | null): string | null {
+	if (!side) return null;
+	if (side.kind === "workflow") return side.id;
+	const e = side.exp;
+	return e?.dispatch?.loop || e?.loops?.[0] || null;
+}
+
+/**
+ * Values per metric for one side, from its last runs' full metrics (every
+ * metric, not just the headline), so two sides compare on what they share:
+ * a version of one experiment against a version of another, or a workflow.
+ * A version keeps only its own runs (`metrics.arm`). Falls back to the
+ * headline metric / the experiment's series where details aren't readable.
+ */
 function useSideValues(app: string, side: CompareSide | null): { byMetric: Map<string, number[]>; ready: boolean } {
-	const loop = side?.kind === "workflow" ? side.id : null;
+	const loop = sideLoop(side);
 	const { cycles } = useCycles(app, loop);
+	const done = useMemo(() => (cycles || []).filter((c) => !c.running && c.ok !== false).slice(0, 20), [cycles]);
+	const [details, setDetails] = useState<Array<Record<string, unknown> | null> | null>(null);
+	const doneKey = done.map((c) => c.ts).join(",");
+	useEffect(() => {
+		if (!loop || cycles === null) { setDetails(null); return; }
+		let live = true;
+		Promise.all(done.map(async (c) => {
+			const k = `${app}:${loop}:${c.ts}`;
+			let d = detailCache.get(k);
+			if (!d) { try { d = await me.cycleDetail(app, loop, c.ts); detailCache.set(k, d); } catch { return null; } }
+			return (d.summary?.metrics as Record<string, unknown> | undefined) ?? null;
+		})).then((rows) => { if (live) setDetails(rows.reverse()); });
+		return () => { live = false; };
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [app, loop, doneKey, cycles === null]);
 	const [series, setSeries] = useState<Array<{ ts: string; v: number }> | null>(null);
 	const exp = side?.exp;
 	const vid = side?.kind === "version" ? side.id : null;
@@ -402,24 +431,23 @@ function useSideValues(app: string, side: CompareSide | null): { byMetric: Map<s
 		return () => { live = false; };
 	}, [app, exp, vid]);
 	return useMemo(() => {
-		const by = new Map<string, number[]>();
-		if (side?.kind === "workflow") {
-			for (const c of [...(cycles || [])].reverse()) {
-				if (c.running || c.ok === false) continue;
+		if (!side) return { byMetric: new Map(), ready: true };
+		const by = runMetricValues(details ?? [], vid ?? undefined);
+		if (side.kind === "workflow" && !by.size) {
+			for (const c of [...done].reverse()) {
 				const km = c.key_metric;
 				const name = typeof km === "object" && km?.name ? km.name : "result";
 				const v = keyValue(c);
 				if (v != null) by.set(name, [...(by.get(name) ?? []), v]);
 			}
-			return { byMetric: by, ready: cycles !== null };
 		}
-		if (side?.kind === "version" && exp) {
+		if (side.kind === "version" && exp) {
 			const name = exp.metric?.name || exp.metric_name || "result";
-			by.set(name, (series || []).map((p) => p.v));
-			return { byMetric: by, ready: series !== null };
+			if (!by.get(name)?.length && series?.length) by.set(name, series.map((p) => p.v));
 		}
-		return { byMetric: by, ready: !side };
-	}, [side, cycles, series, exp]);
+		const ready = side.kind === "version" ? series !== null && (details !== null || !loop) : details !== null || cycles !== null && !done.length;
+		return { byMetric: by, ready };
+	}, [side, details, series, exp, vid, done, loop, cycles]);
 }
 
 export function CompareView({ app, a, b, wf, spec, onPick }: {
@@ -441,7 +469,17 @@ export function CompareView({ app, a, b, wf, spec, onPick }: {
 			</div>
 		);
 	}
-	const metrics = [...new Set([...A.byMetric.keys(), ...B.byMetric.keys()])];
+	// What the sides are judged on: their workflows' feedback metrics and their
+	// experiments' metrics. Everything else a run reports (seeds, sizes) is noise here.
+	const declared = new Set<string>();
+	for (const side of [a, b]) {
+		const w = spec?.workflows.find((x) => x.id === sideLoop(side));
+		for (const st of w?.feedback ?? []) for (const m of st.metrics) declared.add(m.name);
+		const em = side.exp?.metric?.name || side.exp?.metric_name;
+		if (em) declared.add(em);
+	}
+	const seen = [...new Set([...A.byMetric.keys(), ...B.byMetric.keys()])];
+	const metrics = declared.size ? seen.filter((m) => declared.has(m)) : seen;
 	const rows: Array<{ metric: string; a: SideStats | null; b: SideStats | null }> = metrics.map((m) => ({ metric: m, a: sideStats(A.byMetric.get(m) ?? []), b: sideStats(B.byMetric.get(m) ?? []) }));
 	return (
 		<div className="space-y-3">
