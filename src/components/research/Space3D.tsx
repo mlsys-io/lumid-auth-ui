@@ -165,6 +165,10 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		cam: { ...HOME } as Camera,
 		tween: null as null | { from: Camera; to: Camera; t0: number; dur: number; spring?: boolean },
 		lastInput: 0, hover: false, rampT: 0, lastT: 0, dt: 16,
+		// Parked: the reader zoomed in or moved the space to look at something, so
+		// it holds still (no idle turning) until Show everything or a zoom back out
+		// to the overview (2026-11-26: "when zoom can show more, not rotate").
+		parked: false, homeZoom: 0,
 		drag: null as null | { x: number; y: number; yaw: number; pitch: number; fx: number; fy: number; pan: boolean; moved: boolean },
 		// Touch: every finger down, and the two-finger gesture (move + pinch) when there are two.
 		pointers: new Map<number, { x: number; y: number }>(),
@@ -186,6 +190,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 			if (s.current.W) {
 				s.current.cam = aim.current(s.current.framed ? s.current.cam : HOME, s.current.W, s.current.H);
 				s.current.tween = null;
+				s.current.parked = false; // a re-frame is a fresh view
 				s.current.framed = true;
 			}
 			kick.current();
@@ -212,7 +217,11 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		return lit && pts.length
 			// Beside the panel: room for the labels right of the outermost dots.
 			? frameCamera(pts, facing, W, H, boxAbove({ top: 56, bottom: 0.9, margin: side ? 70 : 110 }, H, insetRef.current, side ? rightRef.current + 110 : 0))
-			: frameCamera(hullPts, { ...cam, pitch: HOME.pitch }, W, H, boxAbove(HOME_BOX, H, insetRef.current, rightRef.current));
+			: (() => {
+				const home = frameCamera(hullPts, { ...cam, pitch: HOME.pitch }, W, H, boxAbove(HOME_BOX, H, insetRef.current, rightRef.current));
+				s.current.homeZoom = home.zoom; // the overview's zoom: zooming back to it un-parks
+				return home;
+			})();
 	};
 
 	// Fly to the selected path, or back to the whole space.
@@ -224,6 +233,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		if (!st.W) return;
 		if (first.current) { first.current = false; return; }
 		const to = aim.current(st.cam, st.W, st.H);
+		if (!lit) st.parked = false;
 		if (reduced) st.cam = to; else st.tween = { from: { ...st.cam }, to, t0: performance.now(), dur: 820, spring: !!lit };
 		st.lastInput = performance.now();
 		kick.current();
@@ -249,7 +259,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 			// picks up again 1.5 s after the pointer leaves): turning under the
 			// pointer slid every dot and label away from what you aimed at, so
 			// hovers landed on the wrong node or on nothing (user, 2026-11-25).
-			const wantTurn = !reduced && !st.drag && !st.tween && !st.hover && !hoveredRef.current && !lit && t - st.lastInput > AUTO_ROTATE_IDLE_MS;
+			const wantTurn = !reduced && !st.parked && !st.drag && !st.tween && !st.hover && !hoveredRef.current && !lit && t - st.lastInput > AUTO_ROTATE_IDLE_MS;
 			st.rampT = Math.max(0, Math.min(1, st.rampT + (wantTurn ? 1 : -1) * (dt / 400)));
 			if (st.rampT > 0) { st.cam = { ...st.cam, yaw: st.cam.yaw + AUTO_ROTATE_RAD_PER_MS * dt * easeInOutCubic(st.rampT) }; moving = true; }
 			if (wantTurn && st.rampT < 1) moving = true;
@@ -543,9 +553,12 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		const zoom = Math.max(0.25, Math.min(2.6, c.zoom * f)), k = zoom / c.zoom;
 		const px = at?.x ?? st.W / 2, py = at?.y ?? st.H / 2;
 		st.cam = { ...c, zoom, focusX: px - st.W / 2 - (px - st.W / 2 - c.focusX) * k, focusY: py - st.H / 2 - (py - st.H / 2 - c.focusY) * k };
+		// In: hold still to read. Back out to the overview's zoom: turn again.
+		if (f > 1) st.parked = true;
+		else if (st.homeZoom && zoom <= st.homeZoom * 1.02) st.parked = false;
 		touch();
 	};
-	const pan = (dx: number, dy: number) => { const c = s.current.cam; s.current.cam = { ...c, focusX: c.focusX + dx, focusY: c.focusY + dy }; touch(); };
+	const pan = (dx: number, dy: number) => { const c = s.current.cam; s.current.cam = { ...c, focusX: c.focusX + dx, focusY: c.focusY + dy }; s.current.parked = true; touch(); };
 	const local = (e: { clientX: number; clientY: number }) => {
 		const r = boxRef.current?.getBoundingClientRect();
 		return { x: e.clientX - (r?.left ?? 0), y: e.clientY - (r?.top ?? 0) };
@@ -553,6 +566,8 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 	const reset = () => {
 		const st = s.current;
 		const to = frameCamera(hullPts, HOME, st.W, st.H, boxAbove(HOME_BOX, st.H, insetRef.current, rightRef.current));
+		st.homeZoom = to.zoom;
+		st.parked = false;
 		if (reduced) st.cam = to; else st.tween = { from: { ...st.cam }, to, t0: performance.now(), dur: 600 };
 		st.lastInput = performance.now();
 		onSelect(null);
@@ -592,6 +607,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 			const zoom = Math.max(0.25, Math.min(2.6, p.zoom * (Math.hypot(a.x - b.x, a.y - b.y) / p.dist))), k = zoom / p.zoom;
 			// Moved by the midpoint, scaled about it.
 			st.cam = { ...st.cam, zoom, focusX: mx - st.W / 2 - (p.mx - st.W / 2 - p.fx) * k, focusY: my - st.H / 2 - (p.my - st.H / 2 - p.fy) * k };
+			st.parked = true;
 			touch();
 			return;
 		}
@@ -608,6 +624,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		const dx = e.clientX - d.x, dy = e.clientY - d.y;
 		if (!d.moved && Math.hypot(dx, dy) < 5) return;
 		if (!d.moved) { d.moved = true; (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); setPanning(d.pan); }
+		if (d.pan) st.parked = true;
 		st.cam = d.pan
 			? { ...st.cam, focusX: d.fx + dx, focusY: d.fy + dy }
 			: { ...st.cam, yaw: d.yaw + dx * 0.006, pitch: Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, d.pitch + dy * 0.004)) };
@@ -830,6 +847,7 @@ function MouseHelp() {
 		[<MouseGlyph left right className="w-3.5 h-5" />, "Both buttons (or right, or shift) + drag to move"],
 		[<MouseGlyph wheel className="w-3.5 h-5" />, "⌘/ctrl + scroll to zoom"],
 		[<TwoFingerGlyph />, "Two-finger drag to move · pinch to zoom"],
+		[<RotateCcw className="h-3.5 w-3.5" aria-hidden />, "Zoomed in or moved, it holds still; ⟲ shows everything and turns again"],
 	];
 	return (
 		<div className="relative group">
