@@ -13,7 +13,8 @@
 import { parseDocument, isMap, isSeq, type Document, YAMLMap, YAMLSeq } from "yaml";
 
 export interface FeedbackMetric { name: string; better: "higher" | "lower"; target?: number }
-export interface FeedbackStep { step: string; metrics: FeedbackMetric[] }
+/** `service`: the instrument that measures this step (identity's /me/measure registry). */
+export interface FeedbackStep { step: string; metrics: FeedbackMetric[]; service?: string }
 
 export interface SpecWorkflow {
 	id: string;
@@ -64,6 +65,7 @@ function feedbackOf(v: unknown): FeedbackStep[] {
 				const t = Number(mo.target);
 				return { name: s(mo.name), better: s(mo.better).toLowerCase() === "lower" ? "lower" : "higher", ...(mo.target != null && Number.isFinite(t) ? { target: t } : {}) } as FeedbackMetric;
 			}).filter((m) => m.name),
+			...(s(o.service).trim() ? { service: s(o.service).trim() } : {}),
 		};
 	}).filter((st) => st.step);
 }
@@ -201,7 +203,7 @@ export function addWorkflows(text: string, entries: NewWorkflow[], node?: SpecNo
 		if (e.inputs && Object.keys(e.inputs).length) entry.inputs = e.inputs;
 		if (e.data?.length) entry.data = e.data;
 		if (e.compute && Object.values(e.compute).some(Boolean)) entry.compute = Object.fromEntries(Object.entries(e.compute).filter(([, v]) => v));
-		if (e.feedback?.length) entry.feedback = e.feedback.map((f) => ({ step: f.step, metrics: f.metrics.map((m) => ({ name: m.name, better: m.better, ...(m.target != null ? { target: m.target } : {}) })) }));
+		if (e.feedback?.length) entry.feedback = e.feedback.map((f) => ({ step: f.step, ...(f.service ? { service: f.service } : {}), metrics: f.metrics.map((m) => ({ name: m.name, better: m.better, ...(m.target != null ? { target: m.target } : {}) })) }));
 		seq.add(d.createNode(entry));
 	}
 	return String(d);
@@ -281,7 +283,7 @@ export function setFeedback(text: string, workflowId: string, feedback: Feedback
 	const w = findWorkflow(d, workflowId);
 	if (!w) throw new Error(`No workflow "${workflowId}"`);
 	if (feedback.length) {
-		w.set("feedback", d.createNode(feedback.map((f) => ({ step: f.step, metrics: f.metrics.map((m) => ({ name: m.name, better: m.better, ...(m.target != null ? { target: m.target } : {}) })) }))));
+		w.set("feedback", d.createNode(feedback.map((f) => ({ step: f.step, ...(f.service ? { service: f.service } : {}), metrics: f.metrics.map((m) => ({ name: m.name, better: m.better, ...(m.target != null ? { target: m.target } : {}) })) }))));
 	} else {
 		w.delete("feedback");
 	}

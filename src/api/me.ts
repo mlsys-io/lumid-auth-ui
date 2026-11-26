@@ -653,6 +653,8 @@ export const me = {
   // Workstream E — skills as a first-class surface.
   // Workstream F — cross-app experiments aggregate.
   experimentsAll: () => call<{ experiments: Array<MeExperiment & { app: string }>; count: number }>("GET", "/experiments"),
+  // Central measurement: the instruments identity can measure with (/me/measure).
+  measureInstruments: () => call<{ instruments: import("@/lib/measure").MeasureInstrument[] }>("GET", "/measure/instruments"),
   // Offer lifecycle rides the run-feedback verb: POST /me/runs/:run_id/feedback
   // {verdict: good|bad|neutral} (was /cycles/feedback, which took a -1/0/+1
   // `rating`). The extra fields (kind, label, output_id) pass through.

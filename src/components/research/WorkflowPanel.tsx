@@ -23,6 +23,8 @@ import { compareVerdict, runMetricValues, sideStats, type SideStats } from "@/li
 import { workflowStatusLine, fmtAgo, fmtDuration, dirIdToSec } from "@/lib/activity";
 import { humanId, versionsOf } from "@/lib/research-map";
 import { humanMetric, fmtMetricValue, measuredLine } from "@/lib/run-answer";
+import { instrumentChoices, instrumentName, measuredBy } from "@/lib/measure";
+import { useInstruments } from "@/hooks/useInstruments";
 
 const mLabel = (name: string) => humanMetric(name).label;
 /** A metric value with its unit, the way the run page writes it. */
@@ -285,7 +287,10 @@ function OverviewView({ app, wf, spec, row, cycles, variants, helpers, exps, onS
 					<p className="text-caption text-ink-600">It declares no feedback steps yet — add them under Feedback.</p>
 				) : steps.map((st) => (
 					<div key={st.step} className="rounded-lg border border-ink-100 px-2.5 py-1.5">
-						<div className="text-micro font-medium uppercase tracking-wide text-ink-600">{humanId(st.step)}</div>
+						<div className="flex items-baseline gap-1.5">
+							<span className="text-micro font-medium uppercase tracking-wide text-ink-600">{humanId(st.step)}</span>
+							{"service" in st && st.service && <span className="truncate text-micro text-plum-700" title={measuredBy(st.service) ?? undefined}>by {instrumentName(st.service)}</span>}
+						</div>
 						{st.metrics.map((m) => {
 							const l = metricLine(m.name, latest?.[m.name], m.target, m.better);
 							return (
@@ -540,6 +545,7 @@ function FeedbackView({ app, wf, cycles, save, editable }: {
 	save: (edit: (t: string) => string) => Promise<unknown>; editable: boolean;
 }) {
 	const latest = useLatestMetrics(app, wf.id, cycles);
+	const instruments = useInstruments();
 	const [draft, setDraft] = useState<FeedbackStep[]>(wf.feedback);
 	const [saving, setSaving] = useState(false);
 	useEffect(() => { setDraft(wf.feedback); }, [wf.feedback]);
@@ -565,6 +571,17 @@ function FeedbackView({ app, wf, cycles, save, editable }: {
 							className="h-7 min-w-0 flex-1 rounded-md border border-ink-200 bg-card px-2 text-caption text-ink-900" placeholder="e.g. sandbox" />
 						{editable && <button type="button" aria-label="Remove step" onClick={() => setDraft((d) => d.filter((_, j) => j !== i))} className="rounded p-1 text-ink-600 hover:bg-ink-100 hover:text-brick-700"><Trash2 className="h-3.5 w-3.5" /></button>}
 					</div>
+					{/* Which shared instrument measures this step (identity /me/measure). */}
+					<div className="flex items-center gap-1.5 text-micro">
+						<label className="text-ink-600" htmlFor={`svc-${wf.id}-${i}`}>Measured by</label>
+						<select id={`svc-${wf.id}-${i}`} value={st.service ?? ""} disabled={!editable}
+							onChange={(e) => upd(i, (s) => { const { service: _drop, ...rest } = s; return e.target.value ? { ...rest, service: e.target.value } : rest; })}
+							className="h-6 min-w-0 flex-1 rounded-md border border-ink-200 bg-card px-1 text-micro text-ink-800">
+							<option value="">the app itself</option>
+							{instrumentChoices(instruments).map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+						</select>
+					</div>
+					{st.service && <p className="text-micro text-ink-700">{measuredBy(st.service, instruments)}</p>}
 					{st.metrics.map((m, k) => (
 						<div key={k} className="flex items-center gap-1.5 text-caption">
 							<input aria-label="Metric" list={`metrics-${wf.id}`} value={m.name} disabled={!editable} onChange={(e) => upd(i, (s) => ({ ...s, metrics: s.metrics.map((x, q) => (q === k ? { ...x, name: e.target.value } : x)) }))}

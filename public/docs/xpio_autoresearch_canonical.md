@@ -136,6 +136,7 @@ workflows:                              # the graph's first layer
     data: [protocol_v1]
     feedback:                                    # the steps that measure a run, cheapest first
       - step: simulator
+        service: mlsys-simulator                 # the shared instrument that measures it (see below)
         metrics: [{name: goodput_tok_s, better: higher, target: 900}]
   - id: sandbox
     parent: simulate                             # a VARIANT: a workflow made from another
@@ -144,7 +145,7 @@ workflows:                              # the graph's first layer
     compute: {site: home, gpu: 24Gi}
     feedback:
       - {step: simulator, metrics: [{name: goodput_tok_s, better: higher}]}
-      - {step: sandbox,   metrics: [{name: ttft_ms_p99, better: lower}]}
+      - {step: sandbox,   service: mlsys-sandbox, metrics: [{name: ttft_ms_p99, better: lower}]}
   - id: coach
     helper: true                                 # housekeeping: folds into its parent on the graph
     steps: {python: coach}
@@ -190,6 +191,26 @@ pages:                                  # the app's own pages, after Studio's Gr
 Studio edits this file for you: **Make a variant** appends a workflow (with its DAG, notes or Python
 file, saved together); moving a workflow into a node sets its `node`; the Feedback view edits
 `feedback`. Python steps can only be added by admins. A user's own workflows survive **Get updates**.
+
+### Measure, don't wrap (central measurement, 2026-11-26)
+
+A feedback step that runs a shared instrument names it: `service: <instrument>`. The instrument
+measures; the app asks for a **measurement** instead of wrapping the instrument in its own job:
+`POST /api/v1/me/measure {instrument, inputs}` (SDK `measure()`, MCP tool `measure`;
+`GET /me/measure/instruments` lists them). Identical measurements run once and are read many times —
+the key is the content (instrument, its pinned version, canonical inputs).
+
+| Instrument | Measures | Reused |
+|---|---|---|
+| `mlsys-simulator` | a design on the pinned simulator image | by everyone — seeded and pinned |
+| `lqt-backtest` | a strategy on recorded market history | everyone when the replay used recorded prints over a past window the claim pinned and read no recorded signals; otherwise only the submitter |
+| `mlsys-sandbox` | a design on ONE real GPU | never — every GPU run is fresh; identity checks for a free GPU and the per-user GPU quota first |
+
+Answers: `succeeded` (`result.reused` says when an identical earlier run answered, `result.share`
+who may reuse it), `running`/`queued` (`retry_after`), `failed`, or `not_measured` with the reason in
+words (no free GPU, a quota, a job nobody picked up — cancelled, not left queued). A run reports where
+its number came from in `measured_on` ("Simulated RTX 5080 (mlsys-simulator v0.1.3) · reused from an
+identical run"); the run page and the panel show it.
 
 ## Required `xpcloud.yaml` schema
 
