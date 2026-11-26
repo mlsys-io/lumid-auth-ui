@@ -131,6 +131,11 @@ const CELLS = 28;
 const DONE_SHADE = ["bg-lagoon-300", "bg-lagoon-200", "bg-lagoon-400", "bg-lagoon-200", "bg-lagoon-300", "bg-lagoon-400", "bg-lagoon-200"];
 const shade = (i: number) => DONE_SHADE[(i * 3 + (i >> 2)) % DONE_SHADE.length];
 const CELL_GRID = "grid grid-cols-[repeat(14,minmax(0,1fr))] gap-[2px]";
+// Tile height, shared by run tiles, "+N more" and free slots (was 118px; the
+// panel read tall — squeezed 2026-11-26). Cells are fixed-height bars, not
+// squares, so a wide rail doesn't grow them.
+const TILE_H = "h-[100px]";
+const CELL = "h-1.5 rounded-[2px]";
 const hhmm = (sec: number) => new Date(sec * 1000).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
 function minsAgo(sec: number, now: number): string {
 	const m = Math.max(0, Math.round((now - sec) / 60));
@@ -145,7 +150,7 @@ function Tile({ to, label, startedAt, now, live, title, action, cells, late, bar
 }) {
 	return (
 		<Link to={to} aria-label={label} data-tile="run"
-			className={cn("group relative flex h-[118px] min-w-0 flex-col overflow-hidden rounded-lg border bg-card px-2.5 pb-2 pt-1.5 shadow-e1 animate-lumen-rise transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:shadow-e2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
+			className={cn("group relative flex", TILE_H, "min-w-0 flex-col overflow-hidden rounded-lg border bg-card px-2.5 pb-2 pt-1.5 shadow-e1 animate-lumen-rise transition-[border-color,box-shadow,transform] duration-150 hover:-translate-y-px hover:shadow-e2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
 				late ? "border-ember-200" : "border-ink-200 hover:border-lagoon-300")}>
 			{bar && <span aria-hidden className={cn("absolute inset-y-0 left-0 w-[3px]", bar)} />}
 			<div className="flex items-center gap-1.5 font-mono text-nano tabular-nums text-ink-600">
@@ -153,7 +158,7 @@ function Tile({ to, label, startedAt, now, live, title, action, cells, late, bar
 				<span className="text-ink-800">{hhmm(startedAt)}</span>
 				<span className="ml-auto truncate">{minsAgo(startedAt, now)}</span>
 			</div>
-			<div className="mt-1 line-clamp-2 text-caption font-medium leading-snug text-ink-900">{title}</div>
+			<div className="mt-0.5 line-clamp-2 text-caption font-medium leading-snug text-ink-900">{title}</div>
 			<div className="mt-0.5 truncate text-micro italic text-ink-600">{action}</div>
 			<div className="mt-auto">{cells}</div>
 		</Link>
@@ -168,7 +173,7 @@ function ProgressCells({ p, elapsed, late }: { p: number | null; elapsed: number
 	return (
 		<div className={CELL_GRID} title={tip} aria-hidden>
 			{Array.from({ length: CELLS }, (_, i) => (
-				<span key={i} className={cn("aspect-square rounded-[2px]",
+				<span key={i} className={cn(CELL,
 					i < done ? (late ? "bg-ember-200" : shade(i))
 						: i === done ? (late ? "bg-ember-500 animate-lumen-breathe" : "bg-lagoon-500 animate-lumen-breathe")
 							: "bg-ink-100")} />
@@ -184,7 +189,7 @@ function StepCells({ est }: { est: StepEstimate }) {
 		<div className={CELL_GRID} aria-hidden>
 			{steps.map((st, i) => (
 				<span key={i} title={`${st.stage ? st.stage + " · " : ""}${st.name}`}
-					className={cn("aspect-square rounded-[2px]", st.state === "done" ? shade(i) : st.state === "now" ? "bg-lagoon-500 animate-lumen-breathe" : "bg-ink-100")} />
+					className={cn(CELL, st.state === "done" ? shade(i) : st.state === "now" ? "bg-lagoon-500 animate-lumen-breathe" : "bg-ink-100")} />
 			))}
 		</div>
 	);
@@ -292,7 +297,7 @@ export default function RunningNow({ app, runs = true, jobs = true }: { app?: st
 					{shownJobs.map((j) => <JobTile key={j.job_id} job={j} now={now} />)}
 					{shownFleet.map((j) => <FleetTile key={j.id} job={j} now={now} />)}
 					{overflow && (
-						<Link to={allHref} className="flex h-[118px] flex-col items-center justify-center gap-1 rounded-lg border border-ink-200 bg-muted/40 text-caption text-ink-700 transition-colors hover:bg-muted">
+						<Link to={allHref} className={cn("flex flex-col items-center justify-center gap-1 rounded-lg border border-ink-200 bg-muted/40 text-caption text-ink-700 transition-colors hover:bg-muted", TILE_H)}>
 							<span className="font-mono text-title tabular-nums text-ink-900">+{more}</span>
 							<span className="inline-flex items-center gap-1">more running <ArrowRight className="h-3 w-3" /></span>
 						</Link>
@@ -300,7 +305,7 @@ export default function RunningNow({ app, runs = true, jobs = true }: { app?: st
 					{Array.from({ length: freeSlots }, (_, i) => (
 						// The first free slot says what starts next (or that runs start here).
 						<div key={`free${i}`} data-slot={i === 0 ? "next" : "free"}
-							className="flex h-[118px] flex-col justify-end rounded-lg border border-dashed border-ink-200 p-2.5 text-micro leading-snug">
+							className={cn("flex flex-col justify-end rounded-lg border border-dashed border-ink-200 p-2.5 text-micro leading-snug", TILE_H)}>
 							{i === 0 ? slotText : null}
 						</div>
 					))}
