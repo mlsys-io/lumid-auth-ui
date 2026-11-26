@@ -23,7 +23,7 @@ import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type Reac
 import { Minus, Plus, RotateCcw } from "lucide-react";
 import type { MapEdge, MapNode } from "@/lib/research-map";
 import {
-	AUTO_ROTATE_IDLE_MS, AUTO_ROTATE_RAD_PER_MS, DISTANCE, FOCAL, HOME, PITCH_LIMIT, depthCue, dustField, easeInOutCubic, frameCamera, layoutSpace, mixCamera, project, sceneFloor, turnHull,
+	AUTO_ROTATE_IDLE_MS, AUTO_ROTATE_RAD_PER_MS, DISTANCE, FOCAL, HOME, PITCH_LIMIT, depthCue, dustField, easeInOutCubic, frameCamera, layoutSpace, nearestYaw, project, sceneFloor, stepCameraSpring, turnHull, ZERO_VEL, type CameraVel,
 	type Camera,
 } from "@/lib/space3d";
 import { cn } from "@/lib/utils";
@@ -70,7 +70,7 @@ const HINT_KEY = "space3d_hint_seen_v1";
  *  pixel size read tiny on a big screen and crowded on a small one. */
 const uiScale = (W: number, H: number) => Math.max(0.9, Math.min(1.35, Math.sqrt((W * H) / (900 * 560))));
 /** Arcs per floor ring (each fades with its own depth) and spokes on the floor. */
-const RING_SEGMENTS = 36;
+const RING_SEGMENTS = 18;
 const SPOKES = 24;
 
 // Framing for the whole space: dots are small, so the margin only has to
@@ -84,7 +84,46 @@ const boxAbove = (box: { top: number; bottom: number; margin: number; maxZoom?: 
 });
 
 // A gentle spring: overshoots ~6% and settles (selection flies in, lands).
-const easeOutBack = (t: number) => { const c1 = 1.2, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+
+// The stage canvas's colours, read once from palette classes on a hidden probe
+// (no hex here: palette.json stays the source). Cached once the CSS has applied.
+type StageColors = { floorCore: string; floorMid: string; floorEdge: string; shadowCore: string; shadowEdge: string; ink300: string; plum300: string };
+let stageColorCache: StageColors | null = null;
+function withAlpha(color: string, a: number): string {
+	const m = /rgba?\(([\d.]+)[ ,]+([\d.]+)[ ,]+([\d.]+)(?:[ ,/]+([\d.]+))?/.exec(color);
+	if (!m) return "rgba(0, 0, 0, 0)";
+	return `rgba(${m[1]}, ${m[2]}, ${m[3]}, ${(a * (m[4] === undefined ? 1 : Number(m[4]))).toFixed(3)})`;
+}
+function stageColors(probe: SVGSVGElement | null): StageColors {
+	if (stageColorCache) return stageColorCache;
+	const k = probe?.children;
+	const none = "rgba(0, 0, 0, 0)";
+	if (!k || k.length < 7) return { floorCore: none, floorMid: none, floorEdge: none, shadowCore: none, shadowEdge: none, ink300: none, plum300: none };
+	const stop = (i: number) => { const cs = getComputedStyle(k[i]); return withAlpha(cs.stopColor, parseFloat(cs.stopOpacity || "1")); };
+	const stroke = (i: number) => withAlpha(getComputedStyle(k[i]).stroke, 1);
+	const c = { floorCore: stop(0), floorMid: stop(1), floorEdge: stop(2), shadowCore: stop(3), shadowEdge: stop(4), ink300: stroke(5), plum300: stroke(6) };
+	// Only remember real colours (a probe read before the stylesheet applied is all black/none).
+	if (c.ink300 !== none && c.ink300 !== "rgba(0, 0, 0, 1.000)") stageColorCache = c;
+	return c;
+}
+
+// Write-if-changed for the frame loop: ~900 attribute writes a frame, a quarter
+// of them unchanged, and every SVG geometry write is a style recalculation.
+const lastWrite = new WeakMap<Element, Record<string, string>>();
+function setA(el: Element, name: string, v: string) {
+	let m = lastWrite.get(el); if (!m) { m = {}; lastWrite.set(el, m); }
+	if (m[name] !== v) { m[name] = v; el.setAttribute(name, v); }
+}
+function setS(el: HTMLElement | SVGElement, prop: "opacity" | "transform" | "zIndex" | "filter" | "visibility" | "pointerEvents", v: string) {
+	let m = lastWrite.get(el); if (!m) { m = {}; lastWrite.set(el, m); }
+	const k = "style:" + prop;
+	if (m[k] !== v) { m[k] = v; el.style[prop] = v; }
+}
+
+// Sink and float: world units of vertical bob, and the period range.
+const BOB_UNITS = 11, BOB_MS = 5200, BOB_SPREAD_MS = 1800;
+// A mouse left still this long over empty space counts as idle (the space turns).
+const POINTER_REST_MS = 3000;
 
 export default function Space3D({ nodes, edges, renderCard, renderDot, describe, selected, onSelect, lit, grow, order, height, evidence, insetBottom = 0, insetRight = 0, edgeClass, hoverCard }: Space3DProps) {
 	const insetRef = useRef(insetBottom);
@@ -102,7 +141,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 	const haloEls = useRef(new Map<string, SVGPathElement>());
 	// Every node rides a damped spring toward where the camera puts it: the
 	// space lags a touch behind a drag, overshoots and settles; a new node
-	// springs out of its parent; a hovered node's neighbours lean toward it.
+	// springs out of its parent.
 	const springs = useRef(new Map<string, { x: number; y: number; vx: number; vy: number }>());
 	const labelEls = useRef(new Map<string, SVGTextElement>());
 	// Each dot's label element and its unscaled size (text never changes).
@@ -110,7 +149,15 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 	// Whether each dot's label is showing, and since when it has wanted the
 	// other state (labels change only after ~0.45 s, so they don't blink).
 	const labelState = useRef(new Map<string, { shown: boolean; since: number }>());
-	const pos = useMemo(() => layoutSpace(nodes), [nodes]);
+	// The layout follows the tree's SHAPE (ids, parents, depths), not the array:
+	// every background refresh rebuilds `nodes`, and re-laying out on identity
+	// re-framed the camera, un-parked a zoomed reader and replayed the fly home
+	// mid-turn (2026-11-26: "rotate a while and then change a lot").
+	const shapeKey = nodes.map((n) => `${n.id}<${n.parent ?? ""}@${n.depth}`).join("|");
+	const shapeNodes = useRef(nodes);
+	if (shapeNodes.current !== nodes && shapeKey !== shapeNodes.current.map((n) => `${n.id}<${n.parent ?? ""}@${n.depth}`).join("|")) shapeNodes.current = nodes;
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	const pos = useMemo(() => layoutSpace(shapeNodes.current), [shapeKey]);
 	// A fixed order for label priority among equals (see declutter).
 	const nodeIndex = useMemo(() => new Map(nodes.map((n, i) => [n.id, i])), [nodes]);
 	// Particles: fixed offsets per node (seeded by its id, so they don't jump
@@ -142,29 +189,65 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 	// half bare (2026-11-26, "should be more balanced"). HOME_BOX leaves the
 	// bottom band for the floor instead.
 	const hullPts = useMemo(() => turnHull([...pos.values()]), [pos]);
-	const floorEl = useRef<SVGPathElement>(null);
-	const ringEls = useRef<Array<SVGPathElement | null>>([]);
-	const spokeEls = useRef<Array<SVGPathElement | null>>([]);
-	const shadowEls = useRef(new Map<string, SVGEllipseElement>());
-	const stemEls = useRef(new Map<string, SVGPathElement>());
-	const dustEls = useRef<Array<SVGCircleElement | null>>([]);
+	const stageEl = useRef<HTMLCanvasElement>(null);
+	const colorProbe = useRef<SVGSVGElement>(null);
 	const uid = useId().replace(/:/g, "");
 	// Each node drifts a little on its own phase (the space breathes).
 	const phase = useMemo(() => {
 		const m = new Map<string, number>();
-		nodes.forEach((n, i) => m.set(n.id, (i * 2.399963) % (2 * Math.PI)));
+		shapeNodes.current.forEach((n, i) => m.set(n.id, (i * 2.399963) % (2 * Math.PI)));
 		return m;
-	}, [nodes]);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [shapeKey]);
+	// Sink and float (2026-11-26): each dot keeps its own drift clock, which
+	// eases to a stop while the dot is hovered or selected — what you point at
+	// decelerates where it is (no jump under the pointer); the rest keep breathing.
+	const bobClock = useRef(new Map<string, { c: number; v: number }>());
 	const hoveredRef = useRef<string | null>(null);
 	hoveredRef.current = hovered;
+	// Hover intent (2026-11-26, "hover still causes lots of flickering"): a dot
+	// that opens its card on hover changes size under the pointer, and a nearby
+	// dot then caught the pointer, took the hover, and the two swapped back and
+	// forth (measured: 5 swaps in 3 s on a version dot). Now a node that takes
+	// the hover keeps it from its neighbours for a moment, and leaving clears it
+	// only after a short grace — re-entering cancels.
+	const hoverLeaveTimer = useRef<number | undefined>(undefined);
+	const hoverLockUntil = useRef(0);
+	// A node entered while another held the lock: it takes over when the lock
+	// expires, if the pointer is still on it (no second pointerenter will come).
+	const hoverPending = useRef<string | null>(null);
+	const hoverPendingTimer = useRef<number | undefined>(undefined);
+	const enterNode = (id: string) => {
+		const now = performance.now();
+		if (hoveredRef.current && hoveredRef.current !== id && now < hoverLockUntil.current) {
+			hoverPending.current = id;
+			window.clearTimeout(hoverPendingTimer.current);
+			hoverPendingTimer.current = window.setTimeout(() => {
+				if (hoverPending.current === id) { hoverPending.current = null; enterNode(id); }
+			}, hoverLockUntil.current - now + 10);
+			return;
+		}
+		window.clearTimeout(hoverLeaveTimer.current);
+		if (hoveredRef.current !== id) { hoverLockUntil.current = now + 300; setHovered(id); }
+	};
+	const leaveNode = (id: string) => {
+		if (hoverPending.current === id) hoverPending.current = null;
+		window.clearTimeout(hoverLeaveTimer.current);
+		hoverLeaveTimer.current = window.setTimeout(() => setHovered((h) => (h === id ? null : h)), 180);
+	};
+	useEffect(() => () => { window.clearTimeout(hoverLeaveTimer.current); window.clearTimeout(hoverPendingTimer.current); }, []);
 	const reduced = useMemo(prefersReducedMotion, []);
 
 	// Mutable scene state, read by the frame loop.
 	const s = useRef({
 		W: 0, H: 0,
 		cam: { ...HOME } as Camera,
-		tween: null as null | { from: Camera; to: Camera; t0: number; dur: number; spring?: boolean },
-		lastInput: 0, hover: false, rampT: 0, lastT: 0, dt: 16,
+		// Large camera moves (fly-to, fly back, Show everything, zoom buttons,
+		// arrow keys) settle on a SPRING toward camTarget (2026-11-26, "large
+		// motion needs spring"); direct manipulation clears it and moves 1:1.
+		camTarget: null as null | Camera,
+		camVel: { ...ZERO_VEL } as CameraVel,
+		lastInput: 0, hover: false, lastPointerMove: 0, rampT: 0, lastT: 0, dt: 16,
 		// Parked: the reader zoomed in or moved the space to look at something, so
 		// it holds still (no idle turning) until Show everything or a zoom back out
 		// to the overview (2026-11-26: "when zoom can show more, not rotate").
@@ -183,13 +266,16 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		const el = boxRef.current;
 		if (!el) return;
 		const ro = new ResizeObserver(([e]) => {
-			s.current.W = e.contentRect.width; s.current.H = e.contentRect.height;
+			const { width, height: h } = e.contentRect;
+			// Only a real size change re-frames (observe() reports the current size once).
+			if (s.current.framed && Math.abs(width - s.current.W) < 1 && Math.abs(h - s.current.H) < 1) return;
+			s.current.W = width; s.current.H = h;
 			// Every size change re-frames (not only the first): enlarging or
 			// shrinking the window left the space at the old zoom, off-centre and
 			// at the wrong ratio (user, 2026-11-25). Instant — no fly on resize.
 			if (s.current.W) {
 				s.current.cam = aim.current(s.current.framed ? s.current.cam : HOME, s.current.W, s.current.H);
-				s.current.tween = null;
+				s.current.camTarget = null; s.current.camVel = { ...ZERO_VEL };
 				s.current.parked = false; // a re-frame is a fresh view
 				s.current.framed = true;
 			}
@@ -197,7 +283,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		});
 		ro.observe(el);
 		return () => ro.disconnect();
-	}, [pos, hullPts]);
+	}, []);
 
 	// Where the camera should be for what is selected (or the whole space) at
 	// size W×H — used by the fly-to and by every resize. Rebuilt each render, so
@@ -226,40 +312,55 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 
 	// Fly to the selected path, or back to the whole space.
 	const first = useRef(true);
+	// By content: the parent rebuilds the Set on every data refresh.
+	const litKey = lit ? [...lit].sort().join("|") : "";
+	const prevLit = useRef(litKey);
 	useEffect(() => {
 		const st = s.current;
 		// Read the size now: the height may have just changed with this selection.
 		if (boxRef.current) { st.W = boxRef.current.clientWidth; st.H = boxRef.current.clientHeight; }
 		if (!st.W) return;
-		if (first.current) { first.current = false; return; }
+		if (first.current) { first.current = false; prevLit.current = litKey; return; }
+		const selectionChanged = prevLit.current !== litKey;
+		prevLit.current = litKey;
+		// A reader who zoomed in or moved keeps their view when only the data or
+		// the frame around it changed; a new selection (or deselect) always flies.
+		if (st.parked && !selectionChanged) return;
 		const to = aim.current(st.cam, st.W, st.H);
 		if (!lit) st.parked = false;
-		if (reduced) st.cam = to; else st.tween = { from: { ...st.cam }, to, t0: performance.now(), dur: 820, spring: !!lit };
+		if (reduced) st.cam = to; else springTo(to);
 		st.lastInput = performance.now();
 		kick.current();
-	}, [lit, pos, reduced, selected, insetRight, height, hullPts, nodes]);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [litKey, pos, reduced, selected, insetRight, height, hullPts]);
 
 	// The frame loop.
 	useEffect(() => {
 		const st = s.current;
 		// Once per mount: re-running this effect (hover, selection) must not replay the growth.
 		if (!st.bornAt) st.bornAt = performance.now();
+		// Each dot's current bob (-1 sunk … +1 floated), read by its shadow, and
+		// its screen offset, taken back out before labels are placed.
+		const bobs = new Map<string, number>();
+		const bobOff = new Map<string, [number, number]>();
 		const frame = (t: number) => {
 			st.raf = 0;
 			const dt = Math.min(50, t - (st.lastT || t));
 			st.lastT = t;
 			st.dt = dt || 16;
 			let moving = false;
-			if (st.tween) {
-				const k = Math.min(1, (t - st.tween.t0) / st.tween.dur);
-				st.cam = mixCamera(st.tween.from, st.tween.to, st.tween.spring ? easeOutBack(k) : easeInOutCubic(k));
-				if (k >= 1) st.tween = null; else moving = true;
+			if (st.camTarget) {
+				const r = stepCameraSpring(st.cam, st.camVel, st.camTarget, st.dt / 1000);
+				st.cam = r.cam; st.camVel = r.vel;
+				if (r.done) st.camTarget = null; else moving = true;
 			}
-			// Holds still while the pointer is over the space (it eases to a stop and
-			// picks up again 1.5 s after the pointer leaves): turning under the
-			// pointer slid every dot and label away from what you aimed at, so
-			// hovers landed on the wrong node or on nothing (user, 2026-11-25).
-			const wantTurn = !reduced && !st.parked && !st.drag && !st.tween && !st.hover && !hoveredRef.current && !lit && t - st.lastInput > AUTO_ROTATE_IDLE_MS;
+			// Holds still while the pointer is MOVING over the space, or resting on a
+			// dot: turning under an aiming pointer slid every dot away from what you
+			// aimed at (user, 2026-11-25). A pointer left still over empty space is
+			// idle, like a phone with no pointer at all — before, a laptop whose
+			// mouse sat on the map never turned while the phone did (2026-11-26).
+			const pointerBusy = st.hover && t - st.lastPointerMove < POINTER_REST_MS;
+			const wantTurn = !reduced && !st.parked && !st.drag && !st.camTarget && !pointerBusy && !hoveredRef.current && !lit && t - st.lastInput > AUTO_ROTATE_IDLE_MS;
 			st.rampT = Math.max(0, Math.min(1, st.rampT + (wantTurn ? 1 : -1) * (dt / 400)));
 			if (st.rampT > 0) { st.cam = { ...st.cam, yaw: st.cam.yaw + AUTO_ROTATE_RAD_PER_MS * dt * easeInOutCubic(st.rampT) }; moving = true; }
 			if (wantTurn && st.rampT < 1) moving = true;
@@ -268,55 +369,82 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 			// The drift keeps the loop alive whenever motion is allowed.
 			if ((moving || growing || wantTurn || !reduced) && !document.hidden) st.raf = requestAnimationFrame(frame);
 		};
-		// The floor and what stands on it. Everything here is drawn in world space
-		// and fades with distance (fog), so it turns with the space and gives the
-		// eye a ground to read depth against.
+		// The floor and what stands on it, painted on ONE canvas (2026-11-26,
+		// "optimise speed"): as ~400 SVG elements it cost a style recalculation of
+		// each one every frame (2.4 ms a frame here, ~10 ms on a 4× slower CPU).
+		// Everything is drawn in world space and fades with distance (fog), so it
+		// turns with the space and gives the eye a ground to read depth against.
 		const SEG = RING_SEGMENTS;
 		const drawStage = (t: number, world: Map<string, { x: number; y: number; z: number }>, proj: Map<string, ReturnType<typeof project>>) => {
 			const { W, H, cam } = st;
+			const cv = stageEl.current;
+			const g = cv?.getContext("2d");
+			if (!cv || !g) return;
+			const C = stageColors(colorProbe.current);
+			const dpr = Math.min(2, window.devicePixelRatio || 1);
+			const pw = Math.round(W * dpr), ph = Math.round(H * dpr);
+			if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; }
+			g.setTransform(dpr, 0, 0, dpr, 0, 0);
+			g.clearRect(0, 0, W, H);
 			const fy = floor.y;
 			const at = (r: number, a: number) => project({ x: r * Math.cos(a), y: fy, z: r * Math.sin(a) }, cam, W, H);
 			const fog = (sc: number) => depthCue(sc, cam.zoom).near;
-			// The plane: a disc out to the rim, filled with a soft pool of light.
-			if (floorEl.current) {
-				let d = "";
-				for (let i = 0; i <= 48; i++) { const q = at(floor.rim, (i / 48) * 2 * Math.PI); d += `${i ? "L" : "M"}${q.x.toFixed(1)},${q.y.toFixed(1)}`; }
-				floorEl.current.setAttribute("d", d + "Z");
+			// The plane: a disc out to the rim, filled with a soft pool of light
+			// (an elliptical radial gradient over the disc's box, as SVG drew it).
+			{
+				g.beginPath();
+				let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+				for (let i = 0; i <= 48; i++) {
+					const q = at(floor.rim, (i / 48) * 2 * Math.PI);
+					if (i) g.lineTo(q.x, q.y); else g.moveTo(q.x, q.y);
+					x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y);
+				}
+				g.closePath();
+				const rx = Math.max(1, (x1 - x0) / 2), ry = Math.max(1, (y1 - y0) / 2);
+				g.save();
+				g.translate((x0 + x1) / 2, (y0 + y1) / 2); g.scale(rx, ry);
+				const grad = g.createRadialGradient(0, 0, 0, 0, 0, 1);
+				grad.addColorStop(0, C.floorCore); grad.addColorStop(0.55, C.floorMid); grad.addColorStop(1, C.floorEdge);
+				g.fillStyle = grad; g.fill();
+				g.restore();
 			}
 			// Rings: SEG arcs each, so the far side fades into the fog; the outer
 			// rim is fainter still (the floor dissolves rather than ends).
 			floor.rings.forEach((r, ri) => {
 				const rim = ri === floor.rings.length - 1;
+				g.strokeStyle = ri === 1 ? C.plum300 : C.ink300;
+				g.lineWidth = ri === 1 ? 1.1 : 0.8;
 				for (let k = 0; k < SEG; k++) {
-					const el = ringEls.current[ri * SEG + k];
-					if (!el) continue;
-					let d = "", sc = 0;
-					for (let j = 0; j <= 3; j++) {
-						const q = at(r, ((k + j / 3) / SEG) * 2 * Math.PI);
-						d += `${j ? "L" : "M"}${q.x.toFixed(1)},${q.y.toFixed(1)}`;
-						if (j === 1) sc = q.scale;
+					g.beginPath();
+					let sc = 0;
+					for (let j = 0; j <= 4; j++) {
+						const q = at(r, ((k + j / 4) / SEG) * 2 * Math.PI);
+						if (j) g.lineTo(q.x, q.y); else g.moveTo(q.x, q.y);
+						if (j === 2) sc = q.scale;
 					}
-					el.setAttribute("d", d);
-					el.style.opacity = ((0.1 + 0.5 * fog(sc)) * (rim ? 0.45 : 1)).toFixed(3);
+					g.globalAlpha = (0.1 + 0.5 * fog(sc)) * (rim ? 0.45 : 1);
+					g.stroke();
 				}
 			});
 			// Spokes from the inner ring to the rim, three pieces each (fog again).
 			const r0 = floor.rings[0];
+			g.strokeStyle = C.ink300; g.lineWidth = 0.6;
 			for (let k = 0; k < SPOKES; k++) {
 				const a = (k / SPOKES) * 2 * Math.PI;
 				for (let j = 0; j < 3; j++) {
-					const el = spokeEls.current[k * 3 + j];
-					if (!el) continue;
 					const ra = r0 + (floor.rim - r0) * (j / 3), rb = r0 + (floor.rim - r0) * ((j + 1) / 3);
 					const p = at(ra, a), q = at(rb, a);
-					el.setAttribute("d", `M${p.x.toFixed(1)},${p.y.toFixed(1)}L${q.x.toFixed(1)},${q.y.toFixed(1)}`);
-					el.style.opacity = ((0.08 + 0.32 * fog((p.scale + q.scale) / 2)) * (1 - j * 0.28)).toFixed(3);
+					g.globalAlpha = (0.08 + 0.32 * fog((p.scale + q.scale) / 2)) * (1 - j * 0.28);
+					g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(q.x, q.y); g.stroke();
 				}
 			}
 			// Shadows and stems. They follow each node's spring (the node lags
 			// its target while the space moves; its shadow lags with it).
 			const base = FOCAL / DISTANCE;
 			const squash = Math.max(0.14, Math.abs(Math.sin(cam.pitch)));
+			const shadowGrad = g.createRadialGradient(0, 0, 0, 0, 0, 1);
+			shadowGrad.addColorStop(0, C.shadowCore); shadowGrad.addColorStop(1, C.shadowEdge);
+			g.setLineDash([2, 3]); g.lineWidth = 0.9; g.strokeStyle = C.plum300;
 			for (const n of nodes) {
 				const w = world.get(n.id), now = proj.get(n.id);
 				if (!w || !now) continue;
@@ -326,36 +454,49 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				const fx = f.x + ox * 0.5, fyS = f.y + oy * 0.5;
 				const dim = !!lit && !lit.has(n.id);
 				const born = grow && !reduced ? Math.max(0, Math.min(1, (t - st.bornAt - (order?.get(n.id) ?? 0) * 70) / 380)) : 1;
-				const sh = shadowEls.current.get(n.id);
-				if (sh) {
+				if (f.visible) {
 					const R = (n.depth === 0 ? 22 : n.kind === "version" ? 8 : 13) * (f.scale / base) * uiScale(W, H);
-					// Higher above the floor → a wider, fainter shadow.
+					// Higher above the floor → a wider, fainter shadow; and as a dot
+					// floats up its shadow spreads and pales, as it sinks the shadow
+					// gathers and darkens (the bob read on the floor).
 					const lift = Math.max(0, Math.min(1, (fy - w.y) / 420));
-					sh.setAttribute("cx", fx.toFixed(1)); sh.setAttribute("cy", fyS.toFixed(1));
-					sh.setAttribute("rx", (R * (1 + 0.5 * lift)).toFixed(1)); sh.setAttribute("ry", (R * (1 + 0.5 * lift) * squash).toFixed(1));
-					sh.style.opacity = (f.visible ? (dim ? 0.08 : 0.35 + 0.45 * fog(f.scale)) * (1 - 0.45 * lift) * born : 0).toFixed(3);
+					const b = bobs.get(n.id) ?? 0;
+					const spread = (1 + 0.5 * lift) * (1 + 0.16 * b);
+					const op = (dim ? 0.08 : 0.35 + 0.45 * fog(f.scale)) * (1 - 0.45 * lift) * (1 - 0.25 * b) * born;
+					if (op > 0.003 && R > 0) {
+						g.save();
+						g.translate(fx, fyS); g.scale(R * spread, R * spread * squash);
+						g.globalAlpha = op; g.fillStyle = shadowGrad;
+						g.beginPath(); g.arc(0, 0, 1, 0, 2 * Math.PI); g.fill();
+						g.restore();
+					}
 				}
-				const stem = stemEls.current.get(n.id);
-				if (stem) {
-					stem.setAttribute("d", `M${now.x.toFixed(1)},${now.y.toFixed(1)}L${fx.toFixed(1)},${fyS.toFixed(1)}`);
-					stem.style.opacity = (f.visible && now.visible ? (dim ? 0.04 : lit?.has(n.id) ? 0.7 : 0.18 + 0.4 * fog(now.scale)) * born : 0).toFixed(3);
+				// Stems only for the app and its experiments: the ring you read height
+				// on. Workflows and suggestion columns would bundle into dashed poles.
+				if ((n.depth === 0 || n.kind === "experiment") && f.visible && now.visible) {
+					g.globalAlpha = (dim ? 0.04 : lit?.has(n.id) ? 0.7 : 0.18 + 0.4 * fog(now.scale)) * born;
+					g.beginPath(); g.moveTo(now.x, now.y); g.lineTo(fx, fyS); g.stroke();
 				}
 			}
+			g.setLineDash([]);
 			// Dust: rises slowly and wraps; near motes larger and brighter.
 			const span = fy - (-fy - 120);
-			dust.forEach((m, i) => {
-				const c = dustEls.current[i];
-				if (!c) return;
+			g.fillStyle = C.plum300;
+			for (const m of dust) {
 				const y = reduced ? m.y : fy - ((((fy - m.y) + t * 0.006 * m.speed) % span) + span) % span;
 				const q = project({ x: m.x, y, z: m.z }, cam, W, H);
+				if (!q.visible) continue;
 				const near = fog(q.scale);
 				// Fade in at the floor and out near the top, so motes never pop.
 				const edge = Math.min(1, (fy - y) / 80, (y + fy + 120) / 80);
-				c.setAttribute("cx", q.x.toFixed(1)); c.setAttribute("cy", q.y.toFixed(1));
+				const op = (0.12 + 0.4 * near) * Math.max(0, edge) * (lit ? 0.5 : 1);
+				if (op <= 0.003) continue;
 				// Motes are specks, not dots ("particles too big", user 2026-11-25): ≤1.4px radius.
-				c.setAttribute("r", Math.min(1.4, Math.max(0.4, 0.6 * m.size * (q.scale / base) * (0.7 + 0.6 * near) * uiScale(W, H))).toFixed(2));
-				c.style.opacity = (q.visible ? (0.12 + 0.4 * near) * Math.max(0, edge) * (lit ? 0.5 : 1) : 0).toFixed(3);
-			});
+				const rr = Math.min(1.4, Math.max(0.4, 0.6 * m.size * (q.scale / base) * (0.7 + 0.6 * near) * uiScale(W, H)));
+				g.globalAlpha = op;
+				g.beginPath(); g.arc(q.x, q.y, rr, 0, 2 * Math.PI); g.fill();
+			}
+			g.globalAlpha = 1;
 		};
 		const draw = (t: number) => {
 			const { W, H, cam } = st;
@@ -364,25 +505,39 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 			const proj = new Map<string, ReturnType<typeof project>>();
 			const world = new Map<string, { x: number; y: number; z: number }>();
 			for (const [id, p] of pos) {
-				// Drift: a few units on each axis, 7–9 s periods, never for the app.
+				// Drift: each dot sinks and floats on its own 5–7 s period (a soft
+				// second harmonic keeps it from reading as a metronome) with a little
+				// sway; never the app. Its shadow answers below.
 				const ph = phase.get(id) ?? 0;
-				const a = reduced || p.x === 0 && p.z === 0 ? 0 : 5;
-				const q = { x: p.x + a * Math.sin(t / 4300 + ph), y: p.y + a * Math.sin(t / 3700 + ph * 1.7), z: p.z + a * Math.cos(t / 4700 + ph) };
+				const on = !reduced && !(p.x === 0 && p.z === 0);
+				let clk = bobClock.current.get(id);
+				if (!clk) { clk = { c: t, v: 1 }; bobClock.current.set(id, clk); }
+				const still = id === hoveredRef.current || id === selected;
+				clk.v += ((still ? 0 : 1) - clk.v) * Math.min(1, st.dt / 320);
+				clk.c += st.dt * clk.v;
+				const c = clk.c;
+				const period = BOB_MS + BOB_SPREAD_MS * (ph / (2 * Math.PI));
+				const bob = on ? 0.82 * Math.sin((c / period) * 2 * Math.PI + ph) + 0.18 * Math.sin((c / period) * 4.6 * Math.PI + ph * 2.3) : 0;
+				const sway = on ? 2 : 0;
+				// World y grows downward: a positive bob lifts the dot.
+				const q = { x: p.x + sway * Math.sin(c / 4300 + ph), y: p.y - BOB_UNITS * bob, z: p.z + sway * Math.cos(c / 4700 + ph) };
+				bobs.set(id, bob);
 				world.set(id, q);
-				proj.set(id, project(q, cam, W, H));
+				const pq = project(q, cam, W, H);
+				proj.set(id, pq);
+				// The bob's on-screen offset: labels are placed from the REST point,
+				// so sinking and floating never decides which label shows.
+				if (on) { const r0 = project({ ...q, y: p.y }, cam, W, H); bobOff.set(id, [pq.x - r0.x, pq.y - r0.y]); } else bobOff.delete(id);
 			}
 			// Springs (screen space). Stiffer near the app, looser further out.
 			const sec = Math.min(0.033, st.dt / 1000);
-			const hov = hoveredRef.current;
-			const hp = hov ? proj.get(hov) : undefined;
-			const nb = new Set<string>();
-			if (hov) for (const e of edges) { if (e.source === hov) nb.add(e.target); else if (e.target === hov) nb.add(e.source); }
 			for (const n of nodes) {
 				const p = proj.get(n.id);
 				if (!p) continue;
-				let tx = p.x, ty = p.y;
-				// Neighbours of the hovered node lean 7px toward it.
-				if (hp && nb.has(n.id)) { const dx = hp.x - p.x, dy = hp.y - p.y, d = Math.hypot(dx, dy) || 1; tx += (dx / d) * 7; ty += (dy / d) * 7; }
+				const tx = p.x, ty = p.y;
+				// Hovering a node changes THAT node only (2026-11-26): neighbours no
+				// longer lean toward it — other nodes moving under the pointer read as
+				// the whole space reacting.
 				let sp = springs.current.get(n.id);
 				if (!sp) {
 					// Born at its parent's spot (or its own when there is none / no motion).
@@ -415,13 +570,15 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				// open cards keep the full depth range.
 				const floor = el.dataset.full !== undefined ? 0.5 : 0.82;
 				const size = Math.max(floor, Math.min(1, (p.scale / (FOCAL / DISTANCE)) * 0.9)) * (dim ? 0.92 : 1) * pick * ui;
-				el.style.transform = `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) translate(-50%, -50%) scale(${(size * (0.9 + 0.1 * born)).toFixed(3)})`;
-				el.style.opacity = String(((dim ? 0.07 : lit ? Math.max(0.9, cue.alpha) : cue.alpha) * born).toFixed(3));
-				el.style.zIndex = String(n.id === selected ? 6000 : lit?.has(n.id) ? 5000 : el.dataset.full !== undefined ? 5500 : Math.round((n.depth === 1 && n.kind === "experiment" ? 4500 : 3000) - p.depth));
+				setS(el, "transform", `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) translate(-50%, -50%) scale(${(size * (0.9 + 0.1 * born)).toFixed(3)})`);
+				setS(el, "opacity", String(((dim ? 0.07 : lit ? Math.max(0.9, cue.alpha) : cue.alpha) * born).toFixed(3)));
+				// The hovered node sits above every other open card: its card must never
+				// have another node's dot on top of it, or that dot takes the pointer.
+				setS(el, "zIndex", String(n.id === selected ? 6000 : n.id === hoveredRef.current ? 5800 : lit?.has(n.id) ? 5000 : el.dataset.full !== undefined ? 5500 : Math.round((n.depth === 1 && n.kind === "experiment" ? 4500 : 3000) - p.depth)));
 				// (First-ring experiments carry an overview panel: it sits above plain
 				// dots, so a version dot never lands on its text.)
-				el.style.filter = dim ? "blur(2.5px)" : cue.near < 0.2 ? "blur(0.5px)" : "none";
-				el.style.visibility = p.visible ? "visible" : "hidden";
+				setS(el, "filter", dim ? "blur(2.5px)" : cue.near < 0.2 ? "blur(0.5px)" : "none");
+				setS(el, "visibility", p.visible ? "visible" : "hidden");
 			}
 			declutter(proj, t);
 			for (const e of edges) {
@@ -437,19 +594,19 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				const mx = (a.x + b.x) / 2 - (dy / len) * bend - (v ? v.vx * 0.035 : 0);
 				const my = (a.y + b.y) / 2 + (dx / len) * bend - (v ? v.vy * 0.035 : 0);
 				const d = `M${a.x.toFixed(1)},${a.y.toFixed(1)} Q${mx.toFixed(1)},${my.toFixed(1)} ${b.x.toFixed(1)},${b.y.toFixed(1)}`;
-				ln.setAttribute("d", d);
+				setA(ln, "d", d);
 				const onPath = !!lit && lit.has(e.source) && lit.has(e.target);
 				const born = grow && !reduced ? Math.max(0, Math.min(1, (t - st.bornAt - (order?.get(e.target) ?? 0) * 70 + 120) / 380)) : 1;
 				const cue = depthCue(Math.min(a.scale, b.scale), cam.zoom);
-				ln.style.opacity = String(((lit ? (onPath ? 1 : 0.05) : 0.35 + 0.55 * cue.near) * born).toFixed(3));
+				setS(ln, "opacity", String(((lit ? (onPath ? 1 : 0.05) : 0.35 + 0.55 * cue.near) * born).toFixed(3)));
 				// Hairlines at the back, a little heavier in front.
 				// Hairlines at the back, heavier in front; all scaled with the box.
 				ln.style.strokeWidth = ((onPath ? 2 : 0.75 + 0.95 * cue.near) * ui).toFixed(2);
 				const halo = haloEls.current.get(e.id);
-				if (halo) { halo.setAttribute("d", d); halo.style.opacity = String((0.55 * born).toFixed(3)); }
+				if (halo) { setA(halo, "d", d); setS(halo, "opacity", String((0.55 * born).toFixed(3))); }
 				const lb = labelEls.current.get(e.id);
 				// The curve's midpoint (t = ½ of a quadratic) carries the label.
-				if (lb) { lb.setAttribute("x", ((a.x + b.x) / 4 + mx / 2).toFixed(1)); lb.setAttribute("y", ((a.y + b.y) / 4 + my / 2 - 6).toFixed(1)); }
+				if (lb) { setA(lb, "x", ((a.x + b.x) / 4 + mx / 2).toFixed(1)); setA(lb, "y", ((a.y + b.y) / 4 + my / 2 - 6).toFixed(1)); }
 			}
 			particles.forEach((pt, i) => {
 				const c = particleEls.current[i];
@@ -462,15 +619,17 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				const cue = depthCue(q.scale, cam.zoom);
 				const dimP = !!lit && !lit.has(pt.node);
 				const bornP = grow && !reduced ? Math.max(0, Math.min(1, (t - st.bornAt - (order?.get(pt.node) ?? 0) * 70 - 300) / 500)) : 1;
-				c.setAttribute("cx", q.x.toFixed(1)); c.setAttribute("cy", q.y.toFixed(1));
-				c.setAttribute("r", Math.min(1.6, Math.max(0.5, 0.9 * ui * q.scale / (FOCAL / DISTANCE))).toFixed(2));
-				c.style.opacity = String((q.visible ? (dimP ? 0.03 : 0.16 + 0.38 * cue.near) * bornP : 0).toFixed(3));
+				setA(c, "cx", q.x.toFixed(1)); setA(c, "cy", q.y.toFixed(1));
+				setA(c, "r", Math.min(1.6, Math.max(0.5, 0.9 * ui * q.scale / (FOCAL / DISTANCE))).toFixed(2));
+				setS(c, "opacity", String((q.visible ? (dimP ? 0.03 : 0.16 + 0.38 * cue.near) * bornP : 0).toFixed(3)));
 			});
 		};
 		// Labels that would collide are hidden, most important first: what's
 		// selected or under the pointer, the app, experiments, suggestions, then
 		// versions last.
-		const rank = (n: MapNode) => (n.id === selected ? 0 : n.id === hovered ? 1 : lit?.has(n.id) ? 2 : n.depth === 0 ? 3 : n.kind === "experiment" ? 4 : n.kind === "suggested" ? 5 : 6);
+		// (The hovered node is NOT ranked up: hovering one node must not hide
+		// another's label.)
+		const rank = (n: MapNode) => (n.id === selected ? 0 : lit?.has(n.id) ? 2 : n.depth === 0 ? 3 : n.kind === "experiment" ? 4 : n.kind === "suggested" ? 5 : 6);
 		const declutter = (proj: Map<string, ReturnType<typeof project>>, t: number) => {
 			const cam0 = st.cam;
 			const placed: Array<[number, number, number, number]> = [];
@@ -484,9 +643,16 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				.sort((a, b) => rank(a.n) - rank(b.n)
 					|| Number(!labelState.current.get(a.n.id)?.shown) - Number(!labelState.current.get(b.n.id)?.shown)
 					|| (nodeIndex.get(a.n.id) ?? 0) - (nodeIndex.get(b.n.id) ?? 0));
-			for (const { n, p, el } of items) {
+			for (const { n, p: pb, el } of items) {
+				const o = bobOff.get(n.id);
+				const p = o ? { ...pb!, x: pb!.x - o[0], y: pb!.y - o[1] } : pb;
 				const size = Number(/scale\(([\d.]+)\)/.exec(el!.style.transform)?.[1] ?? 1);
 				if (el!.dataset.full !== undefined) {
+					// A card opened by HOVER sits on top (z) over an opaque face and
+					// claims nothing: labels under it stay put, so the rest of the space
+					// does not change under the pointer. Selected / path cards claim
+					// their box; labels under those give way.
+					if (n.id === hoveredRef.current && n.id !== selected && !lit?.has(n.id)) continue;
 					// An open card claims its own box; labels under it give way.
 					const w = el!.offsetWidth * size, h = el!.offsetHeight * size;
 					placed.push([p!.x - w / 2, p!.y - h / 2, p!.x + w / 2, p!.y + h / 2]);
@@ -501,7 +667,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				}
 				// Versions are labelled too, but the ones at the back of the space
 				// drop their label (depth of field) unless their experiment is in play.
-				const inPlay = lit?.has(n.id) || hovered === n.id || (n.parent && (hovered === n.parent || selected === n.parent));
+				const inPlay = lit?.has(n.id) || (n.parent && selected === n.parent);
 				const quiet = n.kind === "version" && !inPlay && depthCue(p!.scale, cam0.zoom).near < 0.35;
 				const off = !!lit && !lit.has(n.id);
 				// Always RIGHT of the dot — a label never changes side (moving to the
@@ -511,8 +677,12 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				const box: [number, number, number, number] = [p!.x + 12 * size - 2, p!.y - hh, p!.x + 12 * size + ww, p!.y + hh];
 				// Collide on the label's core, not its padding and halo: a slight
 				// overlap is fine, hiding for it made labels blink.
-				const core: [number, number, number, number] = [box[0] + ww * 0.08, box[1] + hh * 0.35, box[2] - ww * 0.08, box[3] - hh * 0.35];
 				const mem = labelState.current.get(n.id) ?? { shown: false, since: 0 };
+				// Spatial hysteresis on top of the timed one: a showing label holds
+				// until it is overlapped a few px deeper than a hidden one needs
+				// clear to appear.
+				const g = mem.shown ? 3 : -2;
+				const core: [number, number, number, number] = [box[0] + ww * 0.08 + g, box[1] + hh * 0.35 + g, box[2] - ww * 0.08 - g, box[3] - hh * 0.35 - g];
 				labelState.current.set(n.id, mem);
 				const want = !(quiet || off) && !hit(core);
 				if (off) { mem.shown = false; mem.since = 0; } // dimmed by a selection: at once
@@ -524,27 +694,45 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 					if (t - mem.since > (want ? 500 : 700)) { mem.shown = want; mem.since = 0; }
 				}
 				if (mem.shown) placed.push(core);
-				lab.el.style.opacity = mem.shown ? "" : "0";
+				setS(lab.el, "opacity", mem.shown ? "" : "0");
 				// A shown label or panel is part of its node (hover/click); a hidden
 				// one must not catch the pointer meant for what lies under it.
-				lab.el.style.pointerEvents = mem.shown && !off ? "auto" : "none";
-				lab.el.classList.remove("space3d-label-left");
+				setS(lab.el, "pointerEvents", mem.shown && !off ? "auto" : "none");
 			}
 		};
 		kick.current = () => { if (!st.raf) st.raf = requestAnimationFrame(frame); };
 		const onVis = () => { if (!document.hidden) kick.current(); };
 		document.addEventListener("visibilitychange", onVis);
+		// Replace any frame already queued: effects declared above this one (the
+		// fly-to) run first in a commit and kick with the PREVIOUS loop, whose
+		// closure holds the old selection — the dimming then lagged one click
+		// behind (selecting dimmed nothing; closing dimmed everything).
+		cancelAnimationFrame(st.raf); st.raf = 0;
 		kick.current();
 		return () => { cancelAnimationFrame(st.raf); st.raf = 0; document.removeEventListener("visibilitychange", onVis); };
-	}, [pos, nodes, nodeIndex, edges, lit, grow, reduced, order, selected, hovered, particles, phase, floor, dust]);
+	}, [pos, nodes, nodeIndex, edges, lit, grow, reduced, order, selected, particles, phase, floor, dust]);
 
 	// ── input ──────────────────────────────────────────────────────────────
-	const touch = () => { s.current.lastInput = performance.now(); s.current.tween = null; kick.current(); };
-	const turn = (dyaw: number, dpitch: number) => {
-		const c = s.current.cam;
-		s.current.cam = { ...c, yaw: c.yaw + dyaw, pitch: Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, c.pitch + dpitch)) };
-		touch();
+	const touch = () => { s.current.lastInput = performance.now(); s.current.camTarget = null; s.current.camVel = { ...ZERO_VEL }; kick.current(); };
+	// Spring the camera toward `to` (yaw the short way round); keeps the
+	// current velocity, so a second press while moving blends rather than jerks.
+	function springTo(to: Camera) {
+		const st = s.current;
+		st.camTarget = { ...to, yaw: nearestYaw(st.cam.yaw, to.yaw) };
+		st.lastInput = performance.now();
+		kick.current();
+	}
+	// Buttons and keys move by a step: spring to it, from wherever the camera is
+	// already heading.
+	const stepTo = (f: (c: Camera) => Camera) => {
+		const st = s.current;
+		const base = st.camTarget ?? st.cam;
+		if (reduced) { st.cam = f(base); touch(); return; }
+		springTo(f(base));
 	};
+	// Arrow keys: a sprung step, not a jump.
+	const turn = (dyaw: number, dpitch: number) =>
+		stepTo((c) => ({ ...c, yaw: c.yaw + dyaw, pitch: Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, c.pitch + dpitch)) }));
 	// Zoom about a point on screen (the cursor; the centre for keys and buttons):
 	// what's under it stays under it. The floor is below the overview's own
 	// minZoom, so zooming out from a big app's overview never snaps inward.
@@ -559,6 +747,18 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		touch();
 	};
 	const pan = (dx: number, dy: number) => { const c = s.current.cam; s.current.cam = { ...c, focusX: c.focusX + dx, focusY: c.focusY + dy }; s.current.parked = true; touch(); };
+	// Shift+arrows: a sprung move.
+	const panStep = (dx: number, dy: number) => { s.current.parked = true; stepTo((c) => ({ ...c, focusX: c.focusX + dx, focusY: c.focusY + dy })); };
+	// Zoom buttons and +/- keys: a sprung zoom about the centre.
+	const zoomStep = (f: number) => {
+		const st = s.current;
+		if (f > 1) st.parked = true;
+		stepTo((c) => {
+			const zoom = Math.max(0.25, Math.min(2.6, c.zoom * f)), k = zoom / c.zoom;
+			if (f < 1 && st.homeZoom && zoom <= st.homeZoom * 1.02) st.parked = false;
+			return { ...c, zoom, focusX: c.focusX * k, focusY: c.focusY * k };
+		});
+	};
 	const local = (e: { clientX: number; clientY: number }) => {
 		const r = boxRef.current?.getBoundingClientRect();
 		return { x: e.clientX - (r?.left ?? 0), y: e.clientY - (r?.top ?? 0) };
@@ -568,7 +768,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		const to = frameCamera(hullPts, HOME, st.W, st.H, boxAbove(HOME_BOX, st.H, insetRef.current, rightRef.current));
 		st.homeZoom = to.zoom;
 		st.parked = false;
-		if (reduced) st.cam = to; else st.tween = { from: { ...st.cam }, to, t0: performance.now(), dur: 600 };
+		if (reduced) st.cam = to; else springTo(to);
 		st.lastInput = performance.now();
 		onSelect(null);
 		kick.current();
@@ -600,6 +800,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 	};
 	const onPointerMove = (e: React.PointerEvent) => {
 		const st = s.current;
+		if (e.pointerType === "mouse") st.lastPointerMove = performance.now();
 		if (st.pointers.has(e.pointerId)) st.pointers.set(e.pointerId, local(e));
 		if (st.pinch && st.pointers.size >= 2) {
 			const [a, b] = [...st.pointers.values()], p = st.pinch;
@@ -668,10 +869,10 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		if (e.target !== e.currentTarget) return; // cards handle their own keys
 		const k = e.key;
 		// Shift + arrows move the space; arrows alone turn it.
-		if (e.shiftKey && k.startsWith("Arrow")) pan(k === "ArrowLeft" ? 40 : k === "ArrowRight" ? -40 : 0, k === "ArrowUp" ? 40 : k === "ArrowDown" ? -40 : 0);
-		else if (k === "ArrowLeft") turn(-0.12, 0); else if (k === "ArrowRight") turn(0.12, 0);
-		else if (k === "ArrowUp") turn(0, -0.08); else if (k === "ArrowDown") turn(0, 0.08);
-		else if (k === "+" || k === "=") zoomBy(1.15); else if (k === "-") zoomBy(1 / 1.15);
+		if (e.shiftKey && k.startsWith("Arrow")) panStep(k === "ArrowLeft" ? 60 : k === "ArrowRight" ? -60 : 0, k === "ArrowUp" ? 60 : k === "ArrowDown" ? -60 : 0);
+		else if (k === "ArrowLeft") turn(-0.2, 0); else if (k === "ArrowRight") turn(0.2, 0);
+		else if (k === "ArrowUp") turn(0, -0.12); else if (k === "ArrowDown") turn(0, 0.12);
+		else if (k === "+" || k === "=") zoomStep(1.2); else if (k === "-") zoomStep(1 / 1.2);
 		else if (k === "0") reset(); else if (k === "Escape") onSelect(null);
 		else return;
 		e.preventDefault();
@@ -693,45 +894,20 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 			onPointerCancel={endDrag}
 			// Right-drag moves the space; it must not open the browser menu.
 			onContextMenu={(e) => e.preventDefault()}
-			onPointerEnter={() => { s.current.hover = true; }}
+			onPointerEnter={() => { s.current.hover = true; s.current.lastPointerMove = performance.now(); }}
 			onPointerLeave={() => { s.current.hover = false; s.current.lastInput = performance.now(); kick.current(); }}
 			onClick={(e) => { if (e.target === e.currentTarget && !suppressClick.current) onSelect(null); }}
 			className={`space3d relative overflow-hidden rounded-xl border border-ink-200 select-none touch-none ${panning ? "cursor-move" : "cursor-grab active:cursor-grabbing"} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50`}
 			style={{ height }}
 		>
+			<canvas ref={stageEl} className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden />
+			{/* Palette probe: the stage canvas reads its colours from these classes once. */}
+			<svg ref={colorProbe} className="absolute w-0 h-0 overflow-hidden" aria-hidden>
+				<stop className="space3d-floor-core" /><stop className="space3d-floor-mid" /><stop className="space3d-floor-edge" />
+				<stop className="space3d-shadow-core" /><stop className="space3d-shadow-edge" />
+				<path className="stroke-ink-300" /><path className="stroke-plum-300" />
+			</svg>
 			<svg className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden>
-				<defs>
-					<radialGradient id={`${uid}-floor`}>
-						<stop offset="0%" className="space3d-floor-core" />
-						<stop offset="55%" className="space3d-floor-mid" />
-						<stop offset="100%" className="space3d-floor-edge" />
-					</radialGradient>
-					<radialGradient id={`${uid}-shadow`}>
-						<stop offset="0%" className="space3d-shadow-core" />
-						<stop offset="100%" className="space3d-shadow-edge" />
-					</radialGradient>
-				</defs>
-				<path ref={floorEl} fill={`url(#${uid}-floor)`} />
-				{floor.rings.map((_, ri) => Array.from({ length: RING_SEGMENTS }, (_, k) => (
-					<path key={`r${ri}:${k}`} ref={(el) => { ringEls.current[ri * RING_SEGMENTS + k] = el; }} fill="none"
-						className={ri === 1 ? "stroke-plum-300" : "stroke-ink-300"} strokeWidth={ri === 1 ? 1.1 : 0.8} style={{ opacity: 0 }} />
-				)))}
-				{Array.from({ length: SPOKES * 3 }, (_, i) => (
-					<path key={`s${i}`} ref={(el) => { spokeEls.current[i] = el; }} className="stroke-ink-300" strokeWidth={0.6} style={{ opacity: 0 }} />
-				))}
-				{nodes.map((n) => (
-					<ellipse key={`sh:${n.id}`} ref={(el) => { if (el) shadowEls.current.set(n.id, el); else shadowEls.current.delete(n.id); }}
-						fill={`url(#${uid}-shadow)`} style={{ opacity: 0 }} />
-				))}
-				{/* Stems only for the app and its experiments: the ring you read height
-				    on. Workflows and suggestion columns would bundle into dashed poles. */}
-				{nodes.filter((n) => n.depth === 0 || n.kind === "experiment").map((n) => (
-					<path key={`st:${n.id}`} ref={(el) => { if (el) stemEls.current.set(n.id, el); else stemEls.current.delete(n.id); }}
-						className="stroke-plum-300" strokeWidth={0.9} strokeDasharray="2 3" fill="none" style={{ opacity: 0 }} />
-				))}
-				{dust.map((_, i) => (
-					<circle key={`d${i}`} ref={(el) => { dustEls.current[i] = el; }} className="fill-plum-300" style={{ opacity: 0 }} />
-				))}
 				{edges.map((e) => {
 					const onPath = !!lit && lit.has(e.source) && lit.has(e.target);
 					return (
@@ -779,8 +955,8 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 						data-full={full ? "" : undefined}
 						className="absolute left-0 top-0 will-change-transform"
 						style={{ opacity: 0 }}
-						onPointerEnter={() => setHovered(n.id)}
-						onPointerLeave={() => setHovered((h) => (h === n.id ? null : h))}
+						onPointerEnter={() => enterNode(n.id)}
+						onPointerLeave={() => leaveNode(n.id)}
 					>
 						<button
 							type="button"
@@ -795,14 +971,14 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 							    element under the pointer between press and release (hover opens the
 							    card) swallowed the click — on touch, every tap. */}
 							{renderDot && <span className={full ? "hidden" : "block"}>{renderDot(n)}</span>}
-							<span className={full ? "block" : "hidden"}>{renderCard(n, { selected: sel, dim })}</span>
+							<span className={full ? "block space3d-card-in" : "hidden"}>{renderCard(n, { selected: sel, dim })}</span>
 						</button>
 					</div>
 				);
 			})}
 			<div className="absolute right-2 top-2 flex items-center gap-1 z-[6000]" onPointerDown={(e) => e.stopPropagation()}>
-				<CtlButton label="Zoom in" onClick={() => zoomBy(1.2)}><Plus className="w-3.5 h-3.5" /></CtlButton>
-				<CtlButton label="Zoom out" onClick={() => zoomBy(1 / 1.2)}><Minus className="w-3.5 h-3.5" /></CtlButton>
+				<CtlButton label="Zoom in" onClick={() => zoomStep(1.2)}><Plus className="w-3.5 h-3.5" /></CtlButton>
+				<CtlButton label="Zoom out" onClick={() => zoomStep(1 / 1.2)}><Minus className="w-3.5 h-3.5" /></CtlButton>
 				<CtlButton label="Show everything" onClick={reset}><RotateCcw className="w-3.5 h-3.5" /></CtlButton>
 				<MouseHelp />
 			</div>

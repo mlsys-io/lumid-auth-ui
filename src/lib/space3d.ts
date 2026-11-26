@@ -254,6 +254,46 @@ export function mixCamera(a: Camera, b: Camera, t: number): Camera {
 	};
 }
 
+/** Camera velocity, per component, in units per second. */
+export interface CameraVel { yaw: number; pitch: number; zoom: number; focusX: number; focusY: number }
+export const ZERO_VEL: CameraVel = { yaw: 0, pitch: 0, zoom: 0, focusX: 0, focusY: 0 };
+
+/** The camera's spring (2026-11-26, "large motion needs spring"): stiffness
+ *  (1/s²) and damping ratio. Slightly underdamped — a large move overshoots a
+ *  hair and settles, like the node springs — and settles in ~0.8 s. */
+export const CAM_SPRING = { k: 60, zeta: 0.82 };
+
+/** The target yaw as the equivalent angle nearest the current one, so a fly
+ *  takes the short way round however many turns the space has made. */
+export function nearestYaw(from: number, to: number): number {
+	let d = (to - from) % (2 * Math.PI);
+	if (d > Math.PI) d -= 2 * Math.PI;
+	if (d < -Math.PI) d += 2 * Math.PI;
+	return from + d;
+}
+
+/** One step of the camera spring toward `target` over `dt` seconds
+ *  (semi-implicit Euler, sub-stepped so a slow frame cannot blow it up).
+ *  `done` once every component is within a hair and at rest — then it snaps. */
+export function stepCameraSpring(cam: Camera, vel: CameraVel, target: Camera, dt: number,
+	spring: { k: number; zeta: number } = CAM_SPRING): { cam: Camera; vel: CameraVel; done: boolean } {
+	const c = 2 * spring.zeta * Math.sqrt(spring.k);
+	const keys = ["yaw", "pitch", "zoom", "focusX", "focusY"] as const;
+	const next = { ...cam }, v = { ...vel };
+	const steps = Math.max(1, Math.ceil(Math.min(dt, 0.1) / (1 / 120)));
+	const h = Math.min(dt, 0.1) / steps;
+	for (let i = 0; i < steps; i++) {
+		for (const key of keys) {
+			const a = spring.k * (target[key] - next[key]) - c * v[key];
+			v[key] += a * h;
+			next[key] += v[key] * h;
+		}
+	}
+	const eps: Record<(typeof keys)[number], number> = { yaw: 1e-4, pitch: 1e-4, zoom: 1e-4, focusX: 0.25, focusY: 0.25 };
+	const done = keys.every((key) => Math.abs(target[key] - next[key]) < eps[key] && Math.abs(v[key]) < eps[key] * 10);
+	return done ? { cam: { ...target }, vel: { ...ZERO_VEL }, done } : { cam: next, vel: v, done };
+}
+
 /** One turn a minute, after 1.5 s without interaction — slow enough to read,
  *  fast enough to see it is alive (Novix's 86 s read as standing still). */
 export const AUTO_ROTATE_RAD_PER_MS = (2 * Math.PI) / 60_000;

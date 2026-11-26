@@ -1,5 +1,5 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
-import { coneDirections, layoutSpace, project, depthCue, frameCamera, mixCamera, firstRing, sceneFloor, dustField, hash01, HOME, STEP } from "./space3d";
+import { coneDirections, layoutSpace, project, depthCue, frameCamera, mixCamera, firstRing, sceneFloor, dustField, hash01, HOME, STEP , stepCameraSpring, nearestYaw, ZERO_VEL } from "./space3d";
 import type { MapNode } from "./research-map";
 
 type Check = { name: string; run: () => void };
@@ -100,6 +100,32 @@ check("one workflow carrying nearly everything still rings the app (no empty sid
 	const sectors = new Array(6).fill(0);
 	for (const [id, p] of pos) if (id !== "app:m") sectors[Math.floor(((Math.atan2(p.z, p.x) + Math.PI) / (2 * Math.PI)) * 6) % 6]++;
 	ok(sectors.every((c) => c > 0), `every 60° sector holds a node (${sectors.join(" ")})`);
+});
+
+check("the camera spring settles on its target, overshoots only a hair, and stops", () => {
+	const from = { yaw: 0, pitch: -0.45, zoom: 0.5, focusX: 0, focusY: 0 };
+	const to = { yaw: 1.2, pitch: -0.18, zoom: 1.4, focusX: -220, focusY: 80 };
+	let cam = from, vel = { ...ZERO_VEL }, t = 0, done = false, maxZoom = 0, maxStep = 0;
+	while (!done && t < 5) {
+		const prev = cam;
+		({ cam, vel, done } = stepCameraSpring(cam, vel, to, 1 / 60));
+		t += 1 / 60;
+		maxZoom = Math.max(maxZoom, cam.zoom);
+		maxStep = Math.max(maxStep, Math.hypot(cam.focusX - prev.focusX, cam.focusY - prev.focusY));
+	}
+	ok(done && t < 2, `settles (${t.toFixed(2)} s)`);
+	ok(near(cam.zoom, to.zoom) && near(cam.focusX, to.focusX) && near(cam.yaw, to.yaw), "lands exactly on the target");
+	ok(maxZoom < to.zoom + (to.zoom - from.zoom) * 0.08, `overshoot under 8% (${(maxZoom - to.zoom).toFixed(3)})`);
+	ok(maxStep < 25, `no single 60 fps frame moves the view more than 25 px (${maxStep.toFixed(1)})`);
+	// A slow frame (a hidden tab coming back) cannot blow it up.
+	const big = stepCameraSpring(from, { ...ZERO_VEL }, to, 2);
+	ok(Number.isFinite(big.cam.focusX) && Math.abs(big.cam.focusX) < 400, "a 2 s frame stays bounded");
+});
+
+check("a fly takes the short way round, however many turns were made", () => {
+	ok(near(nearestYaw(10 * Math.PI + 0.1, 0.2), 10 * Math.PI + 0.2), "same turn");
+	ok(near(nearestYaw(0.1, 2 * Math.PI - 0.1), -0.1), "across zero, backwards");
+	ok(Math.abs(nearestYaw(3, -3) - 3) <= Math.PI, "never more than half a turn");
 });
 
 check("projection: origin lands at the centre; nearer is larger", () => {

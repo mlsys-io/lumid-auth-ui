@@ -904,12 +904,17 @@ html[data-surface="studio"] ::selection {
 .react-flow__edge-path.research-edge { stroke: theme('colors.ink.300'); stroke-width: 1.25; transition: opacity 300ms ease; }
 .react-flow__edge-path.research-edge-dashed { stroke: theme('colors.gold.400'); stroke-dasharray: 2 2; }
 .react-flow__edge-path.research-edge-draw { stroke-dasharray: 100; stroke-dashoffset: 100; animation: strand-draw 650ms cubic-bezier(0.22, 1, 0.36, 1) forwards; }
+/* A node's card opening on hover in the 3D space: a short spring-like rise, not a
+   one-frame swap. Replays whenever the card is shown again (display toggles). */
+.space3d-card-in { animation: space3d-card-in 160ms cubic-bezier(0.34, 1.4, 0.64, 1) both; transform-origin: center; }
+@keyframes space3d-card-in { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
 /* The selected path: Novix's moving dashes, in bronze. */
 .react-flow__edge-path.research-edge-flow { stroke: theme('colors.gold.500'); stroke-width: 2; stroke-dasharray: 3 2; animation: research-flow 1.2s linear infinite; }
 .react-flow__edge-path.research-edge-dim { opacity: 0.25; }
 @keyframes research-flow { to { stroke-dashoffset: -10; } }
 @media (prefers-reduced-motion: reduce) {
 	.react-flow__edge-path.research-edge-draw { animation: none; stroke-dasharray: none; stroke-dashoffset: 0; }
+	.space3d-card-in { animation: none; }
 	.react-flow__edge-path.research-edge-flow { animation: none; }
 }
 
