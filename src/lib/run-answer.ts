@@ -373,7 +373,12 @@ export function runLimits(d: MeCycleDetail | null): RunLimit[] {
 export function measuredLine(m: Record<string, unknown> | null | undefined): { measured: boolean; text: string } | null {
 	if (!m) return null;
 	const on = m.measured_on;
-	if (typeof on === "string" && on.trim()) return { measured: true, text: `Measured on ${on.trim()}` };
+	if (typeof on === "string" && on.trim()) {
+		// A result an identical earlier measurement answered (/me/measure) says so,
+		// unless the app's own words already do.
+		const reused = m.reused === true && !/reused/i.test(on) ? " · reused from an identical run" : "";
+		return { measured: true, text: `Measured on ${on.trim()}${reused}` };
+	}
 	if (m.status === "not_measured") {
 		const why = typeof m.summary === "string" && /^not measured/i.test(m.summary.trim()) ? m.summary.trim() : "Not measured";
 		return { measured: false, text: why };
