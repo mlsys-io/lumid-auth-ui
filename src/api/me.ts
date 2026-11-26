@@ -1444,6 +1444,10 @@ export interface MeCycleListItem {
   // The run's headline metric, surfaced on the node. Either a {name,value}
   // pair or a bare number; read defensively.
   key_metric?: { name?: string; value?: number } | number;
+  /** The run's number came from an identical earlier measurement (/me/measure). */
+  reused?: boolean;
+  /** Where the run's number came from, in the run's own words. */
+  measured_on?: string;
 }
 
 // One addressable dot in a workflow's run sparkline.

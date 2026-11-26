@@ -16,6 +16,7 @@ import { loopLabel } from "@/lib/workflow-names";
 import { appTitle } from "@/components/workflow/AppCard";
 import { StrandAvatar } from "@/components/illustrations/StrandAvatar";
 import { cn } from "@/lib/utils";
+import { measuredBy } from "@/lib/measure";
 
 const NOT_NOW = (app: string) => `research_not_now_v1:${app}`;
 // Snoozed suggestions come back on their own: {id: until (ms)} in this browser.
@@ -123,6 +124,9 @@ export default function ApprovalCard({ app, list, index, onIndex, onDone, showAp
 								<button type="button" onClick={() => setFull((v) => !v)} className="block text-micro text-ink-600 hover:text-ink-900 underline decoration-dotted">{full ? "Less" : "Read all"}</button>
 							)}
 						</div>
+					)}
+					{p.instrument && (
+						<div><dt className="inline font-semibold text-plum-700">Measured by: </dt><dd className="inline text-ink-800">{(measuredBy(p.instrument) ?? "").replace(/^Measured by /, "")}</dd></div>
 					)}
 					<div><dt className="inline font-semibold text-plum-700">Cost: </dt><dd className="inline text-ink-800">{p.est_runs ? `about ${p.est_runs} runs` : "not estimated"}{loop ? ` of ${loopLabel("", loop)}` : ""}</dd></div>
 					{done && <div><dt className="inline font-semibold text-plum-700">Done when: </dt><dd className="inline text-ink-800">{done}</dd></div>}

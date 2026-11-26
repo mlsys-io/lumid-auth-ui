@@ -40,6 +40,9 @@ export interface Proposal {
 	verdict_reason?: string;
 	/** Which planner proposed it (advocate / adversary / economist). */
 	seat?: string;
+	/** The shared instrument that will measure it (identity /me/measure), e.g.
+	 *  mlsys-simulator — normally its workflow's feedback `service`. */
+	instrument?: string;
 }
 
 /** The pre-flight check, in words: would this suggestion record results if

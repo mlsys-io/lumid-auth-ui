@@ -377,6 +377,7 @@ function RunsView({ app, wf, cycles }: { app: string; wf: SpecWorkflow; cycles: 
 							<span className="text-ink-600">{sec ? fmtAgo(sec) : c.ts}</span>
 							{c.duration_s ? <span className="text-micro text-ink-600">· {fmtDuration(c.duration_s)}</span> : null}
 							{c.branch_label && <span className="truncate text-micro text-plum-700">{c.branch_label}</span>}
+							{c.reused && <span className="rounded-full bg-plum-50 px-1.5 text-micro text-plum-700" title={c.measured_on || "Answered by an identical earlier measurement"}>reused</span>}
 							{v != null && <span className="ml-auto font-mono text-micro tabular-nums text-ink-800">{mVal(typeof c.key_metric === "object" ? c.key_metric?.name ?? "" : "", v)}</span>}
 						</button>
 						{isOpen && (
