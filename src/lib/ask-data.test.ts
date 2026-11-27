@@ -1,5 +1,5 @@
 // Ask box words and parsing. Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
-import { askError, cellText, exampleQuestion, parseAgentStream, parseJsonlRows, rowsSummary } from "./ask-data";
+import { answerNote, askError, cellText, exampleQuestion, noRowsLine, parseAgentStream, parseJsonlRows, rowsSummary, sqlError } from "./ask-data";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -29,6 +29,40 @@ check("a failed question keeps its error", () => {
 	const o = parseAgentStream('data: {"type":"iteration"}\ndata: {"type":"error","error":"LLM returned HTTP 413: length limit exceeded"}');
 	eq(o.error, "LLM returned HTTP 413: length limit exceeded");
 	eq(askError(o.error!), 'That store is too big to describe in one go. Name a schema in your question (for example "in macro").');
+});
+// A run that hit its step budget (2026-11-27, a SPY question): `done` carries
+// the last query that worked — a probe — and a half-finished thought.
+const TRUNCATED = [
+	'data: {"type":"iteration","iteration":1,"max_iterations":8}',
+	'data: {"type":"tool_call","call_id":"a","tool":"replay_retrieval_plan"}',
+	'data: {"type":"tool_error","call_id":"a","tool":"replay_retrieval_plan","error":"query exceeded the 30000ms statement timeout"}',
+	'data: {"type":"tool_call","call_id":"b","tool":"replay_retrieval_plan"}',
+	'data: {"type":"tool_result","call_id":"b","tool":"replay_retrieval_plan"}',
+	'data: {"type":"done","truncated":true,"max_iterations_reached":8,"message":{"content":"Malformed plan payload on my side, retrying."},"result":{"rowcount":1,"materialized_uri":"/blobs/retrievals/y/result.jsonl","access_chain":[{"op":"sql","query":"SELECT COUNT(*) FROM market.ohlc_daily WHERE symbol = \'SPY\'"}]}}',
+].join("\n");
+
+check("an answered question is finished and needs no note", () => {
+	const o = parseAgentStream(STREAM);
+	eq([o.finished, o.failedSteps, answerNote(o), noRowsLine(o)], [true, 0, null, null]);
+});
+check("a run out of steps says its rows are only its last query", () => {
+	const o = parseAgentStream(TRUNCATED);
+	eq([o.finished, o.maxSteps, o.failedSteps, o.error], [false, 8, 1, null]);
+	eq(answerNote(o), "It used all 8 of its steps before finishing, so this is not an answer yet. 1 of its queries failed along the way. "
+		+ "The rows below are from the last query that worked, which may be a check rather than the answer. "
+		+ "Ask a narrower question (name the table, a symbol or a date range), or write the SQL yourself below.");
+});
+check("no table: an answer in text needs no 'no rows' line; an empty query says so", () => {
+	const base = parseAgentStream(STREAM);
+	eq(noRowsLine({ ...base, uri: null, rowcount: null }), null);
+	eq(noRowsLine({ ...base, rowcount: 0 }), "The query ran and returned no rows.");
+	eq(noRowsLine({ ...base, answer: "", uri: null, rowcount: null }), "No rows came back.");
+});
+check("SQL console: a timeout in words, other errors verbatim", () => {
+	const raw = 'Post "http://findata-primary:8088/retrieve": context deadline exceeded';
+	eq(sqlError(raw).startsWith("The query ran past the warehouse's time limit (about 30 seconds)."), true);
+	eq(sqlError(raw).endsWith(raw), true);
+	eq(sqlError("sql rejected: only a single read-only select is allowed"), "sql rejected: only a single read-only select is allowed");
 });
 check("rows from JSON lines, capped, columns in first-seen order", () => {
 	const t = '{"date":"2026-05-28","y10":4.4}\n{"date":"2026-05-27","y10":4.5,"note":"x"}\n\nbad\n{"date":"2026-05-26","y10":4.6}';
