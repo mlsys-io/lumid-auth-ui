@@ -115,6 +115,30 @@ check("feedback edits replace the steps", () => {
 	eq(readAppSpec(setFeedback(V2, "simulate", [])).workflows[0].feedback, []);
 });
 
+check("feedback gates: read, written, and edited in place with comments kept", () => {
+	const text = V2.replace(`      - step: simulator
+        metrics: [{name: objective, better: higher, target: 1}]`, `      - step: simulator   # cheap first
+        metrics: [{name: objective, better: higher, target: 1}]
+        gate: " objective >= 1 "
+      - {step: sandbox, metrics: [{name: ttft_p99_ms, better: lower}], gate: ""}`);
+	const fb = readAppSpec(text).workflows[0].feedback;
+	eq(fb.map((f) => f.gate), ["objective >= 1", undefined], "gates read (trimmed; empty is none)");
+	// Change one gate, add one, keep the step's comment and the metrics' flow style.
+	let out = setFeedback(text, "simulate", [{ ...fb[0], gate: "objective >= 2" }, { ...fb[1], gate: "ttft_p99_ms < 2000" }]);
+	eq(readAppSpec(out).workflows[0].feedback.map((f) => f.gate), ["objective >= 2", "ttft_p99_ms < 2000"]);
+	if (!/- step: simulator +# cheap first/.test(out)) throw new Error(`step comment lost:\n${out}`);
+	if (!/metrics: \[ ?\{ ?name: objective, better: higher, target: 1 ?\} ?\]/.test(out)) throw new Error(`metrics style lost:\n${out}`);
+	if (!out.includes("# the simulator")) throw new Error("workflow comment lost");
+	// Clearing a gate removes the key; a dropped step goes; a new step is written whole.
+	out = setFeedback(out, "simulate", [{ ...fb[0], gate: "" }, { step: "holdout", metrics: [{ name: "score", better: "higher" }], gate: "score > 0" }]);
+	const after = readAppSpec(out).workflows[0].feedback;
+	eq(after.map((f) => [f.step, f.gate ?? null]), [["simulator", null], ["holdout", "score > 0"]]);
+	if (/gate: objective/.test(out)) throw new Error("cleared gate still written");
+	// A new workflow carries its gates.
+	const added = addWorkflows(V2, [{ id: "screen", steps: { workflows: ["simulate"] }, feedback: [{ step: "simulate", metrics: [{ name: "objective", better: "higher" }], gate: "objective > 0" }] }]);
+	eq(readAppSpec(added).workflows.find((w) => w.id === "screen")?.feedback[0].gate, "objective > 0");
+});
+
 check("chains: reads steps.workflows (ids and {use, inputs})", () => {
 	const text = V2.replace("nodes:", `  - id: chain_x
     steps:
