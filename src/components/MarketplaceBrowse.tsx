@@ -266,12 +266,12 @@ export default function MarketplaceBrowse() {
 	const requireLogin = () => navigate(`/auth/login?return_to=${encodeURIComponent(window.location.pathname)}`);
 	const guardedAction = (a: PendingAction) => { if (isPublic) { requireLogin(); return; } setAction(a); };
 
-	const install = async (label: string, name: string, ownerSub?: string, sidebarConfig?: { show: boolean; label: string; section: string }) => {
+	const install = async (label: string, name: string, ownerSub?: string, sidebarConfig?: { show: boolean; label: string; section: string }, as?: string) => {
 		if (isPublic) { requireLogin(); return; }
 		const slug = ownerSub ? `${ownerSub}/${name}` : name;
 		setStatuses((m) => ({ ...m, [name]: { state: "installing" } }));
 		try {
-			const resp = await me.installApp(slug, "local", undefined, sidebarConfig ? {
+			const resp = await me.installApp(slug, "local", as, sidebarConfig ? {
 				sidebar_show: sidebarConfig.show,
 				sidebar_label: sidebarConfig.label,
 				sidebar_section: sidebarConfig.section,
@@ -279,7 +279,7 @@ export default function MarketplaceBrowse() {
 			setStatuses((m) => ({ ...m, [name]: { state: "installing", intentId: resp.intent_id } }));
 			// Mark it so My Apps opens the generate+customize step once it lands.
 			markPendingCustomize(name);
-			toast.success(`Installing ${label}… it'll appear in My Agents shortly.`);
+			toast.success(as ? `Adding a copy of ${label} as "${as}"… it'll appear in your apps shortly.` : `Installing ${label}… it'll appear in My Agents shortly.`);
 			navigate("/studio/apps");
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : String(e);
@@ -408,6 +408,7 @@ export default function MarketplaceBrowse() {
 					installedNames={installedNames}
 					onSelect={setDetail}
 					onInstall={(r) => install(r.display_name || r.name, r.name, r.owner_sub)}
+					onInstallCopy={(r, as) => install(r.display_name || r.name, r.name, r.owner_sub, undefined, as)}
 					onAction={guardedAction}
 					onOpen={openInstalled}
 				/>
@@ -489,7 +490,7 @@ function sortRepos(repos: RepoCard[], sort: SortKey): RepoCard[] {
 }
 
 function RepoGrid({
-	repos, query, sort, activeTag, statuses, installedNames, onSelect, onInstall, onAction, onOpen,
+	repos, query, sort, activeTag, statuses, installedNames, onSelect, onInstall, onInstallCopy, onAction, onOpen,
 }: {
 	repos: RepoCard[] | null;
 	query: string;
@@ -499,6 +500,8 @@ function RepoGrid({
 	installedNames: Set<string>;
 	onSelect: (r: RepoCard) => void;
 	onInstall: (r: RepoCard) => void;
+	/** Add another, independent copy under a new name (any app you already have). */
+	onInstallCopy?: (r: RepoCard, as: string) => void;
 	onAction: (a: PendingAction) => void;
 	onOpen: (name: string) => void;
 }) {
@@ -541,6 +544,7 @@ function RepoGrid({
 					installed={installedNames.has(r.name)}
 					onSelect={() => onSelect(r)}
 					onInstall={() => onInstall(r)}
+					onInstallCopy={onInstallCopy ? (as) => onInstallCopy(r, as) : undefined}
 					onAction={onAction}
 					onOpen={onOpen}
 				/>
@@ -559,7 +563,7 @@ const KIND_HELPER: Record<KindAction, string> = {
 };
 
 function RepoCardView({
-	repo, index, status, installed, onSelect, onInstall, onAction, onOpen,
+	repo, index, status, installed, onSelect, onInstall, onInstallCopy, onAction, onOpen,
 }: {
 	repo: RepoCard;
 	index: number;
@@ -567,6 +571,7 @@ function RepoCardView({
 	installed: boolean;
 	onSelect: () => void;
 	onInstall: () => void;
+	onInstallCopy?: (as: string) => void;
 	onAction: (a: PendingAction) => void;
 	onOpen: (name: string) => void;
 }) {
@@ -652,6 +657,7 @@ function RepoCardView({
 						onAction={() => (ctaState === "installed" ? onOpen(status.state === "installed" ? status.appName : repo.name) : onInstall())}
 					/>
 				)}
+				{act === "install" && ctaState === "installed" && onInstallCopy && <AddCopy base={repo.name} onAdd={onInstallCopy} />}
 				{act === "add-skill" && (
 					<button
 						onClick={() => onAction({ type: "add-skill", slug, label: title, version: repo.version })}
@@ -678,6 +684,37 @@ function RepoCardView({
 				)}
 			</div>
 		</article>
+	);
+}
+
+/** "Add another copy…" — a second, independent install of an app you already
+ *  have, under its own name (a fresh start, an experiment you don't want mixed
+ *  into the first). The API always took `as`; the card never offered it. */
+function AddCopy({ base, onAdd }: { base: string; onAdd: (as: string) => void }) {
+	const [open, setOpen] = useState(false);
+	const [name, setName] = useState(`${base}-2`);
+	const valid = /^[a-z0-9][a-z0-9._-]{1,62}$/.test(name) && name !== base;
+	if (!open) {
+		return (
+			<button type="button" onClick={() => setOpen(true)} className="mt-1.5 w-full text-center text-micro text-ink-700 hover:text-ink-900 hover:underline">
+				Add another copy…
+			</button>
+		);
+	}
+	return (
+		<form className="mt-2 space-y-1.5" onSubmit={(e) => { e.preventDefault(); if (valid) { onAdd(name); setOpen(false); } }}>
+			<label className="block text-micro text-ink-700">
+				Name for the new copy
+				<input value={name} onChange={(e) => setName(e.target.value.toLowerCase())} autoFocus aria-invalid={!valid}
+					className="mt-0.5 h-8 w-full rounded-md border border-ink-200 bg-card px-2 font-mono text-caption text-ink-900 focus:outline-none focus:ring-2 focus:ring-ring/40" />
+			</label>
+			{!valid && <p className="text-micro text-brick-700">Lowercase letters, numbers, dots, dashes; not the same as the first copy.</p>}
+			<div className="flex items-center gap-2">
+				<button type="submit" disabled={!valid} className="h-8 flex-1 rounded-md bg-ink-900 text-caption font-medium text-white hover:bg-ink-800 disabled:opacity-50">Add the copy</button>
+				<button type="button" onClick={() => setOpen(false)} className="h-8 rounded-md px-2 text-caption text-ink-700 hover:bg-ink-100">Cancel</button>
+			</div>
+			<p className="text-micro text-ink-600">Starts empty: its own runs, experiments and settings.</p>
+		</form>
 	);
 }
 
