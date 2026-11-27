@@ -32,7 +32,9 @@ import { useInstruments } from "@/hooks/useInstruments";
 const mLabel = (name: string) => humanMetric(name).label;
 /** A metric value with its unit, the way the run page writes it. */
 const mVal = (name: string, v: number) => { const h = humanMetric(name); const t = fmtMetricValue(v, h.unit, name); return h.unit && !t.endsWith("%") ? `${t} ${h.unit}` : t; };
-import { runPath, workflowPath } from "@/lib/run-routes";
+import { compareHref, runPath, workflowPath } from "@/lib/run-routes";
+import { RunSteps, StepProgress } from "@/components/research/ProgressDots";
+import { stepsFromCycle } from "@/lib/progress-dots";
 import { loopLabel } from "@/lib/workflow-names";
 import { appTitle } from "@/components/workflow/AppCard";
 import RunAnswerCard from "@/components/workflow/RunAnswerCard";
@@ -54,18 +56,18 @@ const ask = (prompt: string, context: Record<string, unknown>) =>
 
 const cyclesCache = new Map<string, { at: number; cycles: MeCycleListItem[] }>();
 /** A workflow's recent runs (newest first); polls every 5 s while one is running. */
-export function useCycles(app: string, loop: string | null) {
-	const key = `${app}:${loop}`;
+export function useCycles(app: string, loop: string | null, limit = 40) {
+	const key = `${app}:${loop}:${limit}`;
 	const [cycles, setCycles] = useState<MeCycleListItem[] | null>(() => (loop ? cyclesCache.get(key)?.cycles ?? null : null));
 	const load = useCallback(async () => {
 		if (!loop) return;
 		try {
-			const r = await me.cyclesList(app, loop, 40);
+			const r = await me.cyclesList(app, loop, limit);
 			const c = (r.cycles || []).slice().sort((a, b) => (dirIdToSec(b.ts) ?? 0) - (dirIdToSec(a.ts) ?? 0));
 			cyclesCache.set(key, { at: Date.now(), cycles: c });
 			setCycles(c);
 		} catch { setCycles((cur) => cur ?? []); }
-	}, [app, loop, key]);
+	}, [app, loop, key, limit]);
 	useEffect(() => { setCycles(loop ? cyclesCache.get(key)?.cycles ?? null : null); void load(); }, [key, loop, load]);
 	const running = !!cycles?.some((c) => c.running);
 	useEffect(() => {
@@ -170,7 +172,8 @@ export default function WorkflowPanel({ app, wf, spec, row, exps, view, onView, 
 	/** Rendered as the workflow's own page (full width) rather than over the graph. */
 	page?: boolean;
 }) {
-	const { cycles, reload } = useCycles(app, wf.id);
+	const [limit, setLimit] = useState(40);
+	const { cycles, reload } = useCycles(app, wf.id, limit);
 	// null = still reading: never say "Hasn't run yet" about a list we haven't read.
 	const status = useMemo(() => (cycles === null
 		? { tone: "none" as const, text: "Reading its runs…" }
@@ -219,7 +222,7 @@ export default function WorkflowPanel({ app, wf, spec, row, exps, view, onView, 
 			</div>
 			<div className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain px-3.5 py-3", page && "md:px-5 md:py-4")}>
 				{view === "overview" && <OverviewView app={app} wf={wf} spec={spec} row={row} cycles={cycles} variants={variants} exps={ownExps} onSelect={onSelect} onView={onView} />}
-				{view === "runs" && <RunsView app={app} wf={wf} cycles={cycles} />}
+				{view === "runs" && <RunsView app={app} wf={wf} cycles={cycles} canMore={(cycles?.length ?? 0) >= limit} onMore={() => setLimit((l) => l + 40)} onChanged={() => void reload()} />}
 				{view === "compare" && <CompareView app={app} a={{ kind: "workflow", id: wf.id, label: wfLabel(wf) }} b={compareWith} wf={wf} spec={spec} onPick={onPickCompare} />}
 				{view === "feedback" && <SetupView app={app} wf={wf} spec={spec} row={row} cycles={cycles} helpers={helpers} save={save} editable={editable} />}
 			</div>
@@ -396,51 +399,116 @@ function SetupView({ app, wf, spec, row, cycles, helpers, save, editable }: {
 
 // ── Runs ──────────────────────────────────────────────────────────────────
 
-function RunsView({ app, wf, cycles }: { app: string; wf: SpecWorkflow; cycles: MeCycleListItem[] | null }) {
+function RunsView({ app, wf, cycles, canMore, onMore, onChanged }: {
+	app: string; wf: SpecWorkflow; cycles: MeCycleListItem[] | null;
+	canMore: boolean; onMore: () => void; onChanged: () => void;
+}) {
 	const [open, setOpen] = useState<string | null>(null);
-	const [detail, setDetail] = useState<MeCycleDetail | null>(null);
+	// null = reading; false = this run's detail can't be read here (some
+	// workflows keep only the run's row, not its folder).
+	const [detail, setDetail] = useState<MeCycleDetail | null | false>(null);
+	const [picked, setPicked] = useState<string[]>([]);
+	const [busy, setBusy] = useState<string | null>(null);
 	useEffect(() => {
 		if (!open) { setDetail(null); return; }
 		let live = true;
 		setDetail(null);
-		me.cycleDetail(app, wf.id, open).then((d) => { if (live) setDetail(d); }).catch(() => {});
+		me.cycleDetail(app, wf.id, open).then((d) => { if (live) setDetail(d); }).catch(() => { if (live) setDetail(false); });
 		return () => { live = false; };
 	}, [app, wf.id, open]);
 	if (cycles === null) return <p className="text-caption text-ink-600" role="status">Reading its runs…</p>;
 	if (!cycles.length) return <p className="text-caption text-ink-600">No runs yet. Press Run to start one.</p>;
 	const ordered = [...cycles.filter((c) => c.running), ...cycles.filter((c) => !c.running)];
+	const pick = (ts: string) => setPicked((p) => (p.includes(ts) ? p.filter((x) => x !== ts) : p.length >= 5 ? p : [...p, ts]));
+	const cancel = async () => {
+		setBusy("cancel");
+		try { await me.stopLoop(app, wf.id); toast.success(`Cancelling ${wfLabel(wf)}'s run`, { description: "It stops at its next step." }); onChanged(); }
+		catch (e) { toast.error("Couldn't cancel it", { description: String((e as Error).message || e) }); }
+		finally { setBusy(null); }
+	};
+	const mark = async (ts: string, verdict: "keep" | "discard") => {
+		setBusy(ts);
+		try {
+			if (verdict === "keep") await me.promoteRun(app, ts, undefined, wf.id); else await me.discardRun(app, ts, undefined, wf.id);
+			toast.success(verdict === "keep" ? "Kept — what this run learned carries forward" : "Discarded — what this run learned is dropped");
+			onChanged();
+		} catch (e) { toast.error("Couldn't mark it", { description: String((e as Error).message || e) }); }
+		finally { setBusy(null); }
+	};
 	return (
-		<ul className="space-y-1" aria-label={`Runs of ${wfLabel(wf)}`}>
-			{ordered.map((c) => {
-				const sec = dirIdToSec(c.ts);
-				const v = keyValue(c);
-				const label = c.running ? "Running" : c.ok ? "Succeeded" : c.ok === false ? "Failed" : "Ended";
-				const isOpen = open === c.ts;
-				return (
-					<li key={c.ts} className={cn("rounded-lg border", isOpen ? "border-plum-200" : "border-ink-100")}>
-						<button type="button" onClick={() => setOpen(isOpen ? null : c.ts)} aria-expanded={isOpen}
-							className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-caption hover:bg-ink-50">
-							<span className={cn("h-1.5 w-1.5 rounded-full", c.running ? "bg-lagoon-500 animate-lumen-breathe" : c.ok ? "bg-gold-500" : "bg-brick-500")} />
-							<span className={cn("font-medium", c.running ? "text-lagoon-700" : c.ok ? "text-ink-900" : "text-brick-700")}>{label}</span>
-							<span className="text-ink-600">{sec ? fmtAgo(sec) : c.ts}</span>
-							{c.duration_s ? <span className="text-micro text-ink-600">· {fmtDuration(c.duration_s)}</span> : null}
-							{c.branch_label && <span className="truncate text-micro text-plum-700">{c.branch_label}</span>}
-							{c.reused && <span className="rounded-full bg-plum-50 px-1.5 text-micro text-plum-700" title={c.measured_on || "Answered by an identical earlier measurement"}>reused</span>}
-							{v != null && <span className="ml-auto font-mono text-micro tabular-nums text-ink-800">{mVal(typeof c.key_metric === "object" ? c.key_metric?.name ?? "" : "", v)}</span>}
-						</button>
-						{isOpen && (
-							<div className="space-y-2 border-t border-ink-100 px-2.5 py-2">
-								{detail ? <RunAnswerCard app={app} loop={wf.id} runId={c.ts} detail={detail} listRow={c} cycles={cycles} durationS={c.duration_s} />
-									: <p className="text-micro text-ink-600" role="status">Reading the run…</p>}
-								<Link to={runPath(app, wf.id, c.ts)} className="inline-flex items-center gap-1 text-micro text-ink-700 hover:text-ink-900 hover:underline">
-									Open the full log <ArrowRight className="h-3 w-3" />
-								</Link>
+		<div className="space-y-2">
+			<ul className="space-y-1" aria-label={`Runs of ${wfLabel(wf)}`}>
+				{ordered.map((c) => {
+					const sec = dirIdToSec(c.ts);
+					const v = keyValue(c);
+					const label = c.running ? "Running" : c.ok ? "Succeeded" : c.ok === false ? "Failed" : "Ended";
+					const isOpen = open === c.ts;
+					return (
+						<li key={c.ts} className={cn("rounded-lg border", isOpen ? "border-plum-200" : c.running ? "border-lagoon-200" : "border-ink-100")}>
+							<div className="flex items-center gap-2 px-2 py-1.5 text-caption">
+								{!c.running ? (
+									<input type="checkbox" checked={picked.includes(c.ts)} onChange={() => pick(c.ts)} aria-label={`Compare the run from ${sec ? fmtAgo(sec) : c.ts}`}
+										className="h-3.5 w-3.5 flex-shrink-0 accent-plum-700" />
+								) : <span className="w-3.5 flex-shrink-0" />}
+								<button type="button" onClick={() => setOpen(isOpen ? null : c.ts)} aria-expanded={isOpen}
+									className="flex min-w-0 flex-1 items-center gap-2 text-left hover:underline decoration-ink-300">
+									<span className={cn("h-2 w-2 flex-shrink-0 rounded-[2px]", c.running ? "bg-lagoon-500 animate-lumen-breathe" : c.ok ? "bg-gold-500" : "bg-brick-500")} />
+									<span className={cn("font-medium", c.running ? "text-lagoon-700" : c.ok ? "text-ink-900" : "text-brick-700")}>{label}</span>
+									<span className="whitespace-nowrap text-ink-600">{sec ? fmtAgo(sec) : c.ts}</span>
+									{c.duration_s ? <span className="whitespace-nowrap text-micro text-ink-600">· {fmtDuration(c.duration_s)}</span> : null}
+									{c.branch_label && <span className="truncate text-micro text-plum-700">{c.branch_label}</span>}
+									{c.reused && <span className="rounded-full bg-plum-50 px-1.5 text-micro text-plum-700" title={c.measured_on || "Answered by an identical earlier measurement"}>reused</span>}
+								</button>
+								{v != null && <span className="flex-shrink-0 font-mono text-micro tabular-nums text-ink-800">{mVal(typeof c.key_metric === "object" ? c.key_metric?.name ?? "" : "", v)}</span>}
+								{c.running && (
+									<button type="button" onClick={cancel} disabled={busy === "cancel"}
+										className="flex-shrink-0 rounded-md border border-ink-200 px-1.5 py-0.5 text-micro text-ink-800 hover:border-brick-300 hover:text-brick-700 disabled:opacity-50">Cancel</button>
+								)}
 							</div>
-						)}
-					</li>
-				);
-			})}
-		</ul>
+							{/* A running run shows its steps as they fill in. */}
+							{c.running && (
+								<div className="border-t border-ink-100 px-2.5 py-2">
+									<RunSteps app={app} loop={wf.id} ts={c.ts} running />
+								</div>
+							)}
+							{isOpen && (
+								<div className="space-y-2 border-t border-ink-100 px-2.5 py-2">
+									{detail === null ? <p className="text-micro text-ink-600" role="status">Reading the run…</p>
+										: detail === false ? <p className="text-micro text-ink-600">This run's details aren't kept here — only its outcome{c.duration_s ? ` and time (${fmtDuration(c.duration_s)})` : ""}.</p>
+										: <>
+											{!c.running && (() => { const st = stepsFromCycle(detail, { app }); return st.length > 1 ? <StepProgress steps={st} /> : null; })()}
+											<RunAnswerCard app={app} loop={wf.id} runId={c.ts} detail={detail} listRow={c} cycles={cycles} durationS={c.duration_s} />
+										</>}
+									<div className="flex flex-wrap items-center gap-1.5">
+										{!c.running && <>
+											<button type="button" onClick={() => mark(c.ts, "keep")} disabled={busy === c.ts} title="What this run learned carries forward"
+												className="rounded-md border border-gold-300 bg-gold-50 px-2 py-0.5 text-micro font-medium text-gold-800 hover:bg-gold-100 disabled:opacity-50">Keep it</button>
+											<button type="button" onClick={() => mark(c.ts, "discard")} disabled={busy === c.ts} title="What this run learned is dropped"
+												className="rounded-md border border-ink-200 px-2 py-0.5 text-micro text-ink-800 hover:bg-ink-50 disabled:opacity-50">Discard it</button>
+										</>}
+										<Link to={runPath(app, wf.id, c.ts)} className="ml-auto inline-flex items-center gap-1 text-micro text-ink-700 hover:text-ink-900 hover:underline">
+											Open the full log <ArrowRight className="h-3 w-3" />
+										</Link>
+									</div>
+								</div>
+							)}
+						</li>
+					);
+				})}
+			</ul>
+			{canMore && <button type="button" onClick={onMore} className="w-full rounded-lg border border-dashed border-ink-200 py-1.5 text-caption text-ink-700 hover:bg-ink-50">Load 40 more</button>}
+			{picked.length > 0 && (
+				<div className="sticky bottom-0 flex items-center gap-2 rounded-lg border border-plum-200 bg-plum-50 px-2.5 py-1.5 text-caption text-plum-900">
+					<Scale className="h-3.5 w-3.5" aria-hidden />
+					<span>{picked.length === 1 ? "Pick one more run" : `${picked.length} runs picked`}</span>
+					<button type="button" onClick={() => setPicked([])} className="text-micro underline">clear</button>
+					{picked.length >= 2 && (
+						<Link to={compareHref(app, { runs: picked.map((ts) => ({ loop: wf.id, ts })) })}
+							className="ml-auto rounded-md bg-plum-700 px-2 py-0.5 text-caption font-medium text-white hover:bg-plum-800">Compare {picked.length}</Link>
+					)}
+				</div>
+			)}
+		</div>
 	);
 }
 
