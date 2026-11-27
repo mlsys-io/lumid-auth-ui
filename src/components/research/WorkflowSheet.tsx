@@ -5,9 +5,9 @@
 //     data, compute, feedback, name and node) — VariantSheetBody, reused.
 //   · Chain other workflows: workflows this app already has, run in order,
 //     each passing its results to the next (`steps: {workflows: [...]}`).
-//     Shown only once the engine that runs a chain is live for this browser
-//     (localStorage lumid:chain-workflows = 1) or the app already has a chain;
-//     otherwise the card says "Coming soon".
+//     The engine that runs a chain is live (identity v0.5.509 + scheduler
+//     v0.4.125, 2026-11-27), so the card is always on; localStorage
+//     lumid:chain-workflows = 0 turns it off in one browser if it misbehaves.
 //   · or describe it in chat: pre-fills the chat (the person presses send).
 //
 // Before saving it says what will happen ("Creates ‘X’ in <app>. It runs only
@@ -53,7 +53,7 @@ type Step = "choose" | "steps" | "chain";
 
 const CHAIN_FLAG = "lumid:chain-workflows";
 function chainOptedIn(): boolean {
-	try { return localStorage.getItem(CHAIN_FLAG) === "1"; } catch { return false; }
+	try { return localStorage.getItem(CHAIN_FLAG) !== "0"; } catch { return true; }
 }
 
 const wfName = (w: SpecWorkflow) => newWorkflowName(w.id, w.title);

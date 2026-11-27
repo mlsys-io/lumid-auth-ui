@@ -24,6 +24,7 @@ import { buildEvolution } from "@/lib/evolution";
 import ApprovalCard, { readNotNow, writeNotNow } from "@/components/research/ApprovalCard";
 import ResearchDashboard from "@/components/research/ResearchDashboard";
 import ResearchTable from "@/components/research/ResearchTable";
+import { compareHref } from "@/lib/run-routes";
 import { Segmented } from "@/components/ui/segmented";
 import { useWorkflowColors, type WfSwatch } from "@/hooks/useWorkflowColors";
 import { useStageHeight } from "@/components/research/stage-height";
@@ -756,6 +757,8 @@ export default function ResearchMap({ app }: { app: string }) {
 	// map, at the right edge; the camera frames the path in the space left.
 	const selProposalIdx = selKind === "sug" ? pending.findIndex((p) => `sug:${p.id}` === selected) : -1;
 	const panelOpen = !!(selWf || selNode || selExp || selProposalIdx >= 0);
+	// An idea's card needs a little more width for its three answers.
+	const sidePx = selProposalIdx >= 0 ? Math.max(panelPx, 416) : panelPx;
 	const panelStyle = { bottom: 12 };
 	const panel = selWf && graph ? (
 		<WorkflowPanel key={selWf.id} app={app} wf={selWf} spec={graph.spec} row={rows.get(selWf.id)} exps={exps}
@@ -782,8 +785,8 @@ export default function ResearchMap({ app }: { app: string }) {
 	) : selProposalIdx >= 0 ? (
 		// An idea to try opens here, in the panel — no longer docked over the
 		// foot of the graph, where it covered half the space (2026-11-27).
-		<div role="dialog" aria-label="Idea to try" style={panelStyle}
-			className="absolute right-3 top-3 z-[6100] flex w-[22rem] max-w-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-xl border border-ink-200 bg-card shadow-e3 map-panel-in 2xl:w-[26rem]">
+		<div role="dialog" aria-label="Idea to try" style={{ ...panelStyle, width: sidePx }}
+			className="absolute right-3 top-3 z-[6100] flex max-w-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-xl border border-ink-200 bg-card shadow-e3 map-panel-in">
 			<div className="flex items-center gap-2 border-b border-ink-100 px-3.5 py-2">
 				<span className="eyebrow text-ember-700">Idea to try</span>
 				<button type="button" onClick={close} aria-label="Close" className="ml-auto inline-flex h-6 w-6 items-center justify-center rounded-md text-ink-600 hover:bg-ink-100"><X className="h-3.5 w-3.5" /></button>
@@ -802,15 +805,15 @@ export default function ResearchMap({ app }: { app: string }) {
 	const workArea = (
 		<div className="relative min-w-0" style={{ height: workHeight }}>
 			{listShown ? (
-				<div className="absolute inset-0" style={panelOpen ? { right: panelPx + 24 } : undefined}>
+				<div className="absolute inset-0" style={panelOpen ? { right: sidePx + 24 } : undefined}>
 					<ResearchTable app={app} exps={exps} pending={pending} workflows={workflows} groups={groups} rows={rows} wfLabel={wfLabel}
 						selected={selected} onSelect={(id) => onSelect(id)}
-						compareHref={(v) => `/studio/apps/${encodeURIComponent(app)}/compare?versions=${encodeURIComponent(v.join(","))}`} />
+						compareHref={(v) => compareHref(app, { versions: v.map((k) => { const i = k.indexOf(":"); return { exp: k.slice(0, i), version: k.slice(i + 1) }; }) })} />
 				</div>
 			) : (
 				<MapCanvas app={app} exps={exps} proposals={pending} workflows={workflows} groups={groups} rows={rows} marks={marks}
 					selected={selected} onSelect={onSelect} grow={grow} ready={mapReady} stageHeight={stage.height}
-					insetBottom={0} insetRight={panelOpen ? panelPx + 12 : 0} />
+					insetBottom={0} insetRight={panelOpen ? sidePx + 12 : 0} />
 			)}
 			{picking && (
 				<div role="status" className="absolute left-1/2 top-3 z-[6200] -translate-x-1/2 rounded-full border border-plum-200 bg-card px-3 py-1 text-caption text-plum-800 shadow-e2">
