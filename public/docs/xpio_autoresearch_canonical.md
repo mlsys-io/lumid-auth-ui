@@ -182,6 +182,7 @@ pages:                                  # the app's own pages, after Studio's Gr
 | `about` + `notes` file | `description` |
 | `helper: true` | `role: helper` |
 | first `feedback` metric | `metrics.primary` |
+| `feedback[].gate` | `engine.gates: {<step>: "<expr>"}` (see below) |
 | `experiments[].workflow` | `dispatch.loop` (+ `loop`) |
 | `question` / `done_when` / `data` | `description` / `success_criteria` / `dataset_id` |
 | `metric.better: lower` | `metric.higher_is_better: false` |
@@ -197,10 +198,41 @@ with `_`, e.g. `prev_observe_n`), which fill `{{ args.prev_<metric> }}` — so a
 declaring it in its own `inputs` — and env `LUMID_PREV_CYCLE` (previous stage's cycle dir) and
 `LUMID_PREV_METRICS` (the same flat metrics, JSON). The first stage whose run is not ok stops the chain;
 the rest are `skipped`. The chain's summary: `engine: chain`, `stages: [{loop, ts, ok, duration_s,
-metrics, status: done|failed|skipped, error?}]`, `metrics` = the last stage's (when it ran), `ok` = every
-stage ran ok, `error: "Stage 2 (sandbox) failed: <reason>"`. A stage naming an unknown workflow, the
-chain itself, or a loop through other chains is refused on save (identity) and at run time; chains
-nest at most 3 deep. A chain has no `python`/`dag`/`skills` of its own.
+metrics, status: done|filtered|failed|skipped, error?, gate?, reason?}]`, `metrics` = the last stage's
+(when it ran), `ok` = every stage ran ok (a filter counts as ok), `error: "Stage 2 (sandbox) failed:
+<reason>"`. A stage naming an unknown workflow, the chain itself, or a loop through other chains is
+refused on save (identity) and at run time; chains nest at most 3 deep. A chain has no
+`python`/`dag`/`skills` of its own. When an experiment runs a version of a chain, the version's
+`inputs` (the run's args) and its id (`LUMID_EXPERIMENT_ID`, `LUMID_RUN_VARIANT`) reach **every**
+stage; on a name clash a stage's own `inputs` win over the version's, which win over `prev_*`.
+
+**`feedback[].gate` (a filter).** A feedback step may carry a `gate`: an expression over that step's
+metrics, checked by the same evaluator as `done_when` (`experiments.safe_eval_expr`: comparisons,
+`and`/`or`/`not`, arithmetic, numbers — a bool metric reads as 0/1, and a nested metric answers by its
+bare name when nothing else claims it). `step` names the stage (a chain stage's workflow id) or, in a
+single workflow, one of its steps; a gate with no `step` gates the workflow itself. No gate = the step
+only measures, and always passes. Both normalizers write `engine.gates: {<step>: "<expr>"}` for a
+chain and a single workflow alike; identity refuses a `gate` that is not a non-empty string.
+
+- **Chain.** After each stage runs ok, its gate is checked on its flat metrics. A failing gate marks
+  the stage `filtered` and the rest `skipped`; the chain run is still **ok** (a filter is a result,
+  not an error) with `filtered_at: <stage>` and `reason` in words naming the failing comparison(s) —
+  `"score 0.21 < 0.5, trades 12 < 30"` for `score >= 0.5 and trades >= 30`. A metric the stage never
+  reported fails its gate (`"trades was not reported (gate: trades >= 30)"`).
+- **Single workflow.** After an ok run, its feedback steps are checked in order on the run's metrics;
+  the first failing gate filters the version the same way and the steps after it are not recorded.
+- **Stage rows.** When the run is a version of an experiment (the dispatch named the version; the
+  experiment is the one it named, else the one the workflow is attached to), every step that ran ok
+  appends **one** row to that experiment's ledger:
+  `record_result(app_dir, <experiment>, variant_id=<version>, metrics={...the step's metrics...,
+  cost_usd, duration_s, stage_passed: 1|0}, dims={stage, stage_index: "1".., passed: "1"|"0",
+  reason, chain: <chain id, or the workflow's own id>}, cycle_ts=<the step's run ts>)`. `cost_usd` is
+  the step run's `cost.cost_usd`, else a `cost_usd` metric it reported, else 0; in a single workflow
+  the run's cost and duration go on step 1's row and 0 on the rest, so sums stay true. A stage that
+  **failed** writes no row — it measured nothing and stays re-runnable — and a plain run (no version)
+  writes none. With gates the platform writes these rows: a gated step's command should not also
+  `record_result` the same metrics, or they count twice. The versions × steps evidence (who passed
+  which step, why the rest stopped, what each step cost) is read off these rows alone.
 
 ```yaml
 - id: strategy_pipeline
@@ -211,6 +243,9 @@ nest at most 3 deep. A chain has no `python`/`dag`/`skills` of its own.
     - backtest
     - use: forward_test
       inputs: {days: 7}
+  feedback:                    # a gate per stage: pass, or the version stops there
+  - {step: backtest, metrics: [{name: score}, {name: n}], gate: "score >= 0.5 and n >= 30"}
+  - {step: forward_test, metrics: [{name: score}]}               # no gate: measures only
 ```
 
 Studio edits this file for you: **Make a variant** appends a workflow (with its DAG, notes or Python

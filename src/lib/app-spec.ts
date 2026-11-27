@@ -13,8 +13,13 @@
 import { parseDocument, isMap, isSeq, type Document, YAMLMap, YAMLSeq } from "yaml";
 
 export interface FeedbackMetric { name: string; better: "higher" | "lower"; target?: number }
-/** `service`: the instrument that measures this step (identity's /me/measure registry). */
-export interface FeedbackStep { step: string; metrics: FeedbackMetric[]; service?: string }
+/**
+ * `service`: the instrument that measures this step (identity's /me/measure registry).
+ * `gate`: the step's pass rule, an expression over its metrics ("score >= 0.5 and n >= 30",
+ * the evaluator `done_when` uses). A version that fails it stops at this step; no gate =
+ * the step only measures. The runtime reads it as `engine.gates` (spec_v2).
+ */
+export interface FeedbackStep { step: string; metrics: FeedbackMetric[]; service?: string; gate?: string }
 
 export interface SpecWorkflow {
 	id: string;
@@ -79,9 +84,19 @@ function feedbackOf(v: unknown): FeedbackStep[] {
 				return { name: s(mo.name), better: s(mo.better).toLowerCase() === "lower" ? "lower" : "higher", ...(mo.target != null && Number.isFinite(t) ? { target: t } : {}) } as FeedbackMetric;
 			}).filter((m) => m.name),
 			...(s(o.service).trim() ? { service: s(o.service).trim() } : {}),
+			...(typeof o.gate === "string" && o.gate.trim() ? { gate: o.gate.trim() } : {}),
 		};
 	}).filter((st) => st.step);
 }
+
+const metricsOut = (f: FeedbackStep) => f.metrics.map((m) => ({ name: m.name, better: m.better, ...(m.target != null ? { target: m.target } : {}) }));
+/** One feedback step as written to the spec. */
+const feedbackOut = (f: FeedbackStep): Obj => ({
+	step: f.step,
+	...(f.service ? { service: f.service } : {}),
+	metrics: metricsOut(f),
+	...(f.gate?.trim() ? { gate: f.gate.trim() } : {}),
+});
 
 /** `steps.workflows` as written: ids, or `{use, inputs}`. Entries without a workflow are dropped. */
 function chainOf(v: unknown): ChainStage[] {
@@ -238,7 +253,7 @@ export function addWorkflows(text: string, entries: NewWorkflow[], node?: SpecNo
 		if (e.inputs && Object.keys(e.inputs).length) entry.inputs = e.inputs;
 		if (e.data?.length) entry.data = e.data;
 		if (e.compute && Object.values(e.compute).some(Boolean)) entry.compute = Object.fromEntries(Object.entries(e.compute).filter(([, v]) => v));
-		if (e.feedback?.length) entry.feedback = e.feedback.map((f) => ({ step: f.step, ...(f.service ? { service: f.service } : {}), metrics: f.metrics.map((m) => ({ name: m.name, better: m.better, ...(m.target != null ? { target: m.target } : {}) })) }));
+		if (e.feedback?.length) entry.feedback = e.feedback.map(feedbackOut);
 		seq.add(d.createNode(entry));
 	}
 	return String(d);
@@ -312,15 +327,35 @@ export function removeNode(text: string, id: string): string {
 	return String(d);
 }
 
-/** Replace a workflow's feedback steps and metrics. */
+/**
+ * Replace a workflow's feedback steps (metrics, service, gate). A step that was
+ * already there is edited in place, so its comments and style survive; new
+ * steps are appended in the order given; steps left out are removed.
+ */
 export function setFeedback(text: string, workflowId: string, feedback: FeedbackStep[]): string {
 	const d = doc(text);
 	const w = findWorkflow(d, workflowId);
 	if (!w) throw new Error(`No workflow "${workflowId}"`);
-	if (feedback.length) {
-		w.set("feedback", d.createNode(feedback.map((f) => ({ step: f.step, ...(f.service ? { service: f.service } : {}), metrics: f.metrics.map((m) => ({ name: m.name, better: m.better, ...(m.target != null ? { target: m.target } : {}) })) }))));
-	} else {
+	if (!feedback.length) {
 		w.delete("feedback");
+		return String(d);
 	}
+	const old = w.get("feedback", true);
+	if (!isSeq(old)) {
+		w.set("feedback", d.createNode(feedback.map(feedbackOut)));
+		return String(d);
+	}
+	const byStep = new Map<string, YAMLMap>();
+	for (const it of old.items) if (isMap(it)) byStep.set(s(it.get("step")), it as YAMLMap);
+	old.items = feedback.map((f) => {
+		const m = byStep.get(f.step);
+		if (!m) return d.createNode(feedbackOut(f));
+		byStep.delete(f.step); // a step listed twice gets a fresh entry the second time
+		if (f.service) m.set("service", f.service); else m.delete("service");
+		const was = feedbackOf([m.toJSON()])[0]?.metrics ?? [];
+		if (JSON.stringify(was) !== JSON.stringify(f.metrics)) m.set("metrics", d.createNode(metricsOut(f)));
+		if (f.gate?.trim()) m.set("gate", f.gate.trim()); else m.delete("gate");
+		return m;
+	});
 	return String(d);
 }
