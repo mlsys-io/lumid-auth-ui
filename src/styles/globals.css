@@ -914,7 +914,6 @@ html[data-surface="studio"] ::selection {
 @keyframes research-flow { to { stroke-dashoffset: -10; } }
 @media (prefers-reduced-motion: reduce) {
 	.react-flow__edge-path.research-edge-draw { animation: none; stroke-dasharray: none; stroke-dashoffset: 0; }
-	.space3d-card-in { animation: none; }
 	.react-flow__edge-path.research-edge-flow { animation: none; }
 }
 
@@ -987,7 +986,6 @@ html[data-surface="studio"] ::selection {
 /* The selected path's edges flow from the app outwards. */
 .space3d-edge-flow { stroke-dasharray: 4 3; animation: research-flow 1.2s linear infinite; }
 @media (prefers-reduced-motion: reduce) {
-	.space3d-edge-flow { animation: none; }
 }
 /* Dot labels in the 3D space: a halo of the page colour keeps a name legible
    where it crosses an edge, without boxing it (Novix's bare labels). */
@@ -1010,14 +1008,11 @@ html[data-surface="studio"] ::selection {
 /* Hovering a node lights its panel (no card swap, nothing moves). */
 .space3d [data-kind]:hover .space3d-panel { border-color: theme('colors.plum.400'); box-shadow: 0 2px 8px color-mix(in srgb, theme('colors.ink.900') 14%, transparent); }
 .space3d [data-kind]:hover .space3d-label:not(.space3d-panel) > span:first-child { text-decoration: underline; text-decoration-color: theme('colors.plum.300'); text-underline-offset: 2px; }
-@media (prefers-reduced-motion: reduce) { .space3d-panel { transition: none; } }
 .space3d-label-left { left: auto !important; right: 100%; margin-left: 0; margin-right: 0.25rem; align-items: flex-end; text-align: right; }
-@media (prefers-reduced-motion: reduce) { .space3d-label { transition: none; } }
 
 /* The research map's root radiates while its app works (Novix's root rings). */
 @keyframes space3d-ping { 0% { transform: scale(1); opacity: 0.7; } 100% { transform: scale(2.6); opacity: 0; } }
 .space3d-ping { animation: space3d-ping 2.2s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
-@media (prefers-reduced-motion: reduce) { .space3d-ping { animation: none; opacity: 0; } }
 /* The wash under an evolution line and its end dot arrive after the line has drawn. */
 @keyframes evo-area-in { 0%, 60% { opacity: 0; } 100% { opacity: 1; } }
 .evo-area-in { animation: evo-area-in 1.2s ease-out both; }

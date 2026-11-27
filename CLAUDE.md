@@ -177,8 +177,9 @@ on. (Simulator vs real GPU, backtest vs forward test are app details, not UI str
   code, and no 3D library. App at the centre, experiments on a ring, versions in columns further
   out; perspective camera turns when idle (paused on hover), drag/⌘-scroll/arrows; clicking a card
   turns its branch to face you and frames the path. Cards are DOM, edges SVG, ONE rAF loop writes
-  transforms (React never re-renders per frame; the loop stops when idle/hidden). Reduced motion:
-  no turning, no fly-to, no flow. Test hooks: `[data-kind]`, `[data-dim]`, `aria-pressed`.
+  transforms (React never re-renders per frame; the loop stops when idle/hidden). **The space
+  ignores the system's reduced-motion setting** (operator decision 2026-11-27; `reduced = false` in
+  `Space3D`); the rest of Studio still honours it. Test hooks: `[data-kind]`, `[data-dim]`, `aria-pressed`.
 - **Compute panel**: machines from `GET /me/compute` (identity, counts only), the app's queue from
   `GET /me/apps/:app/queue` (scheduler `queue_read`), running/finished from the runs feed. **Not on the
   app home** (2026-11-25: unwanted beside the map when the chat rail is hidden — running work lives
@@ -223,7 +224,7 @@ on. (Simulator vs real GPU, backtest vs forward test are app details, not UI str
   depth, ζ 0.62) toward its projected point — born at its parent (the tree springs out), lags a
   drag and settles, hovered node's neighbours lean 7px toward it. Edges are quadratic curves that
   all sweep one way and flex with the child's spring velocity; width/opacity by depth; the
-  selected path is plum, dashed, flowing, over a soft halo. Reduced motion: springs snap.
+  selected path is plum, dashed, flowing, over a soft halo. (Reduced motion is ignored here — see round 5.)
 - **Approval card docks over the foot of the map** (Novix), tinted equal-half answers.
 - Evolution lines are monotone cubics (`smoothPath`, never overshoot a value) with a wash under a
   lone line; version chips are plum, winning inverted.
