@@ -11,7 +11,7 @@
 // Lumid's clarity: readable cards with a status in words, no modes, no
 // counters. Wording lives in lib/research-map.ts. Phones get a list.
 
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowRight, ChevronDown, FlaskConical, MessagesSquare, Plus, Sparkles, X } from "lucide-react";
 import { openNewWorkflow, useNewWorkflowParam, useNewWorkflowRequests } from "@/components/research/new-workflow";
@@ -648,6 +648,63 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 	);
 }
 
+/** A version's own panel (2026-11-27: "when selecting a leaf node, the pop-up
+ *  panel only shows its parent"): where it stands, its numbers, and its verbs. */
+function VersionPanel({ app, e, version, style, onClose, onBack, onCompare }: {
+	app: string; e: MeExperiment; version: string; style?: React.CSSProperties;
+	onClose: () => void; onBack: () => void; onCompare: () => void;
+}) {
+	const v = versionsOf(e).find((x) => x.id === version);
+	const agg = e.variants?.[version];
+	const metric = e.metric?.name || e.metric_name || "";
+	const m = metric ? humanMetric(metric) : null;
+	const val = (n: number) => fmtMetricValue(n, m?.unit ?? "", metric);
+	const arm = (e.arms || []).find((a) => String(a.id) === version) as Record<string, unknown> | undefined;
+	const settings = arm ? Object.entries(arm).filter(([k]) => k !== "id" && k !== "description") : [];
+	useEffect(() => {
+		const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") onClose(); };
+		window.addEventListener("keydown", onKey);
+		return () => window.removeEventListener("keydown", onKey);
+	}, [onClose]);
+	return (
+		<div role="dialog" aria-label={`Version: ${v?.label ?? humanId(version)}`} style={style}
+			className="absolute right-3 top-12 z-[6100] flex flex-col overflow-hidden rounded-xl border border-ink-200 bg-card shadow-e3 map-panel-in">
+			<div className="space-y-1 border-b border-ink-100 px-3.5 pb-2.5 pt-3">
+				<div className="flex items-center gap-1">
+					<span className="eyebrow text-plum-700">Version</span>
+					<button type="button" onClick={onClose} aria-label="Close" title="Close (Esc)" className="ml-auto inline-flex h-6 w-6 items-center justify-center rounded-md text-ink-600 hover:bg-ink-100"><X className="h-3.5 w-3.5" /></button>
+				</div>
+				<div className="text-title font-semibold leading-snug text-ink-900">{v?.label ?? humanId(version)}</div>
+				<button type="button" onClick={onBack} className="text-caption text-ink-700 hover:text-ink-900 hover:underline">of {humanId(e.id)} ›</button>
+				{v && <div className="flex items-center gap-1.5"><span className={cn("rounded-full border px-1.5 text-nano font-medium", TAG_CLS[v.tag] ?? TAG_CLS.current)}>{v.tag}</span><span className="text-caption text-ink-700">{v.line}</span></div>}
+			</div>
+			<div className="scrollbar-hide min-h-0 flex-1 space-y-3 overflow-y-auto px-3.5 py-3">
+				{v?.description && <p className="text-caption text-ink-800">{v.description}</p>}
+				{agg && agg.n > 0 && m && (
+					<dl className="grid grid-cols-3 gap-2 text-center">
+						<div className="rounded-lg border border-ink-100 px-2 py-1.5"><dt className="eyebrow">Average</dt><dd className="font-mono text-meta tabular-nums text-ink-900">{val(agg.mean)}</dd></div>
+						<div className="rounded-lg border border-ink-100 px-2 py-1.5"><dt className="eyebrow">Latest</dt><dd className="font-mono text-meta tabular-nums text-ink-900">{agg.last != null ? val(agg.last) : "—"}</dd></div>
+						<div className="rounded-lg border border-ink-100 px-2 py-1.5"><dt className="eyebrow">Results</dt><dd className="font-mono text-meta tabular-nums text-ink-900">{agg.n}</dd></div>
+					</dl>
+				)}
+				{m && <p className="text-micro text-ink-600">{m.label}{m.unit ? ` (${m.unit})` : ""} — {e.higher_is_better === false || e.metric?.higher_is_better === false ? "lower" : "higher"} is better</p>}
+				{settings.length > 0 && (
+					<section className="space-y-1">
+						<h3 className="eyebrow">What it changes</h3>
+						<dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-caption">
+							{settings.map(([k, x]) => (<Fragment key={k}><dt className="text-ink-600">{humanId(k)}</dt><dd className="min-w-0 truncate font-mono text-micro text-ink-900" title={String(x)}>{typeof x === "object" ? JSON.stringify(x) : String(x)}</dd></Fragment>))}
+						</dl>
+					</section>
+				)}
+			</div>
+			<div className="flex flex-wrap items-center gap-1.5 border-t border-ink-100 bg-muted/30 px-3 py-2">
+				<RunVersions app={app} e={e} only={version} />
+				<Button size="sm" variant="ghost" onClick={onCompare} className="ml-auto">Compare with…</Button>
+			</div>
+		</div>
+	);
+}
+
 /** Versions with results, each with a checkbox: two to five → Compare N. */
 function PickVersions({ app, e }: { app: string; e: MeExperiment }) {
 	const vs = versionsOf(e).filter((v) => v.n > 0);
@@ -835,6 +892,9 @@ export default function ResearchMap({ app }: { app: string }) {
 				<CompareView app={app} a={selVersionSide} b={sideOf(compareB)} spec={graph?.spec} onPick={() => setPicking(true)} />
 			</div>
 		</div>
+	) : selKind === "ver" && selExp && !compareB ? (
+		<VersionPanel key={selected!} app={app} e={selExp} version={selected!.split(":")[2]} style={panelStyle} onClose={close}
+			onBack={() => onSelect(`exp:${selExp.id}`)} onCompare={() => setPicking(true)} />
 	) : selExp ? (
 		<ExperimentDetail key={selExp.id} app={app} e={selExp} panel onClose={close} style={panelStyle}
 			onCompare={selVersionSide ? () => setPicking(true) : undefined}

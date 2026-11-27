@@ -20,7 +20,11 @@ import type { QueueRow } from "@/lib/compute";
 import { cn } from "@/lib/utils";
 import { loopLabel } from "@/lib/workflow-names";
 
-type Sent = { n: number; loop: string; intents: string[]; labels: string[] } | { chat: true };
+type Sent = { n: number; loop: string; intents: string[]; labels: string[]; exp: string; ids: string[]; sentAt: number } | { chat: true };
+
+// A batch outlives its panel: closing and reopening the experiment (or the
+// panel re-rendering after the results refresh) used to drop the progress.
+const sentByExperiment = new Map<string, Sent>();
 
 // Read the batch back from the app's queue until every run has finished —
 // the button used to say "Queued" once and go quiet while runs started,
@@ -38,7 +42,7 @@ function useBatch(app: string, sent: Sent | null, onFinished: () => void): Batch
 			try {
 				const q = await me.appQueue(app);
 				if (stop) return;
-				const p = batchProgress((q.rows || []) as QueueRow[], sent.intents, sent.labels);
+				const p = batchProgress((q.rows || []) as QueueRow[], sent.intents, sent.labels, { experiment: sent.exp, versions: sent.ids, sentAt: sent.sentAt });
 				setProg(p);
 				if (p.finished) {
 					// The results are in: the chart and the map re-read them now.
@@ -62,16 +66,22 @@ const DOT: Record<string, string> = {
 	failed: "bg-brick-500",
 };
 
-export default function RunVersions({ app, e, onQueued }: { app: string; e: MeExperiment; onQueued?: () => void }) {
+export default function RunVersions({ app, e, onQueued, only }: { app: string; e: MeExperiment; onQueued?: () => void;
+	/** Just this version (a version's own panel). */
+	only?: string }) {
+	const key = only ? `${e.id}:${only}` : e.id;
 	const [busy, setBusy] = useState(false);
-	const [sent, setSent] = useState<Sent | null>(null);
+	const [sent, setSentState] = useState<Sent | null>(() => sentByExperiment.get(key) ?? null);
+	const setSent = (s: Sent | null) => { if (s) sentByExperiment.set(key, s); else sentByExperiment.delete(key); setSentState(s); };
 	const [err, setErr] = useState<string | null>(null);
 	const loop = experimentLoop(e);
-	const { ids, untried } = versionsToRun(e);
+	const all = versionsToRun(e);
+	const ids = only ? [only] : all.ids;
+	const untried = only ? !(e.variants?.[only]?.n) : all.untried;
 	const [over, setOver] = useState(false);
-	const prog = useBatch(app, sent, () => setOver(true));
+	const prog = useBatch(app, sent, () => { setOver(true); sentByExperiment.delete(key); });
 	if (!loop || !ids.length || e.status && /concluded|done|archived|closed/i.test(e.status)) return null;
-	const label = untried
+	const label = only ? `Run ${humanId(only)} once` : untried
 		? ids.length === 1 ? `Run the untried version (${humanId(ids[0])})` : `Run the ${ids.length} untried versions`
 		: `Run each version once more (${ids.length} runs)`;
 
@@ -101,7 +111,7 @@ export default function RunVersions({ app, e, onQueued }: { app: string; e: MeEx
 				});
 				intents.push(r.intent_id);
 			}
-			setSent({ n: ids.length, loop, intents, labels: ids.map(humanId) });
+			setSent({ n: ids.length, loop, intents, labels: ids.map(humanId), exp: e.id, ids, sentAt: Date.now() / 1000 });
 			onQueued?.();
 			// Report what the scheduler did, not what we asked for.
 			Promise.all(intents.map((i) => waitForIntent(i, { timeoutMs: 90_000 }).catch(() => null)))

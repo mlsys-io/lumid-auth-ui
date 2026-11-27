@@ -770,7 +770,6 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		else if (st.homeZoom && zoom <= st.homeZoom * 1.02) st.parked = false;
 		touch();
 	};
-	const pan = (dx: number, dy: number) => { const c = s.current.cam; s.current.cam = { ...c, focusX: c.focusX + dx, focusY: c.focusY + dy }; s.current.parked = true; touch(); };
 	// Shift+arrows: a sprung move.
 	const panStep = (dx: number, dy: number) => { s.current.parked = true; stepTo((c) => ({ ...c, focusX: c.focusX + dx, focusY: c.focusY + dy })); };
 	// Zoom buttons and +/- keys: a sprung zoom about the centre.
@@ -877,20 +876,14 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 	useEffect(() => {
 		const el = boxRef.current;
 		if (!el) return;
-		// A mouse wheel zooms about the cursor (2026-11-27: "mouse middle scroll
-		// should be zoom in and out"), as do ⌘/ctrl + wheel and a trackpad pinch
-		// (which arrives as ctrl+wheel). A two-finger trackpad drag — small,
-		// fractional, often sideways deltas — still moves the space.
+		// The wheel zooms about the cursor, with or without ctrl (2026-11-27:
+		// "mouse wheel, when not pressing ctrl, should be zoom"); a trackpad pinch
+		// arrives as ctrl+wheel and zooms too. Moving: drag with both buttons, the
+		// right button or shift, or two fingers on a touch screen.
 		const onWheel = (e: WheelEvent) => {
 			e.preventDefault();
-			const mouseWheel = e.deltaMode === 1 || (e.deltaX === 0 && Math.abs(e.deltaY) >= 40 && Number.isInteger(e.deltaY));
-			if (e.ctrlKey || e.metaKey || mouseWheel) {
-				const dy = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY;
-				zoomBy(Math.exp(-Math.max(-240, Math.min(240, dy)) * 0.0022), local(e));
-				return;
-			}
-			const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? s.current.H : 1;
-			pan(-e.deltaX * unit, -e.deltaY * unit);
+			const dy = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaMode === 2 ? e.deltaY * s.current.H : e.deltaY;
+			zoomBy(Math.exp(-Math.max(-240, Math.min(240, dy)) * 0.0022), local(e));
 		};
 		el.addEventListener("wheel", onWheel, { passive: false });
 		return () => el.removeEventListener("wheel", onWheel);
