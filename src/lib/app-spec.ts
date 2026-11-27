@@ -28,7 +28,8 @@ export interface SpecWorkflow {
 	helper: boolean;
 	/** "manual" or a cron. */
 	run: string;
-	steps: { python?: string; dag?: string; skills?: string[] };
+	/** `workflows`: a chain of other workflows, run in order (see ChainStage). */
+	steps: { python?: string; dag?: string; skills?: string[]; workflows?: ChainStage[] };
 	inputs: Record<string, unknown>;
 	data: string[];
 	compute: { site?: string; gpu?: string };
@@ -41,6 +42,18 @@ export interface SpecWorkflow {
 }
 
 export interface SpecNode { id: string; title: string; parent: string }
+
+/**
+ * One stage of a chain (`steps.workflows`): another workflow of the same app,
+ * by id, or `{use, inputs}` to run it with some inputs changed. The stages run
+ * in order, each passing its results on; the chain stops at the first that fails.
+ */
+export type ChainStage = string | { use: string; inputs?: Record<string, unknown> };
+
+/** A chain's stages in one shape: `{use, inputs}` (inputs = only the changed ones). */
+export function chainStages(steps: { workflows?: ChainStage[] }): Array<{ use: string; inputs: Record<string, unknown> }> {
+	return (steps.workflows ?? []).map((st) => (typeof st === "string" ? { use: st, inputs: {} } : { use: st.use, inputs: st.inputs ?? {} }));
+}
 
 export interface AppSpec {
 	title?: string;
@@ -70,6 +83,18 @@ function feedbackOf(v: unknown): FeedbackStep[] {
 	}).filter((st) => st.step);
 }
 
+/** `steps.workflows` as written: ids, or `{use, inputs}`. Entries without a workflow are dropped. */
+function chainOf(v: unknown): ChainStage[] {
+	return list(v).flatMap((st): ChainStage[] => {
+		if (typeof st === "string") return st.trim() ? [st.trim()] : [];
+		const o = obj(st);
+		const use = s(o.use || o.workflow).trim();
+		if (!use) return [];
+		const inputs = obj(o.inputs);
+		return [Object.keys(inputs).length ? { use, inputs } : { use }];
+	});
+}
+
 function workflowOf(w: Obj, legacy: boolean): SpecWorkflow {
 	const eng = obj(w.engine);
 	const steps = obj(w.steps);
@@ -90,7 +115,7 @@ function workflowOf(w: Obj, legacy: boolean): SpecWorkflow {
 		run: !run || run === "@trigger" || run === "manual" ? "manual" : run,
 		steps: legacy
 			? eng.type === "command" ? { python: s(eng.module) } : eng.type === "lumilake" || eng.type === "flowmesh" ? { dag: s(eng.workflow) } : list(w.skills).length ? { skills: list(w.skills).map(s) } : {}
-			: { ...(steps.python ? { python: s(steps.python) } : {}), ...(steps.dag ? { dag: s(steps.dag) } : {}), ...(list(steps.skills).length ? { skills: list(steps.skills).map(s) } : {}) },
+			: { ...(steps.python ? { python: s(steps.python) } : {}), ...(steps.dag ? { dag: s(steps.dag) } : {}), ...(list(steps.skills).length ? { skills: list(steps.skills).map(s) } : {}), ...(chainOf(steps.workflows).length ? { workflows: chainOf(steps.workflows) } : {}) },
 		inputs: obj(w.inputs),
 		data: list(w.data ?? w.datasets).map(s).filter(Boolean),
 		compute,
@@ -171,7 +196,7 @@ function findNode(d: Document.Parsed, id: string): YAMLMap | null {
 
 export interface NewWorkflow {
 	id: string; title?: string; about?: string; parent?: string; node?: string;
-	steps: { python?: string; dag?: string; skills?: string[] };
+	steps: { python?: string; dag?: string; skills?: string[]; workflows?: ChainStage[] };
 	inputs?: Record<string, unknown>; data?: string[]; compute?: { site?: string; gpu?: string };
 	feedback?: FeedbackStep[]; notes?: string;
 }
@@ -184,6 +209,14 @@ export function addWorkflows(text: string, entries: NewWorkflow[], node?: SpecNo
 		if (!/^[a-z][a-z0-9_]{0,47}$/.test(e.id)) throw new Error(`"${e.id}" can't be a workflow id: use lower-case letters, digits and _`);
 		if (ids.has(e.id)) throw new Error(`There is already a workflow called "${e.id}"`);
 		if (e.parent && !ids.has(e.parent)) throw new Error(`There is no workflow "${e.parent}" to make a variant of`);
+		if (e.steps.workflows) {
+			const stages = chainStages(e.steps);
+			if (!stages.length) throw new Error("A chain needs at least one workflow");
+			for (const st of stages) {
+				if (st.use === e.id) throw new Error(`"${e.id}" can't be a stage of itself`);
+				if (!ids.has(st.use)) throw new Error(`There is no workflow "${st.use}" to chain`);
+			}
+		}
 		ids.add(e.id);
 	}
 	if (node) {
@@ -199,7 +232,9 @@ export function addWorkflows(text: string, entries: NewWorkflow[], node?: SpecNo
 		if (e.parent) entry.parent = e.parent;
 		if (e.node) entry.node = e.node;
 		entry.run = "manual";
-		entry.steps = e.steps;
+		entry.steps = e.steps.workflows
+			? { workflows: e.steps.workflows.map((st) => (typeof st === "string" || !st.inputs || !Object.keys(st.inputs).length ? (typeof st === "string" ? st : st.use) : { use: st.use, inputs: st.inputs })) }
+			: e.steps;
 		if (e.inputs && Object.keys(e.inputs).length) entry.inputs = e.inputs;
 		if (e.data?.length) entry.data = e.data;
 		if (e.compute && Object.values(e.compute).some(Boolean)) entry.compute = Object.fromEntries(Object.entries(e.compute).filter(([, v]) => v));

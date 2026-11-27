@@ -3,6 +3,8 @@ import { readAppSpec, addWorkflows } from "./app-spec";
 import {
 	idProblem, suggestId, inputRowsFrom, inputValue, inputsFrom, dagPath, codePath, cleanFeedback,
 	buildVariants, describePrompt, saveErrorWords, type VariantForm,
+	buildChain, chainRowFor, chainStageFrom, chainFeedback, chainable, chainEnabled, passesOn,
+	newWorkflowName, createsSentence, createdToast, newWorkflowChatPrompt, definitionLines,
 } from "./variant-form";
 
 type Check = { name: string; run: () => void };
@@ -139,6 +141,55 @@ check("save errors in words", () => {
 
 check("a request that got no answer is said in words", () => {
 	eq(saveErrorWords(new TypeError("Failed to fetch")), "Couldn't reach lum.id, so nothing was saved — try again in a moment.");
+});
+
+// ── a new workflow, and chains ──
+
+check("new workflow words: name, the sentence before saving, the toast, the chat prompt", () => {
+	eq(newWorkflowName("strategy_run"), "Strategy run");
+	eq(newWorkflowName("strategy_run", "  Strategy pipeline "), "Strategy pipeline");
+	eq(createsSentence("Strategy pipeline", "Quant Research"), "Creates \u2018Strategy pipeline\u2019 in Quant Research. It runs only when you press Run.");
+	eq(createdToast("Strategy pipeline"), "Created Strategy pipeline \u2014 run it when you're ready");
+	const p = newWorkflowChatPrompt("Quant Research");
+	if (/how often|schedule|cron/i.test(p)) throw new Error(`the prompt asks about a schedule: ${p}`);
+	if (!/only when I press Run/.test(p)) throw new Error("the prompt doesn't say it runs only when pressed");
+});
+check("chain stages: unchanged inputs write the bare id; changed ones only the change", () => {
+	eq(chainable(spec).map((w) => w.id), ["simulate", "graph"]);
+	const row = chainRowFor(sim);
+	eq(chainStageFrom(row, sim), "simulate");
+	const changed = { ...row, inputs: row.inputs.map((r) => (r.key === "rounds" ? { ...r, value: "7" } : r)).concat([{ key: "days", value: "7" }]) };
+	eq(chainStageFrom(changed, sim), { use: "simulate", inputs: { rounds: 7, days: 7 } });
+	// A removed input falls back to the workflow's own value: no override.
+	eq(chainStageFrom({ ...row, inputs: row.inputs.filter((r) => r.key !== "task") }, sim), "simulate");
+});
+check("chain: buildChain → addWorkflows writes steps.workflows, run manual, feedback from the last stage", () => {
+	const stages = [{ ...chainRowFor(sim), inputs: [{ key: "rounds", value: "5" }] }, chainRowFor(spec.workflows[1]), chainRowFor(sim)];
+	eq(chainFeedback(spec, stages).map((f) => f.step), ["simulator"]);
+	eq(chainFeedback(spec, stages.slice(0, 2)), []);
+	const built = buildChain({ id: "sim_chain", title: "Simulate twice", stages, feedback: chainFeedback(spec, stages), placement: { mode: "into", node: "real_gpu" } }, spec);
+	eq(built.files, []);
+	const w = readAppSpec(addWorkflows(SPEC, built.entries, built.node)).workflows.find((x) => x.id === "sim_chain")!;
+	eq([w.run, w.node, w.title, w.steps], ["manual", "real_gpu", "Simulate twice", { workflows: [{ use: "simulate", inputs: { rounds: 5 } }, "graph", "simulate"] }]);
+	eq(w.feedback[0].metrics[0], { name: "objective", better: "higher", target: 1 });
+	if (!/workflows simulate → graph → simulate, in order/.test(definitionLines(w)[0])) throw new Error(definitionLines(w)[0]);
+});
+check("chain: refuses an empty chain, a taken id, a bad input, a vanished workflow", () => {
+	const ok = { id: "c", title: "", stages: [chainRowFor(sim)], feedback: [], placement: { mode: "under" as const } };
+	throws(() => buildChain({ ...ok, stages: [] }, spec), /at least one workflow/);
+	throws(() => buildChain({ ...ok, id: "simulate" }, spec), /already a workflow/);
+	throws(() => buildChain({ ...ok, stages: [{ use: "simulate", inputs: [{ key: "rounds", value: "many" }] }] }, spec), /Stage 1 \(Simulate\): Input "rounds": "many" is not a number/);
+	throws(() => buildChain({ ...ok, stages: [{ use: "gone", inputs: [] }] }, spec), /no workflow "gone" any more/);
+});
+check("chain: what passes on, and when the builder is offered", () => {
+	const graph = spec.workflows[1];
+	eq(passesOn(sim, graph, 2), { line: "Stage 2 can use stage 1's results (Objective) as prev_objective", inputs: ["prev_objective"], uses: [] });
+	const reads = { ...graph, inputs: { prev_objective: 0, prev_other: 1, window: 3 } };
+	eq(passesOn(sim, reads, 3).uses, ["prev_objective"]);
+	eq(passesOn(graph, sim, 2), { line: "Stage 2 runs after stage 1 and can read its results", inputs: [], uses: [] });
+	eq([chainEnabled(spec, false), chainEnabled(spec, true)], [false, true]);
+	const withChain = readAppSpec(SPEC.replace("nodes:", "  - id: c\n    steps: {workflows: [simulate]}\nnodes:"));
+	eq(chainEnabled(withChain, false), true);
 });
 
 export function run(): number {

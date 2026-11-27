@@ -1,6 +1,6 @@
 // ApprovalCard — "For your approval": what an app suggests trying next, with
 // what it will try, what it costs and when it is done, and two answers —
-// Go ahead (starts the experiment through the existing experiments route) or
+// Go ahead (adds the experiment through the existing experiments route; it runs nothing) or
 // Not now (hidden for this session). Shared by the app's Research map and the
 // Inbox's "Needs you", so a suggestion reads and acts the same in both.
 // Kept out of ResearchMap.tsx so the Inbox does not load the map's graph code.
@@ -67,10 +67,11 @@ export default function ApprovalCard({ app, list, index, onIndex, onDone, showAp
 				id: p.id, loop, metric, dataset_id: p.dataset_id, kind: p.kind, hypothesis: p.hypothesis,
 				success_criteria: p.success_criteria, min_samples: p.min_samples, arms: p.arms,
 			});
-			toast.success(`Started “${humanId(p.id)}” — it joins the map when ${loopLabel("", loop)} next runs.`);
+			// Go ahead adds the experiment; it runs nothing (a separate press does).
+			toast.success(`Added ‘${humanId(p.id)}’ to ${loopLabel("", loop)}. Run its versions when you're ready.`);
 			onDone(p.id);
 		} catch (e) {
-			toast.error(`Couldn't start it: ${e instanceof MeApiError ? e.message : String(e)}`, {
+			toast.error(`Couldn't add it: ${e instanceof MeApiError ? e.message : String(e)}`, {
 				action: { label: "Ask about it", onClick: () => window.dispatchEvent(new CustomEvent("studio:ask", { detail: { prompt: `Start the suggested experiment ${p.id} for me — it failed from the map.`, context: { app } } })) },
 			});
 		} finally { setBusy(false); }

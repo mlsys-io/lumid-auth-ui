@@ -26,6 +26,7 @@ import { appTitle } from "@/components/workflow/AppCard";
 import { loopLabel } from "@/lib/workflow-names";
 import { bearerHeader } from "@/api/session-bearer";
 import AppSecretsSection, { type ConfigField } from "./AppSecretsSection";
+import { newWorkflowPath } from "@/components/research/new-workflow";
 import {
 	Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
@@ -64,7 +65,7 @@ function XpioRef({ ref, className, children }: { ref: string; className?: string
 }
 
 const SCHEDULE_PRESETS: { label: string; value: string }[] = [
-	{ label: "Manual only (@trigger)", value: "@trigger" },
+	{ label: "Only when you press Run", value: "@trigger" },
 	{ label: "Every 30 minutes", value: "*/30 * * * *" },
 	{ label: "Hourly", value: "0 * * * *" },
 	{ label: "Daily at 08:00", value: "0 8 * * *" },
@@ -82,14 +83,13 @@ export default function AppManagePanel() {
 	const [saving, setSaving] = useState(false);
 	const [pickerOpen, setPickerOpen] = useState(false);
 	const [wfFormOpen, setWfFormOpen] = useState(false);
-	// ?new=1 — arrived from the workflow picker's "Fill in a form": open the
-	// New workflow form straight away (once), instead of a second click here.
-	const [params, setParams] = useSearchParams();
+	// ?new=1 — an old link to "New workflow": that is the New workflow sheet on
+	// the app's research home now (WorkflowSheet), so go there and open it.
+	const [params] = useSearchParams();
+	const toNewSheet = useNavigate();
 	useEffect(() => {
-		if (params.get("new") !== "1") return;
-		setWfFormOpen(true);
-		const sp = new URLSearchParams(params); sp.delete("new"); setParams(sp, { replace: true });
-	}, [params, setParams]);
+		if (params.get("new") === "1" && app) toNewSheet(newWorkflowPath(app), { replace: true });
+	}, [params, app, toNewSheet]);
 
 	const reload = useCallback(() => {
 		me.appConfig(app)
@@ -320,7 +320,7 @@ export default function AppManagePanel() {
 					</button>
 				</div>
 				{loops.length === 0 ? (
-					<p className="text-caption text-ink-600">No workflows yet. A workflow is a scheduled sequence of skill steps — create one and the scheduler runs it automatically.</p>
+					<p className="text-caption text-ink-600">No workflows yet. A workflow is a sequence of skill steps — create one, then press Run.</p>
 				) : (
 					<div className="divide-y divide-ink-100 rounded-lg border border-ink-200">
 						{loops.map((l, i) => (
@@ -586,13 +586,14 @@ function NewWorkflowDialog({
 	onCreate: (wf: { name: string; schedule: string; skills: string[]; goal: string }) => void;
 }) {
 	const [name, setName] = useState("");
-	const [schedule, setSchedule] = useState("0 8 * * *");
+	// Nothing new runs on its own: a new workflow starts as "only when you press Run".
+	const [schedule, setSchedule] = useState("@trigger");
 	const [customCron, setCustomCron] = useState(false);
 	const [skillsText, setSkillsText] = useState("");
 	const [goal, setGoal] = useState("");
 
 	useEffect(() => {
-		if (open) { setName(""); setSchedule("0 8 * * *"); setCustomCron(false); setSkillsText(""); setGoal(""); }
+		if (open) { setName(""); setSchedule("@trigger"); setCustomCron(false); setSkillsText(""); setGoal(""); }
 	}, [open]);
 
 	const slug = name.trim().toLowerCase().replace(/[^a-z0-9_]+/g, "_").replace(/^_+|_+$/g, "");
@@ -607,7 +608,7 @@ function NewWorkflowDialog({
 						<CalendarClock className="w-4 h-4 text-gold-600" /> New workflow
 					</DialogTitle>
 					<DialogDescription className="text-meta">
-						A job this app runs on a schedule: a few steps, in order. It&apos;s saved to the app&apos;s settings and starts on its own at the next scheduled time. Not sure what to put? Close this and describe it in the chat instead.
+						A few steps this app runs, in order. It&apos;s saved to the app&apos;s settings. It runs only when you press Run. Not sure what to put? Close this and describe it in the chat instead.
 					</DialogDescription>
 				</DialogHeader>
 				<div className="space-y-3">

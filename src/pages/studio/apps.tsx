@@ -693,20 +693,20 @@ function WorkflowSelect({ rows, selected, onSelect, onNew, onAsk, crumb = false 
 					<div className="sticky -bottom-1 -mx-1 -mb-1 px-1 pb-1 mt-1 bg-popover border-t border-ink-100">
 						<div className="eyebrow px-2.5 pt-1.5 pb-0.5">New workflow</div>
 						{/* Two ways in: say what it should do (the chat drafts it for you to
-						    approve), or fill in the form (name · schedule · steps). */}
+						    approve), or the New workflow sheet (?new=1). Neither runs anything. */}
 						{onAsk && (
 							<button type="button" onClick={() => { setOpen(false); onAsk(); }}
 								className="w-full flex items-start gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-muted transition-colors">
 								<MessagesSquare className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-gold-700" />
 								<span className="min-w-0"><span className="block text-meta font-medium text-ink-800">Describe it in chat</span>
-									<span className="block text-micro text-ink-600">Say what it should do and how often; the chat drafts it for you to approve.</span></span>
+									<span className="block text-micro text-ink-600">Say what it should do; the chat drafts it for you to approve.</span></span>
 							</button>
 						)}
 						<button type="button" onClick={() => { setOpen(false); onNew(); }}
 							className="w-full flex items-start gap-2 px-2.5 py-2 rounded-lg text-left hover:bg-muted transition-colors">
 							<Plus className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-ink-600" />
-							<span className="min-w-0"><span className="block text-meta font-medium text-ink-800">Fill in a form</span>
-								<span className="block text-micro text-ink-600">Name, schedule and the steps it runs.</span></span>
+							<span className="min-w-0"><span className="block text-meta font-medium text-ink-800">Build it step by step</span>
+								<span className="block text-micro text-ink-600">Its steps, data and feedback. It runs only when you press Run.</span></span>
 						</button>
 					</div>
 				)}
@@ -810,9 +810,9 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 	const crumbTarget = usePortalTarget("topstrip-crumb-slot", !!embedded && !nestedInSurface);
 	const appMenuTarget = usePortalTarget("topstrip-app-menu", !!embedded && !nestedInSurface);
 	// "Describe it in chat": prefill the chat (the person presses send); the
-	// chat asks what it should do and how often, then drafts it for approval.
+	// chat asks what it should do (never how often: it runs when pressed), then drafts it.
 	const askNewWorkflow = () => window.dispatchEvent(new CustomEvent("studio:ask", { detail: {
-		prompt: `I'd like to add a new workflow to this app. Ask me what it should do and how often it should run, then draft it for me to approve before anything is saved.`,
+		prompt: `I'd like to add a new workflow to this app. Ask me what it should do and how a result should be judged, then draft it for me to approve before anything is saved. It will be created to run only when I press Run, so start nothing.`,
 		context: { app },
 	} }));
 	const [params] = useSearchParams();
@@ -1251,7 +1251,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 								)}
 								{rows.length >= 1 && !(embedded && crumbTarget) && (
 									<WorkflowSelect rows={rows} selected={effSelected} onSelect={select}
-										onNew={() => navigate(`/studio/a/${encodeURIComponent(app)}/manage?new=1`)} onAsk={askNewWorkflow} />
+										onNew={() => navigate(`/studio/apps/${encodeURIComponent(app)}?new=1`)} onAsk={askNewWorkflow} />
 								)}
 								{/* Slot: the open workflow panel hoists its run controls (status ·
 								    version dots · pull/publish · plan-next · pause) onto this line. */}

@@ -1,16 +1,19 @@
 // AppWorkflowList — the open app's workflows, listed in the sidebar under the
 // app (not behind a dropdown): status dot, name, how often it runs; the one
-// you're on is lit. Ends with "New workflow": describe it in chat (the chat
-// drafts it for approval), or the form (icon on the right). Each row has a ⋯
+// you're on is lit. Ends with "New workflow": the New workflow sheet on the
+// app's research home (WorkflowSheet, via ?new=1), or describe it in chat (icon
+// on the right; the chat drafts it for approval). Either way nothing runs. Each row has a ⋯
 // on hover/focus: Run now · Open · Delete workflow… — deleting used to live
 // only behind the workflow page's ⋯ or Manage app, and people couldn't find it.
 
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { ArrowRight, ClipboardList, MoreHorizontal, Play, Plus, Trash2 } from "lucide-react";
+import { ArrowRight, MessagesSquare, MoreHorizontal, Play, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { me, MeApiError, type MeWorkflowRow } from "@/api/me";
 import { appTitle } from "@/components/workflow/AppCard";
+import { newWorkflowPath } from "@/components/research/new-workflow";
+import { newWorkflowChatPrompt } from "@/lib/variant-form";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 import { deleteWorkflow } from "@/lib/delete-workflow";
@@ -56,7 +59,7 @@ export default function AppWorkflowList({ app }: { app: string }) {
 	const prefix = `/studio/apps/${encodeURIComponent(app)}/w/`;
 	const current = location.pathname.startsWith(prefix) ? decodeURIComponent(location.pathname.slice(prefix.length).split("/")[0]) : null;
 	const ask = () => window.dispatchEvent(new CustomEvent("studio:ask", { detail: {
-		prompt: "I'd like to add a new workflow to this app. Ask me what it should do and how often it should run, then draft it for me to approve before anything is saved.",
+		prompt: newWorkflowChatPrompt(appTitle(app)),
 		context: { app },
 	} }));
 	return (
@@ -110,14 +113,14 @@ export default function AppWorkflowList({ app }: { app: string }) {
 				);
 			})}
 			<div className="flex items-center gap-0.5">
-				<button type="button" onClick={ask} title="Describe the workflow in the chat; it drafts it for you to approve"
+				<button type="button" onClick={() => navigate(newWorkflowPath(app))} title="Write its steps or chain other workflows; it runs only when you press Run"
 					className="flex-1 flex items-center gap-2 rounded-md px-2 py-1 text-caption text-ink-600 hover:bg-ink-100/60 hover:text-ink-900 transition-colors text-left min-w-0">
 					<Plus className="w-3 h-3 flex-shrink-0" /> <span className="truncate">New workflow</span>
 				</button>
-				<Link to={`/studio/a/${encodeURIComponent(app)}/manage?new=1`} title="Or fill in a form: name, schedule, steps" aria-label="New workflow from a form"
+				<button type="button" onClick={ask} title="Or describe it in chat; it drafts it for you to approve" aria-label="Describe a new workflow in chat"
 					className="inline-flex items-center justify-center w-6 h-6 rounded-md text-ink-500 hover:text-ink-900 hover:bg-ink-100/60 flex-shrink-0">
-					<ClipboardList className="w-3 h-3" />
-				</Link>
+					<MessagesSquare className="w-3 h-3" />
+				</button>
 			</div>
 		</nav>
 	);

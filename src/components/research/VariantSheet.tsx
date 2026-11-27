@@ -12,9 +12,14 @@
 //
 // "Describe it" doesn't save anything: it pre-fills the chat with the parent's
 // definition and the description, asking for a proposal to approve.
+//
+// With no parent this is the "Write its steps" path of the New workflow sheet
+// (WorkflowSheet.tsx), which mounts VariantSheetBody inside its own dialog and
+// offers the chat as a link on its first step — so the body then drops the
+// "Describe it" card and says, before saving, exactly what will be created.
 
 import { lazy, Suspense, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import { Code2, GitBranch, Loader2, MessagesSquare, Plus, Shuffle, Trash2, Workflow as WorkflowIcon } from "lucide-react";
+import { ArrowLeft, Code2, GitBranch, Loader2, MessagesSquare, Plus, Shuffle, Trash2, Workflow as WorkflowIcon } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { me } from "@/api/me";
@@ -23,11 +28,11 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { DatasetPicker, type DatasetRef } from "@/components/data/DatasetPicker";
 import { ComputePicker } from "@/components/compute/ComputePicker";
-import { addWorkflows, type AppSpec, type FeedbackStep, type SpecWorkflow } from "@/lib/app-spec";
+import { addWorkflows, nodeIdFrom, type AppSpec, type FeedbackStep, type SpecWorkflow } from "@/lib/app-spec";
 import { plainCause } from "@/lib/activity";
 import {
-	BLANK_CODE, BLANK_DAG, buildVariants, codePath, dagPath, describePrompt, idProblem, inputRowsFrom,
-	saveErrorWords, suggestId, type ChangeKind, type InputRow, type Placement, type VariantRow,
+	BLANK_CODE, BLANK_DAG, buildVariants, codePath, createdToast, createsSentence, dagPath, describePrompt, idProblem, inputRowsFrom,
+	newWorkflowName, saveErrorWords, suggestId, type ChangeKind, type InputRow, type Placement, type VariantRow,
 } from "@/lib/variant-form";
 
 // The DAG editor (canvas + inspector) is heavy; load it only when "Edit the steps" opens.
@@ -44,17 +49,53 @@ export interface VariantSheetProps {
 	onCreated?: (ids: string[]) => void;
 }
 
+export interface VariantSheetBodyProps extends VariantSheetProps {
+	/** With no parent: the app's name for "Creates ‘…’ in <app>", and Back to the sheet's first step. */
+	appName?: string;
+	onBack?: () => void;
+	/** Reports whether a save is in flight (the dialog mustn't close mid-save). */
+	onBusy?: (busy: boolean) => void;
+}
+
 type Loaded = { state: "idle" } | { state: "loading" } | { state: "ok"; text: string } | { state: "error"; why: string };
 
-const field = "w-full px-3 py-2 text-meta rounded-lg border border-ink-200 bg-card text-ink-900 placeholder:text-ink-500 focus:outline-none focus:ring-4 focus:ring-gold-400/15 focus:border-gold-400";
+export const field = "w-full px-3 py-2 text-meta rounded-lg border border-ink-200 bg-card text-ink-900 placeholder:text-ink-500 focus:outline-none focus:ring-4 focus:ring-gold-400/15 focus:border-gold-400";
 
 const wfName = (w: SpecWorkflow) => w.title || w.id;
 
-export function VariantSheet({ app, parent, spec, save, onClose, onCreated }: VariantSheetProps) {
+export function VariantSheet(props: VariantSheetProps) {
+	const { parent } = props;
+	const label = parent ? "Make a variant" : "New workflow";
+	const [busy, setBusy] = useState(false);
+	return (
+		<Dialog open onOpenChange={(o) => { if (!o && !busy) props.onClose(); }}>
+			<DialogContent
+				aria-label={label}
+				onInteractOutside={(e) => { if (busy) e.preventDefault(); }}
+				className={SHEET_CLASS}
+			>
+				<header className="px-5 pt-5 pb-3 border-b border-ink-200 pr-12">
+					<DialogTitle className="font-display text-h3 text-ink-900 font-normal">{label}</DialogTitle>
+					<DialogDescription className="text-caption text-ink-600 mt-1">
+						{parent
+							? <>A new workflow made from <span className="font-medium text-ink-800">{wfName(parent)}</span>. It runs only when you start it.</>
+							: <>A new workflow in this app. It runs only when you start it.</>}
+					</DialogDescription>
+				</header>
+				<VariantSheetBody {...props} onBusy={setBusy} />
+			</DialogContent>
+		</Dialog>
+	);
+}
+
+/** The right-hand sheet both VariantSheet and WorkflowSheet open in. */
+export const SHEET_CLASS = "top-0 right-0 left-auto h-full max-h-screen w-full max-w-full sm:max-w-2xl translate-x-0 translate-y-0 rounded-none sm:rounded-l-2xl flex flex-col gap-0 p-0 overflow-hidden";
+
+/** The sheet's sections and footer, without the dialog around them. */
+export function VariantSheetBody({ app, parent, spec, save, onClose, onCreated, appName, onBack, onBusy }: VariantSheetBodyProps) {
 	const role = useContext(AuthContext)?.user?.role;
 	const isAdmin = role === "admin" || role === "super_admin";
 	const taken = useMemo(() => spec.workflows.map((w) => w.id), [spec.workflows]);
-	const label = parent ? "Make a variant" : "New workflow";
 
 	// 1 · how it changes
 	const [change, setChange] = useState<ChangeKind>(parent ? "same" : "steps");
@@ -73,8 +114,12 @@ export function VariantSheet({ app, parent, spec, save, onClose, onCreated }: Va
 	const [nodeTitle, setNodeTitle] = useState(parent ? `Variants of ${wfName(parent)}` : "");
 	const [intoNode, setIntoNode] = useState(spec.nodes[0]?.id ?? "");
 
-	const [busy, setBusy] = useState(false);
+	const [busy, setBusyState] = useState(false);
+	const setBusy = (b: boolean) => { setBusyState(b); onBusy?.(b); };
 	const [error, setError] = useState<string | null>(null);
+	// A new workflow's id follows its title until the id is edited by hand.
+	const autoId = (title: string) => (title.trim() ? nodeIdFrom(title, taken).slice(0, 48) : suggestId("", taken));
+	const newName = newWorkflowName(rows[0]?.id ?? "", rows[0]?.title ?? "");
 
 	// Load the parent's definition the first time its card opens.
 	useEffect(() => {
@@ -147,7 +192,7 @@ export function VariantSheet({ app, parent, spec, save, onClose, onCreated }: Va
 			const n = built.ids.length;
 			toast.success(parent
 				? `Made ${n === 1 ? `the variant ${built.ids[0]}` : `${n} variants`} of ${wfName(parent)}. Run ${n === 1 ? "it" : "them"} when you're ready.`
-				: `Made the workflow ${built.ids[0]}. Run it when you're ready.`);
+				: createdToast(newName));
 			onCreated?.(built.ids);
 			onClose();
 		} catch (e) {
@@ -158,210 +203,208 @@ export function VariantSheet({ app, parent, spec, save, onClose, onCreated }: Va
 	};
 
 	const cards: Array<{ key: ChangeKind; title: string; hint: string; icon: typeof GitBranch; off?: string }> = [
-		{ key: "describe", title: "Describe it", hint: parent ? "Say what should change; the chat drafts it for you to approve." : "Say what it should do; the chat drafts it for you to approve.", icon: MessagesSquare },
-		{ key: "steps", title: "Edit the steps", hint: parent?.steps.dag ? "Change the step graph. The variant gets its own copy." : parent ? "This one is Python code — see its steps here." : "Draw the steps on a graph.", icon: WorkflowIcon },
-		{ key: "code", title: "Edit the code", hint: parent?.steps.python ? "Change the Python step. The variant gets its own copy." : "Write a Python step.", icon: Code2, off: isAdmin ? undefined : "Admins only" },
+		...(parent ? [{ key: "describe" as const, title: "Describe it", hint: "Say what should change; the chat drafts it for you to approve.", icon: MessagesSquare }] : []),
+		{ key: "steps", title: parent ? "Edit the steps" : "Draw the steps", hint: parent?.steps.dag ? "Change the step graph. The variant gets its own copy." : parent ? "This one is Python code — see its steps here." : "Draw the steps on a graph.", icon: WorkflowIcon },
+		{ key: "code", title: parent ? "Edit the code" : "Write the code", hint: parent?.steps.python ? "Change the Python step. The variant gets its own copy." : "Write a Python step.", icon: Code2, off: isAdmin ? undefined : "Admins only" },
 		...(parent ? [{ key: "same" as const, title: "Same steps, other inputs", hint: "Keep the steps; change inputs, data or compute below.", icon: Shuffle }] : []),
 	];
 
 	return (
-		<Dialog open onOpenChange={(o) => { if (!o && !busy) onClose(); }}>
-			<DialogContent
-				aria-label={label}
-				onInteractOutside={(e) => { if (busy) e.preventDefault(); }}
-				className="top-0 right-0 left-auto h-full max-h-screen w-full max-w-full sm:max-w-2xl translate-x-0 translate-y-0 rounded-none sm:rounded-l-2xl flex flex-col gap-0 p-0 overflow-hidden"
-			>
-				<header className="px-5 pt-5 pb-3 border-b border-ink-200 pr-12">
-					<DialogTitle className="font-display text-h3 text-ink-900 font-normal">{label}</DialogTitle>
-					<DialogDescription className="text-caption text-ink-600 mt-1">
-						{parent
-							? <>A new workflow made from <span className="font-medium text-ink-800">{wfName(parent)}</span>. It runs only when you start it.</>
-							: <>A new workflow in this app. It runs only when you start it.</>}
-					</DialogDescription>
-				</header>
+		<>
+			<div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
+				{/* 1 · How it changes */}
+				<section aria-label="How it changes" className="space-y-3">
+					<SectionTitle n={1} title={parent ? "How it changes" : "How it works"} />
+					<div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+						{cards.map((c) => {
+							const on = change === c.key;
+							const Icon = c.icon;
+							return (
+								<button
+									key={c.key}
+									type="button"
+									aria-pressed={on}
+									onClick={() => { setChange(c.key); setError(null); }}
+									className={cn(
+										"text-left rounded-xl border p-3 transition-colors",
+										on ? "border-gold-300 bg-gold-50/60 ring-2 ring-gold-200" : "border-ink-200 bg-card hover:border-gold-200",
+									)}
+								>
+									<div className="flex items-center gap-2">
+										<Icon className={cn("w-4 h-4", on ? "text-gold-700" : "text-ink-600")} />
+										<span className="text-meta font-medium text-ink-900">{c.title}</span>
+										{c.off && <span className="ml-auto text-nano text-ink-600">{c.off}</span>}
+									</div>
+									<p className="text-caption text-ink-600 mt-1">{c.hint}</p>
+								</button>
+							);
+						})}
+					</div>
 
-				<div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
-					{/* 1 · How it changes */}
-					<section aria-label="How it changes" className="space-y-3">
-						<SectionTitle n={1} title={parent ? "How it changes" : "How it works"} />
-						<div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-							{cards.map((c) => {
-								const on = change === c.key;
-								const Icon = c.icon;
-								return (
-									<button
-										key={c.key}
-										type="button"
-										aria-pressed={on}
-										onClick={() => { setChange(c.key); setError(null); }}
-										className={cn(
-											"text-left rounded-xl border p-3 transition-colors",
-											on ? "border-gold-300 bg-gold-50/60 ring-2 ring-gold-200" : "border-ink-200 bg-card hover:border-gold-200",
-										)}
-									>
-										<div className="flex items-center gap-2">
-											<Icon className={cn("w-4 h-4", on ? "text-gold-700" : "text-ink-600")} />
-											<span className="text-meta font-medium text-ink-900">{c.title}</span>
-											{c.off && <span className="ml-auto text-nano text-ink-600">{c.off}</span>}
-										</div>
-										<p className="text-caption text-ink-600 mt-1">{c.hint}</p>
-									</button>
-								);
-							})}
+					{change === "describe" && (
+						<div className="space-y-2">
+							<label htmlFor="variant-describe" className="text-caption font-medium text-ink-700">{parent ? "What should be different?" : "What should it do?"}</label>
+							<textarea
+								id="variant-describe"
+								value={description}
+								onChange={(e) => setDescription(e.target.value)}
+								rows={4}
+								placeholder={parent ? "e.g. Same simulation, but score on the 2025 tasks and stop after 50 rounds" : "e.g. Every run, read the newest arXiv papers on KV caching and score them for novelty"}
+								className={cn(field, "resize-y")}
+							/>
+							<p className="text-caption text-ink-600">
+								The chat gets {parent ? "this workflow's definition and " : ""}your words, drafts the steps, data, compute and feedback, and stages it as a proposal. Nothing is made or started until you approve.
+							</p>
 						</div>
+					)}
 
-						{change === "describe" && (
-							<div className="space-y-2">
-								<label htmlFor="variant-describe" className="text-caption font-medium text-ink-700">{parent ? "What should be different?" : "What should it do?"}</label>
-								<textarea
-									id="variant-describe"
-									value={description}
-									onChange={(e) => setDescription(e.target.value)}
-									rows={4}
-									placeholder={parent ? "e.g. Same simulation, but score on the 2025 tasks and stop after 50 rounds" : "e.g. Every run, read the newest arXiv papers on KV caching and score them for novelty"}
-									className={cn(field, "resize-y")}
-								/>
-								<p className="text-caption text-ink-600">
-									The chat gets {parent ? "this workflow's definition and " : ""}your words, drafts the steps, data, compute and feedback, and stages it as a proposal. Nothing is made or started until you approve.
-								</p>
+					{change === "steps" && (
+						<StepsPane parent={parent} loaded={dag} value={dagText} onChange={setDagText} onUseCode={() => setChange("code")} />
+					)}
+
+					{change === "code" && (
+						<CodePane parent={parent} loaded={code} value={codeText} onChange={setCodeText} canSave={isAdmin} newPath={codePath(rows[0]?.id || "new")} />
+					)}
+				</section>
+
+				{change !== "describe" && (
+					<>
+						{/* 2 · Data */}
+						<section aria-label="Data" className="space-y-3">
+							<SectionTitle n={2} title="Data" hint={parent ? `Starts from what ${wfName(parent)} reads.` : undefined} />
+							<DatasetPicker
+								multiple
+								apps={[app]}
+								declared={spec.data}
+								allowTyped
+								heading="This app's casebooks"
+								emptyTitle="No dataset"
+								emptyHint="The steps gather or fetch their own data each run."
+								value={data.map((id): DatasetRef => ({ group: id, label: id }))}
+								onChange={(next) => setData([...new Set(next.map((r) => r.group))])}
+							/>
+						</section>
+
+						{/* 3 · Compute */}
+						<section aria-label="Compute" className="space-y-3">
+							<SectionTitle n={3} title="Compute" hint={parent ? `Starts from where ${wfName(parent)} runs.` : undefined} />
+							<ComputePicker value={compute} onChange={setCompute} inheritedLabel={spec.compute.site ? `App default (${spec.compute.site})` : "App default"} />
+						</section>
+
+						{/* 4 · Feedback & metrics */}
+						<section aria-label="Feedback and metrics" className="space-y-3">
+							<SectionTitle n={4} title="Feedback & metrics" hint={parent ? `Inherited from ${wfName(parent)}; change what this one is judged on.` : "What judges each run, and which way is better."} />
+							<FeedbackEditor value={feedback} onChange={setFeedback} />
+						</section>
+
+						{/* 5 · Name and node */}
+						<section aria-label="Name and node" className="space-y-3">
+							<SectionTitle n={5} title="Name and node" />
+							<div className="space-y-3">
+								{rows.map((r, i) => (
+									<VariantRowEditor
+										key={i}
+										index={i}
+										row={r}
+										count={rows.length}
+										problem={idProblem(r.id.trim(), taken, rows.slice(0, i).map((x) => x.id.trim()))}
+										parentInputs={parent?.inputs ?? {}}
+										onChange={(next) => setRows(rows.map((x, j) => {
+											if (j !== i) return x;
+											// With no parent, the id follows the title until it is edited by hand.
+											if (!parent && next.title !== x.title && x.id === autoId(x.title)) return { ...next, id: autoId(next.title) };
+											return next;
+										}))}
+										onRemove={() => setRows(rows.filter((_, j) => j !== i))}
+									/>
+								))}
+								{parent && (
+									<button
+										type="button"
+										onClick={() => setRows([...rows, { id: suggestId(parent.id, [...taken, ...rows.map((x) => x.id)]), title: "", inputs: inputRowsFrom(parent.inputs) }])}
+										className="inline-flex items-center gap-1 text-caption text-gold-700 hover:text-gold-800 font-medium"
+									>
+										<Plus className="w-3.5 h-3.5" />Another variant
+									</button>
+								)}
+								{rows.length > 1 && (
+									<p className="text-caption text-ink-600">All {rows.length} share the change, data, compute, feedback and node above; each keeps its own id and inputs.</p>
+								)}
 							</div>
-						)}
 
-						{change === "steps" && (
-							<StepsPane parent={parent} loaded={dag} value={dagText} onChange={setDagText} onUseCode={() => setChange("code")} />
-						)}
-
-						{change === "code" && (
-							<CodePane parent={parent} loaded={code} value={codeText} onChange={setCodeText} canSave={isAdmin} newPath={codePath(rows[0]?.id || "new")} />
-						)}
-					</section>
-
-					{change !== "describe" && (
-						<>
-							{/* 2 · Data */}
-							<section aria-label="Data" className="space-y-3">
-								<SectionTitle n={2} title="Data" hint={parent ? `Starts from what ${wfName(parent)} reads.` : undefined} />
-								<DatasetPicker
-									multiple
-									apps={[app]}
-									declared={spec.data}
-									allowTyped
-									heading="This app's casebooks"
-									emptyTitle="No dataset"
-									emptyHint="The steps gather or fetch their own data each run."
-									value={data.map((id): DatasetRef => ({ group: id, label: id }))}
-									onChange={(next) => setData([...new Set(next.map((r) => r.group))])}
-								/>
-							</section>
-
-							{/* 3 · Compute */}
-							<section aria-label="Compute" className="space-y-3">
-								<SectionTitle n={3} title="Compute" hint={parent ? `Starts from where ${wfName(parent)} runs.` : undefined} />
-								<ComputePicker value={compute} onChange={setCompute} inheritedLabel={spec.compute.site ? `App default (${spec.compute.site})` : "App default"} />
-							</section>
-
-							{/* 4 · Feedback & metrics */}
-							<section aria-label="Feedback and metrics" className="space-y-3">
-								<SectionTitle n={4} title="Feedback & metrics" hint={parent ? `Inherited from ${wfName(parent)}; change what this one is judged on.` : "What judges each run, and which way is better."} />
-								<FeedbackEditor value={feedback} onChange={setFeedback} />
-							</section>
-
-							{/* 5 · Name and node */}
-							<section aria-label="Name and node" className="space-y-3">
-								<SectionTitle n={5} title="Name and node" />
-								<div className="space-y-3">
-									{rows.map((r, i) => (
-										<VariantRowEditor
-											key={i}
-											index={i}
-											row={r}
-											count={rows.length}
-											problem={idProblem(r.id.trim(), taken, rows.slice(0, i).map((x) => x.id.trim()))}
-											parentInputs={parent?.inputs ?? {}}
-											onChange={(next) => setRows(rows.map((x, j) => (j === i ? next : x)))}
-											onRemove={() => setRows(rows.filter((_, j) => j !== i))}
-										/>
-									))}
-									{parent && (
-										<button
-											type="button"
-											onClick={() => setRows([...rows, { id: suggestId(parent.id, [...taken, ...rows.map((x) => x.id)]), title: "", inputs: inputRowsFrom(parent.inputs) }])}
-											className="inline-flex items-center gap-1 text-caption text-gold-700 hover:text-gold-800 font-medium"
-										>
-											<Plus className="w-3.5 h-3.5" />Another variant
-										</button>
-									)}
-									{rows.length > 1 && (
-										<p className="text-caption text-ink-600">All {rows.length} share the change, data, compute, feedback and node above; each keeps its own id and inputs.</p>
-									)}
-								</div>
-
-								<fieldset className="space-y-2">
-									<legend className="text-caption font-medium text-ink-700 mb-1">Where it goes on the map</legend>
-									{parent && (
-										<Choice name="placement" checked={placementMode === "new"} onPick={() => setPlacementMode("new")}>
-											<span className="flex-1 flex flex-wrap items-center gap-2">
-												A new node named
-												<input
-													value={nodeTitle}
-													onChange={(e) => setNodeTitle(e.target.value)}
-													onFocus={() => setPlacementMode("new")}
-													aria-label="New node name"
-													className={cn(field, "w-auto flex-1 min-w-40 py-1")}
-												/>
-												<span className="text-ink-600">under {wfName(parent)}</span>
-											</span>
-										</Choice>
-									)}
-									<Choice name="placement" checked={placementMode === "under"} onPick={() => setPlacementMode("under")}>
-										{parent ? <>Directly under {wfName(parent)}</> : <>At the top, beside the app's other workflows</>}
+							<fieldset className="space-y-2">
+								<legend className="text-caption font-medium text-ink-700 mb-1">Where it goes on the map</legend>
+								{parent && (
+									<Choice name="placement" checked={placementMode === "new"} onPick={() => setPlacementMode("new")}>
+										<span className="flex-1 flex flex-wrap items-center gap-2">
+											A new node named
+											<input
+												value={nodeTitle}
+												onChange={(e) => setNodeTitle(e.target.value)}
+												onFocus={() => setPlacementMode("new")}
+												aria-label="New node name"
+												className={cn(field, "w-auto flex-1 min-w-40 py-1")}
+											/>
+											<span className="text-ink-600">under {wfName(parent)}</span>
+										</span>
 									</Choice>
-									{spec.nodes.length > 0 && (
-										<Choice name="placement" checked={placementMode === "into"} onPick={() => setPlacementMode("into")}>
-											<span className="flex-1 flex flex-wrap items-center gap-2">
-												Into the node
-												<select
-													value={intoNode}
-													onChange={(e) => { setIntoNode(e.target.value); setPlacementMode("into"); }}
-													aria-label="Existing node"
-													className={cn(field, "w-auto py-1")}
-												>
-													{spec.nodes.map((n) => <option key={n.id} value={n.id}>{n.title}</option>)}
-												</select>
-											</span>
-										</Choice>
-									)}
-								</fieldset>
-							</section>
-						</>
+								)}
+								<Choice name="placement" checked={placementMode === "under"} onPick={() => setPlacementMode("under")}>
+									{parent ? <>Directly under {wfName(parent)}</> : <>At the top, beside the app's other workflows</>}
+								</Choice>
+								{spec.nodes.length > 0 && (
+									<Choice name="placement" checked={placementMode === "into"} onPick={() => setPlacementMode("into")}>
+										<span className="flex-1 flex flex-wrap items-center gap-2">
+											Into the node
+											<select
+												value={intoNode}
+												onChange={(e) => { setIntoNode(e.target.value); setPlacementMode("into"); }}
+												aria-label="Existing node"
+												className={cn(field, "w-auto py-1")}
+											>
+												{spec.nodes.map((n) => <option key={n.id} value={n.id}>{n.title}</option>)}
+											</select>
+										</span>
+									</Choice>
+								)}
+							</fieldset>
+						</section>
+					</>
+				)}
+			</div>
+
+			<footer className="border-t border-ink-200 px-5 py-3 space-y-2 bg-ink-50/60">
+				{error && <p role="alert" className="text-caption text-brick-700">{error}</p>}
+				{!error && blocked && change !== "describe" && <p className="text-caption text-ink-600">{blocked}</p>}
+				{!error && !blocked && !parent && (
+					<p data-creates className="text-caption text-ink-800">{createsSentence(newName, appName || spec.title || app)}</p>
+				)}
+				<div className="flex items-center justify-end gap-2">
+					{onBack && (
+						<Button variant="ghost" size="sm" onClick={onBack} disabled={busy} className="mr-auto">
+							<ArrowLeft className="w-3.5 h-3.5" />Back
+						</Button>
+					)}
+					<Button variant="ghost" size="sm" onClick={onClose} disabled={busy}>Cancel</Button>
+					{change === "describe" ? (
+						<Button variant="accent" size="sm" onClick={askChat}>
+							<MessagesSquare className="w-3.5 h-3.5" />Send to the chat
+						</Button>
+					) : (
+						<Button variant="accent" size="sm" onClick={create} disabled={busy || !!blocked}>
+							{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <GitBranch className="w-3.5 h-3.5" />}
+							{parent ? (rows.length > 1 ? `Create ${rows.length} variants` : "Create variant") : "Create workflow"}
+						</Button>
 					)}
 				</div>
-
-				<footer className="border-t border-ink-200 px-5 py-3 space-y-2 bg-ink-50/60">
-					{error && <p role="alert" className="text-caption text-brick-700">{error}</p>}
-					{!error && blocked && change !== "describe" && <p className="text-caption text-ink-600">{blocked}</p>}
-					<div className="flex items-center justify-end gap-2">
-						<Button variant="ghost" size="sm" onClick={onClose} disabled={busy}>Cancel</Button>
-						{change === "describe" ? (
-							<Button variant="accent" size="sm" onClick={askChat}>
-								<MessagesSquare className="w-3.5 h-3.5" />Send to the chat
-							</Button>
-						) : (
-							<Button variant="accent" size="sm" onClick={create} disabled={busy || !!blocked}>
-								{busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <GitBranch className="w-3.5 h-3.5" />}
-								{parent ? (rows.length > 1 ? `Create ${rows.length} variants` : "Create variant") : "Create workflow"}
-							</Button>
-						)}
-					</div>
-				</footer>
-			</DialogContent>
-		</Dialog>
+			</footer>
+		</>
 	);
 }
 
 // ── pieces ───────────────────────────────────────────────────────────────
 
-function SectionTitle({ n, title, hint }: { n: number; title: string; hint?: string }) {
+export function SectionTitle({ n, title, hint }: { n: number; title: string; hint?: string }) {
 	return (
 		<div>
 			<h3 className="flex items-center gap-2 text-body font-semibold text-ink-900">
@@ -373,7 +416,7 @@ function SectionTitle({ n, title, hint }: { n: number; title: string; hint?: str
 	);
 }
 
-function Choice({ name, checked, onPick, children }: { name: string; checked: boolean; onPick: () => void; children: ReactNode }) {
+export function Choice({ name, checked, onPick, children }: { name: string; checked: boolean; onPick: () => void; children: ReactNode }) {
 	return (
 		<label className={cn("flex items-center gap-2.5 rounded-lg border px-3 py-2 text-meta text-ink-800 cursor-pointer", checked ? "border-gold-300 bg-gold-50/60" : "border-ink-200 bg-card hover:border-gold-200")}>
 			<input type="radio" name={name} checked={checked} onChange={onPick} className="accent-gold-700" />
@@ -469,7 +512,7 @@ function CodePane({ parent, loaded, value, onChange, canSave, newPath }: {
 	);
 }
 
-function FeedbackEditor({ value, onChange }: { value: FeedbackStep[]; onChange: (v: FeedbackStep[]) => void }) {
+export function FeedbackEditor({ value, onChange }: { value: FeedbackStep[]; onChange: (v: FeedbackStep[]) => void }) {
 	const setStep = (i: number, patch: Partial<FeedbackStep>) => onChange(value.map((f, j) => (j === i ? { ...f, ...patch } : f)));
 	return (
 		<div className="space-y-2">
@@ -522,7 +565,6 @@ function VariantRowEditor({ index, row, count, problem, parentInputs, onChange, 
 	index: number; row: VariantRow; count: number; problem: string | null; parentInputs: Record<string, unknown>;
 	onChange: (r: VariantRow) => void; onRemove: () => void;
 }) {
-	const setInput = (k: number, patch: Partial<InputRow>) => onChange({ ...row, inputs: row.inputs.map((x, j) => (j === k ? { ...x, ...patch } : x)) });
 	const idId = `variant-id-${index}`;
 	return (
 		<div className="rounded-xl border border-ink-200 bg-card p-3 space-y-2.5">
@@ -545,33 +587,50 @@ function VariantRowEditor({ index, row, count, problem, parentInputs, onChange, 
 			</div>
 			<div>
 				<div className="text-caption font-medium text-ink-700 mb-1">Inputs</div>
-				{row.inputs.length === 0 && <p className="text-caption text-ink-600">No inputs.</p>}
-				<div className="space-y-1.5">
-					{row.inputs.map((inp, k) => {
-						const inherited = inp.key.trim() in parentInputs;
-						return (
-							<div key={k} className="flex items-center gap-2">
-								<input value={inp.key} onChange={(e) => setInput(k, { key: e.target.value })} placeholder="name" aria-label="Input name" className={cn(field, "py-1 w-40 font-mono")} />
-								<input value={inp.value} onChange={(e) => setInput(k, { value: e.target.value })} placeholder="value" aria-label={`Value of ${inp.key || "this input"}`} className={cn(field, "py-1 flex-1 font-mono")} />
-								<button type="button" onClick={() => onChange({ ...row, inputs: row.inputs.filter((_, j) => j !== k) })} aria-label={`Remove ${inp.key || "this input"}`} title={inherited ? "Leave it out: the steps use their own default" : undefined} className="p-1.5 text-ink-600 hover:text-brick-700 rounded">
-									<Trash2 className="w-3.5 h-3.5" />
-								</button>
-							</div>
-						);
-					})}
-				</div>
-				<div className="flex items-center gap-3 mt-1.5">
-					<button type="button" onClick={() => onChange({ ...row, inputs: [...row.inputs, { key: "", value: "" }] })} className="inline-flex items-center gap-1 text-caption text-gold-700 hover:text-gold-800 font-medium">
-						<Plus className="w-3.5 h-3.5" />Add an input
-					</button>
-					{count > 1 && (
+				<InputRowsEditor
+					rows={row.inputs}
+					own={parentInputs}
+					onChange={(inputs) => onChange({ ...row, inputs })}
+					extra={count > 1 && (
 						<button type="button" onClick={onRemove} className="ml-auto inline-flex items-center gap-1 text-caption text-ink-600 hover:text-brick-700">
 							<Trash2 className="w-3.5 h-3.5" />Remove this variant
 						</button>
 					)}
-				</div>
+				/>
 			</div>
 		</div>
+	);
+}
+
+/** key = value rows. `own`: the inputs these start from (removing one falls back to it). */
+export function InputRowsEditor({ rows, own, onChange, extra }: {
+	rows: InputRow[]; own: Record<string, unknown>; onChange: (rows: InputRow[]) => void; extra?: ReactNode;
+}) {
+	const setInput = (k: number, patch: Partial<InputRow>) => onChange(rows.map((x, j) => (j === k ? { ...x, ...patch } : x)));
+	return (
+		<>
+			{rows.length === 0 && <p className="text-caption text-ink-600">No inputs.</p>}
+			<div className="space-y-1.5">
+				{rows.map((inp, k) => {
+					const inherited = inp.key.trim() in own;
+					return (
+						<div key={k} className="flex items-center gap-2">
+							<input value={inp.key} onChange={(e) => setInput(k, { key: e.target.value })} placeholder="name" aria-label="Input name" className={cn(field, "py-1 w-32 sm:w-40 font-mono")} />
+							<input value={inp.value} onChange={(e) => setInput(k, { value: e.target.value })} placeholder="value" aria-label={`Value of ${inp.key || "this input"}`} className={cn(field, "py-1 flex-1 min-w-0 font-mono")} />
+							<button type="button" onClick={() => onChange(rows.filter((_, j) => j !== k))} aria-label={`Remove ${inp.key || "this input"}`} title={inherited ? "Leave it out: the steps use their own default" : undefined} className="p-1.5 text-ink-600 hover:text-brick-700 rounded">
+								<Trash2 className="w-3.5 h-3.5" />
+							</button>
+						</div>
+					);
+				})}
+			</div>
+			<div className="flex items-center gap-3 mt-1.5">
+				<button type="button" onClick={() => onChange([...rows, { key: "", value: "" }])} className="inline-flex items-center gap-1 text-caption text-gold-700 hover:text-gold-800 font-medium">
+					<Plus className="w-3.5 h-3.5" />Add an input
+				</button>
+				{extra}
+			</div>
+		</>
 	);
 }
 

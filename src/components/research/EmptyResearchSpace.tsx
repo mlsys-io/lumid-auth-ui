@@ -10,12 +10,13 @@
 // dashed branches where workflows, setups and comparisons appear — and labels
 // each with the step that makes it real. Two ways to start: describe it in the
 // chat (it drafts the workflow for approval; nothing is saved without a press)
-// or build it step by step.
+// or build it step by step (the New workflow sheet, opened by the map around
+// this — openNewWorkflow).
 
-import { Link } from "react-router-dom";
 import { ArrowRight, MessagesSquare, Sparkles } from "lucide-react";
 import { appTitle } from "@/components/workflow/AppCard";
 import { useStageHeight } from "@/components/research/stage-height";
+import { openNewWorkflow } from "@/components/research/new-workflow";
 
 const STEPS = [
 	{ n: 1, title: "Add a workflow", text: "What to measure, and how a result is judged.", x: 20, y: 18 },
@@ -112,10 +113,10 @@ export default function EmptyResearchSpace({ app }: { app: string }) {
 							className="inline-flex items-center gap-1.5 rounded-lg bg-ink-900 px-3 py-1.5 text-caption font-medium text-white transition-colors hover:bg-ink-800">
 							<MessagesSquare className="h-3.5 w-3.5" aria-hidden />Describe it in chat
 						</button>
-						<Link to={`/studio/a/${encodeURIComponent(app)}/manage?new=1`} data-empty-action="build"
+						<button type="button" onClick={() => openNewWorkflow(app)} data-empty-action="build"
 							className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 bg-card px-3 py-1.5 text-caption text-ink-800 transition-colors hover:bg-ink-50">
 							Build it step by step <ArrowRight className="h-3.5 w-3.5" aria-hidden />
-						</Link>
+						</button>
 						<span className="text-micro text-ink-600">The chat drafts it for you to approve; nothing is saved until you do.</span>
 					</div>
 				</div>
