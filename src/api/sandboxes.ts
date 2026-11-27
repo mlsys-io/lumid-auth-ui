@@ -276,6 +276,8 @@ export interface SandboxList {
 	size_defaults?: SiteSizeDefaults;
 	/** Lifetime ceilings; absent on servers older than the 48h-CPU build. See SiteTtlInfo. */
 	ttl?: SiteTtlInfo;
+	/** Docker inside a sandbox; absent on servers without Docker mode. See SiteDockerInfo. */
+	docker?: SiteDockerInfo;
 }
 
 // ---------------------------------------------------------------------------
@@ -380,6 +382,23 @@ export function cpuForSite(site: string): SiteCpuInfo | undefined {
 export interface SiteTtlInfo {
 	cpu_max_hours: number;
 	gpu_max_hours: number;
+}
+
+/**
+ * Docker inside a sandbox (`docker` on GET /api/sandboxes, 2026-11-27): an unprivileged box (sysbox, its own
+ * user namespace) that runs dockerd. CPU only, sandbox home volume only, its own disk capped at `max_disk_gi`.
+ * `enabled` false or absent = the site has no Docker-capable machines.
+ */
+export interface SiteDockerInfo {
+	enabled: boolean;
+	max_disk_gi: number;
+	gpu: boolean;
+}
+
+const siteDocker = new Map<string, SiteDockerInfo>();
+
+export function dockerForSite(site: string): SiteDockerInfo | undefined {
+	return siteDocker.get(site);
 }
 
 const siteTtl = new Map<string, SiteTtlInfo>();
@@ -487,6 +506,8 @@ export interface CreateSandboxRequest {
 	 */
 	gpu_product?: string;
 	ttl_hours?: number;
+	/** Docker inside the box (sysbox). Only where dockerForSite(site)?.enabled; CPU only, volume home. */
+	docker?: boolean;
 	/**
 	 * Where /home comes from. "host" = your real /home on an s0/h0 host (only when your login
 	 * there is linked to your account; see UsernameInfo.host_homes), "volume" = the sandbox
@@ -611,6 +632,7 @@ export async function listSandboxesForSite(site: string): Promise<Sandbox[]> {
 	if (r.data?.cpu && Array.isArray(r.data.cpu.sizes)) siteCpu.set(site, r.data.cpu);
 	if (r.data?.size_defaults) siteSizeDefaults.set(site, r.data.size_defaults);
 	if (r.data?.ttl && typeof r.data.ttl.cpu_max_hours === "number") siteTtl.set(site, r.data.ttl);
+	if (r.data?.docker && typeof r.data.docker.enabled === "boolean") siteDocker.set(site, r.data.docker);
 	return (r.data?.sandboxes ?? []).map((s) => ({ ...s, site, gpus_free: s.gpus_free ?? gpusFree }));
 }
 
