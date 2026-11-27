@@ -131,6 +131,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 	rightRef.current = insetRight;
 	// While the space is being moved (not turned): the cursor says so.
 	const [panning, setPanning] = useState(false);
+	const [parkedUi, setParkedUi] = useState(false);
 	const [hint, setHint] = useState(() => { try { return !sessionStorage.getItem(HINT_KEY); } catch { return true; } });
 	// The node under the pointer (or keyboard focus) opens into its full card.
 	const [hovered, setHovered] = useState<string | null>(null);
@@ -256,6 +257,11 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		// it holds still (no idle turning) until Show everything or a zoom back out
 		// to the overview (2026-11-26: "when zoom can show more, not rotate").
 		parked: false, homeZoom: 0,
+		// What the "Paused" chip last showed, and whether a dot holds KEYBOARD
+		// focus (a mouse click's focus must not pause the space — it stuck the
+		// turning until you clicked elsewhere, 2026-11-27 "sometimes the graph
+		// stops rotation").
+		parkedShown: false, kbFocus: false,
 		drag: null as null | { x: number; y: number; yaw: number; pitch: number; fx: number; fy: number; pan: boolean; moved: boolean },
 		// Touch: every finger down, and the two-finger gesture (move + pinch) when there are two.
 		pointers: new Map<number, { x: number; y: number }>(),
@@ -364,7 +370,15 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 			// idle, like a phone with no pointer at all — before, a laptop whose
 			// mouse sat on the map never turned while the phone did (2026-11-26).
 			const pointerBusy = st.hover && t - st.lastPointerMove < POINTER_REST_MS;
-			const wantTurn = !reduced && !st.parked && !st.drag && !st.camTarget && !pointerBusy && !hoveredRef.current && !lit && t - st.lastInput > AUTO_ROTATE_IDLE_MS;
+			// A hovered dot pauses only while the pointer is really over the space
+			// (a card swapped under it can skip its pointerleave and leave the hover
+			// stuck), or while it holds keyboard focus.
+			const hoverHolds = !!hoveredRef.current && (st.hover || st.kbFocus);
+			const wantTurn = !reduced && !st.parked && !st.drag && !st.camTarget && !pointerBusy && !hoverHolds && !lit && t - st.lastInput > AUTO_ROTATE_IDLE_MS;
+			if (st.parked !== st.parkedShown) { st.parkedShown = st.parked; setParkedUi(st.parked); }
+			// Test hook: whether the space is turning on its own right now.
+			const turning = st.rampT > 0 ? "1" : "0";
+			if (boxRef.current && boxRef.current.dataset.turning !== turning) boxRef.current.dataset.turning = turning;
 			st.rampT = Math.max(0, Math.min(1, st.rampT + (wantTurn ? 1 : -1) * (dt / 400)));
 			if (st.rampT > 0) { st.cam = { ...st.cam, yaw: st.cam.yaw + AUTO_ROTATE_RAD_PER_MS * dt * easeInOutCubic(st.rampT) }; moving = true; }
 			if (wantTurn && st.rampT < 1) moving = true;
@@ -972,8 +986,8 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 							type="button"
 							aria-pressed={sel}
 							aria-label={describe(n)}
-							onFocus={() => setHovered(n.id)}
-							onBlur={() => setHovered((h) => (h === n.id ? null : h))}
+							onFocus={(e) => { if (e.currentTarget.matches(":focus-visible")) { s.current.kbFocus = true; setHovered(n.id); } }}
+							onBlur={() => { s.current.kbFocus = false; setHovered((h) => (h === n.id ? null : h)); }}
 							onClick={(e) => { e.stopPropagation(); if (suppressClick.current) return; onSelect(sel && !e.shiftKey ? null : n.id, e.shiftKey); }}
 							className="block text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plum-400 rounded-xl"
 						>
@@ -987,6 +1001,12 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				);
 			})}
 			<div className="absolute right-2 top-2 flex items-center gap-1 z-[6000]" onPointerDown={(e) => e.stopPropagation()}>
+				{/* Zoomed in or moved: it holds still on purpose — say so, and offer the way back. */}
+				{parkedUi && !lit && (
+					<button type="button" onClick={reset} className="mr-1 inline-flex h-7 items-center gap-1 rounded-lg border border-ink-200 bg-card/90 px-2 text-micro text-ink-700 hover:border-ink-300 hover:text-ink-900">
+						Paused while zoomed in · <span className="font-medium text-ink-900">Turn again</span>
+					</button>
+				)}
 				<CtlButton label="Zoom in" onClick={() => zoomStep(1.2)}><Plus className="w-3.5 h-3.5" /></CtlButton>
 				<CtlButton label="Zoom out" onClick={() => zoomStep(1 / 1.2)}><Minus className="w-3.5 h-3.5" /></CtlButton>
 				<CtlButton label="Show everything" onClick={reset}><RotateCcw className="w-3.5 h-3.5" /></CtlButton>
