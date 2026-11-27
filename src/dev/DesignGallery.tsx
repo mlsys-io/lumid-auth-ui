@@ -25,6 +25,9 @@ import { StrandMark } from "@/components/illustrations/StrandMark";
 import { StrandAvatar } from "@/components/illustrations/StrandAvatar";
 import * as Scenes from "@/components/illustrations/scenes";
 import { RunDots, StepProgress, type RunDot, type StepDot } from "@/components/research/ProgressDots";
+import { EvidenceTable } from "@/components/research/EvidenceGrid";
+import { nextWords } from "@/lib/evidence";
+import { DEMO_EVIDENCE } from "./evidence-fixtures";
 
 // Progress-dots demo data (fixed times, so the gallery is stable).
 const DEMO_T = Math.floor(Date.now() / 1000) - 600;
@@ -221,6 +224,17 @@ export default function DesignGallery() {
 							<div><RunDots runs={DEMO_RUNS.slice(-6)} label="This week" /></div>
 						</div>
 						<StepProgress steps={DEMO_STEPS} />
+					</div>
+				</Section>
+				<Section id="evidence" title="Each version, step by step — the experiment panel's grid">
+					<div className="flex flex-wrap items-start gap-6">
+						{DEMO_EVIDENCE.map(({ title, ev }) => (
+							<div key={title} className="w-[22rem] max-w-full space-y-2 rounded-xl border border-ink-200 bg-card p-3.5 shadow-e1">
+								<div className="text-micro text-ink-600">{title}</div>
+								<EvidenceTable ev={ev} picked={title.startsWith("Three") ? "short_horizon" : null} onPick={() => {}}
+									action={ev.next[0] ? <Button size="sm" variant="secondary" className="h-auto min-h-8 whitespace-normal py-1 text-left text-caption"><Play className="h-3.5 w-3.5 flex-shrink-0" /> {nextWords(ev.next[0])}</Button> : null} />
+							</div>
+						))}
 					</div>
 				</Section>
 				<Section id="brand" title="Brand · StrandMark">
