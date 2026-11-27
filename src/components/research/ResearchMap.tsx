@@ -13,7 +13,8 @@
 
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowRight, FlaskConical, MessagesSquare, Sparkles, X } from "lucide-react";
+import { ArrowRight, FlaskConical, MessagesSquare, Plus, Sparkles, X } from "lucide-react";
+import { openNewWorkflow, useNewWorkflowParam, useNewWorkflowRequests } from "@/components/research/new-workflow";
 import apiClient from "@/api/client";
 import { me, type MeExperiment, type MeExperimentDetail } from "@/api/me";
 import EvolutionChart, { type EvoSeries } from "@/components/research/EvolutionChart";
@@ -647,6 +648,15 @@ export default function ResearchMap({ app }: { app: string }) {
 	const live = useShellActivity()?.runningApps.includes(app) ?? false;
 	const grow = useOncePerSession(`research-map:${app}`);
 	const [selected, setSelected] = useState<string | null>(null);
+	// New workflow: the header button, the empty state, the sidebar and ?new=1.
+	const [newOpen, setNewOpen] = useState(false);
+	useNewWorkflowRequests(app, () => setNewOpen(true));
+	useNewWorkflowParam(app, () => setNewOpen(true));
+	const newSheet = newOpen && graph && (
+		<Suspense fallback={null}>
+			<WorkflowSheet app={app} spec={graph.spec} save={save} onClose={() => setNewOpen(false)} onCreated={(id) => { setNewOpen(false); setSelected(`wf:${id}`); }} />
+		</Suspense>
+	);
 	const [view, setView] = useState<PanelView>("overview");
 	// The stage: measured here so the canvas, the docked card and the
 	// too-small notice agree on one size.
@@ -721,7 +731,7 @@ export default function ResearchMap({ app }: { app: string }) {
 
 	if (!data && !graph) return null;
 	// Nothing yet: the same stage, showing what will grow there and how to start.
-	if (workflows.length === 0 && exps.length === 0 && pending.length === 0) return <EmptyResearchSpace app={app} />;
+	if (workflows.length === 0 && exps.length === 0 && pending.length === 0) return <><EmptyResearchSpace app={app} />{newSheet}</>;
 
 	const selKind = selected?.split(":")[0];
 	const selWf = selKind === "wf" ? workflows.find((w) => `wf:${w.id}` === selected) : undefined;
@@ -829,6 +839,10 @@ export default function ResearchMap({ app }: { app: string }) {
 					className="hidden flex-shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5 text-micro text-ink-700 hover:bg-ink-100 hover:text-ink-900 lg:inline-flex">
 					<MessagesSquare className="h-3 w-3" />What should I run next?
 				</button>
+				<button type="button" onClick={() => openNewWorkflow(app)} data-new-workflow title="Create a workflow — it runs only when you press Run"
+					className="inline-flex flex-shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5 text-micro text-ink-700 hover:bg-ink-100 hover:text-ink-900">
+					<Plus className="h-3 w-3" />New workflow
+				</button>
 				<span className="ml-auto min-w-0 truncate whitespace-nowrap font-mono text-nano uppercase tracking-wider text-ink-600">{mapSummary(exps, pending, workflows)}</span>
 				<span className="hidden whitespace-nowrap font-mono text-nano text-ink-600 md:inline" title="When this was read">· {updated}</span>
 				<Suspense fallback={null}><NeedsFixingMenu app={app} /></Suspense>
@@ -846,6 +860,7 @@ export default function ResearchMap({ app }: { app: string }) {
 			)}
 			{variantFor && graph && <VariantSlot app={app} parent={variantFor === "new" ? undefined : variantFor} spec={graph.spec} save={save}
 				onClose={() => setVariantFor(null)} onCreated={(ids) => { setVariantFor(null); if (ids[0]) setSelected(`wf:${ids[0]}`); }} />}
+			{newSheet}
 		</section>
 	);
 }
@@ -854,6 +869,7 @@ const EMPTY_ROWS = new Map<string, MeWorkflowRow>();
 
 // The Make a variant sheet loads with its editors only when opened.
 const VariantSheet = lazy(() => import("@/components/research/VariantSheet"));
+const WorkflowSheet = lazy(() => import("@/components/research/WorkflowSheet"));
 function VariantSlot(props: { app: string; parent?: SpecWorkflow; spec: import("@/lib/app-spec").AppSpec; save: ReturnType<typeof useAppGraph>["save"]; onClose: () => void; onCreated: (ids: string[]) => void }) {
 	return <Suspense fallback={null}><VariantSheet {...props} /></Suspense>;
 }
