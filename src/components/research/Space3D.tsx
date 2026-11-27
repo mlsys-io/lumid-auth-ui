@@ -28,7 +28,6 @@ import {
 } from "@/lib/space3d";
 import { cn } from "@/lib/utils";
 
-const prefersReducedMotion = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
 export interface Space3DProps {
 	nodes: MapNode[];
@@ -236,7 +235,12 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		hoverLeaveTimer.current = window.setTimeout(() => setHovered((h) => (h === id ? null : h)), 180);
 	};
 	useEffect(() => () => { window.clearTimeout(hoverLeaveTimer.current); window.clearTimeout(hoverPendingTimer.current); }, []);
-	const reduced = useMemo(prefersReducedMotion, []);
+	// The research space moves regardless of the system's reduce-motion setting
+	// (operator decision 2026-11-27: "disable reduce motion switch"). A laptop set
+	// to reduce motion saw a still map with missing labels while the same page
+	// turned on a phone. The rest of Studio still honours the setting. The
+	// reduced paths below stay (always false here) so this is one line to undo.
+	const reduced = false;
 
 	// Mutable scene state, read by the frame loop.
 	const s = useRef({
@@ -990,14 +994,6 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 			{hint && (
 				<div className="absolute left-3 top-2.5 z-[6000] text-nano text-ink-600 pointer-events-none transition-opacity">
 					Drag to turn · two fingers or both buttons to move · pinch or ⌘/ctrl + scroll to zoom · click a dot to open it
-				</div>
-			)}
-			{/* Said, not guessed at: under the system's reduced-motion setting the
-			    space never turns on its own, which read as "broken" on a laptop
-			    set that way while the same page turned on a phone (2026-11-27). */}
-			{reduced && (
-				<div className={`absolute left-3 ${hint ? "top-7" : "top-2.5"} z-[6000] text-nano text-ink-600 pointer-events-none`} data-reduced-motion>
-					Holding still: this device asks for less motion. Drag or use the arrow keys to turn it.
 				</div>
 			)}
 		</div>
