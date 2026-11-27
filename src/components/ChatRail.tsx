@@ -201,7 +201,9 @@ export default function ChatRail({
 					<div className="flex-1 min-h-0 flex flex-col px-3 py-3">
 						{/* A hairline between the panel above (Running) and the chat,
 						    edge to edge of the rail (2026-11-27). */}
-						{top && <div data-rail-top className="flex-shrink-0 -mx-3 px-3 mb-3 border-b border-ink-200">{top}</div>}
+						{/* `empty:hidden`: when the panel renders nothing (nothing running) the
+						    wrapper and its separator go too. */}
+						{top && <div data-rail-top className="flex-shrink-0 -mx-3 px-3 mb-3 border-b border-ink-200 empty:hidden">{top}</div>}
 						<StudioChat docked groundApp={groundApp} />
 					</div>
 				</div>

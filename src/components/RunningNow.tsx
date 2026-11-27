@@ -267,6 +267,10 @@ export default function RunningNow({ app, runs = true, jobs = true }: { app?: st
 	// Nothing loaded yet: render nothing, so the rail doesn't flash a state the
 	// first answer immediately contradicts.
 	if (runs && feed.runs === null && activeJobs.length === 0 && fleetJobs.length === 0) return null;
+	// Nothing running: no panel at all — the chat takes the rail ("if none
+	// running, hide the running panel totally", 2026-11-27). It comes back the
+	// moment a run or job starts.
+	if (total === 0) return null;
 
 	// Novix's grid: one box per running job, free slots as dashed boxes — a
 	// row of two while one or nothing runs, two rows of two once more do; more
@@ -285,7 +289,7 @@ export default function RunningNow({ app, runs = true, jobs = true }: { app?: st
 	const mLine = machinesLine(machines);
 	const slotText = next[0]
 		? <><span className="text-ink-600">Starts next{next.length > 1 ? ` (+${next.length - 1})` : ""}: </span><span className="font-medium text-ink-800">{loopLabel("", next[0].loop)}{next[0].version ? ` · ${versionLabel(next[0].version)}` : ""}</span></>
-		: <span className="text-ink-600">{total ? "Nothing waiting — the next run starts here." : "Nothing running — runs start here."}</span>;
+		: <span className="text-ink-600">Nothing waiting — the next run starts here.</span>;
 
 	return (
 		<section aria-label="Running now" className="mb-3 space-y-1.5">
