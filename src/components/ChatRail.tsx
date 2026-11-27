@@ -199,7 +199,9 @@ export default function ChatRail({
 						/>
 					)}
 					<div className="flex-1 min-h-0 flex flex-col px-3 py-3">
-						{top}
+						{/* A hairline between the panel above (Running) and the chat,
+						    edge to edge of the rail (2026-11-27). */}
+						{top && <div data-rail-top className="flex-shrink-0 -mx-3 px-3 mb-3 border-b border-ink-200">{top}</div>}
 						<StudioChat docked groundApp={groundApp} />
 					</div>
 				</div>

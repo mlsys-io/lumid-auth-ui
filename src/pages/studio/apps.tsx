@@ -57,7 +57,6 @@ import LoopOrbit, { type LoopMode, type LoopStageKey } from "@/components/workfl
 // (AppsHome) doesn't statically pull the DAG canvas (@xyflow → vendor-flow) +
 // charts (recharts → vendor-charts) that only the per-app overview renders.
 // They load on demand when an overview actually mounts them.
-const AppActivityBand = lazy(() => import("@/components/activity/AppActivityBand"));
 const ResearchHome = lazy(() => import("@/components/research/ResearchHome"));
 const WorkflowObservabilityPanel = lazy(() => import("@/components/workflow/WorkflowObservabilityPanel"));
 const WorkflowPage = lazy(() => import("@/components/research/WorkflowPage"));
@@ -1269,7 +1268,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 						return embedded && appSlotTarget
 							? <>
 								{/* Where you are, as plain text — no menu. The app's workflows are
-								    listed in the sidebar under the app (AppWorkflowList). */}
+								    on its graph (no longer listed in the sidebar, 2026-11-27). */}
 								{crumbTarget && (() => {
 									const cur = rows.find((r) => r.loop === effSelected);
 									return cur ? createPortal(
@@ -1291,11 +1290,8 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 							// without curated copy fall back to the workflow list so the
 							// overview is never blank. ──
 							<div className="space-y-6 animate-in fade-in duration-200">
-								{/* Needs fixing for THIS app — empty when healthy. Running runs
-								    live in the Compute panel beside the map. */}
-								{!nestedInSurface && atHome && (
-									<Suspense fallback={null}><AppActivityBand app={app} failingOnly /></Suspense>
-								)}
+								{/* Needs fixing moved to a button in the top strip
+								    (NeedsFixingMenu, 2026-11-27): the band pushed the map down. */}
 								{/* The app's own pages, then what it is exploring (3D map) with
 								    the compute its runs wait for. A named page (?surface=) shows
 								    just that page. */}

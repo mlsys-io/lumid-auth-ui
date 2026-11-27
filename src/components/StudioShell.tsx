@@ -29,6 +29,7 @@ import {
 	Trash2,
 	Loader2,
 	AlertCircle,
+	AlertTriangle,
 	ShieldCheck, Receipt, History, LayoutGrid,} from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '../hooks/useAuth';
@@ -66,8 +67,6 @@ import { httpUser } from '../runmesh/utils/axios';
 // running, failing). Fills the gap left by removing the redundant
 // "Ask anything" search input.
 import TopStatusStrip from './TopStatusStrip';
-// The open app's workflows, under it in the sidebar (lazy: only when inside an app).
-const AppWorkflowList = lazy(() => import("@/components/AppWorkflowList"));
 
 interface NavItem {
 	to: string;
@@ -557,15 +556,18 @@ function AppFolder({
 }) {
 	const location = useLocation();
 	const to = `/studio/apps/${encodeURIComponent(item.app)}`;
-	// On the app or any of its pages (a workflow, a run): lit, and its
-	// workflows listed underneath.
-	const inside = location.pathname === to || location.pathname.startsWith(`${to}/`);
+	// Its workflows are no longer listed underneath (2026-11-27: "no need to
+	// show workflows on the apps left panel") — the app's graph is the list.
 	const active = location.pathname === to && !location.search.includes("surface=");
 	// Seed with the slug so an app that declares no icon still gets its own.
 	const installing = item.status === 'installing';
 	const failed = item.status === 'failed';
 	// A breathing dot while one of this app's workflows is running.
-	const running = !!useShellActivity()?.runningApps.includes(item.app);
+	const shell = useShellActivity();
+	const running = !!shell?.runningApps.includes(item.app);
+	// Workflows of this app whose latest run failed (same 3-day window as the
+	// top strip's "N need fixing" button on the app's page).
+	const failingN = shell?.failingByApp?.[item.app] ?? 0;
 
 	// A new conversation in an app starts from the docked chat's own "New
 	// conversation" button; the hover-only ⊕ that used to sit here was a third
@@ -591,11 +593,17 @@ function AppFolder({
 					{installing && <Loader2 className="w-3 h-3 flex-shrink-0 animate-spin text-muted-foreground" />}
 					{failed && <AlertCircle className="w-3 h-3 flex-shrink-0 text-brick-600" />}
 					{badge != null && badge > 0 && (
-						<span className="flex-shrink-0 inline-flex min-w-[18px] h-[18px] items-center justify-center px-1 rounded-full bg-gold-100 text-gold-800 text-micro font-semibold tabular-nums">{badge}</span>
+						<span title={`${badge} awaiting you`} className="flex-shrink-0 inline-flex min-w-[18px] h-[18px] items-center justify-center px-1 rounded-full bg-gold-100 text-gold-800 text-micro font-semibold tabular-nums">{badge}</span>
+					)}
+					{failingN > 0 && !installing && (
+						<span data-app-failing={failingN} title={`${failingN} workflow${failingN === 1 ? '' : 's'} need${failingN === 1 ? 's' : ''} fixing`}
+							aria-label={`${failingN} need${failingN === 1 ? 's' : ''} fixing`}
+							className="flex-shrink-0 inline-flex h-[18px] items-center gap-0.5 px-1.5 rounded-full bg-brick-50 text-brick-700 text-micro font-semibold tabular-nums">
+							<AlertTriangle className="w-2.5 h-2.5" aria-hidden />{failingN}
+						</span>
 					)}
 				</button>
 			</div>
-			{inside && <Suspense fallback={null}><AppWorkflowList app={item.app} /></Suspense>}
 		</div>
 	);
 }
