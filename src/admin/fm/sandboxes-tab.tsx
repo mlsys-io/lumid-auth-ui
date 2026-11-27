@@ -779,7 +779,7 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 								<option key={n} value={n}>{n === 0 ? "none" : n}</option>
 							))}
 						</select>
-						{gpuBoxSize && <span className="mt-1 block text-[11px] text-ink-500">with {gpuBoxSize}</span>}
+						{gpuBoxSize && <span className="mt-1 block text-xs text-ink-500">with {gpuBoxSize}</span>}
 					</label>
 					{gpu === 0 && cpuOptions.length > 0 && (
 						<label className="text-xs text-ink-600">
