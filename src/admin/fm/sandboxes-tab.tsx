@@ -47,6 +47,7 @@ import {
 	portPoolForSite,
 	cpuForSite,
 	ttlForSite,
+	dockerForSite,
 	sizeDefaultsForSite,
 	gpuProfileForSite,
 	imagesForSite,
@@ -219,6 +220,7 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 	const [homeChoice, setHomeChoice] = useState("");
 	const [name, setName] = useState("dev");
 	const [gpu, setGpu] = useState(0);
+	const [docker, setDocker] = useState(false);
 	// CPU cores for a CPU sandbox, from the site's published menu (cpuForSite). 2 matches the
 	// server's own default, so an untouched form asks for what it always got.
 	const [cpu, setCpu] = useState(2);
@@ -494,6 +496,13 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 	// Lifetime menu: whatever of 2/8/24/48h the site's ceiling for THIS kind of box allows. A server
 	// that publishes no ceilings is the old single 24h cap. Offering more than the server accepts
 	// would be the GPU-selector bug again in a different field.
+	// Docker inside the box: offered only where the site has Docker-capable machines. CPU only, so ticking it
+	// clears the GPU choice, and the GPU menu is locked while it is ticked.
+	const dockerInfo = dockerForSite(target);
+	const dockerAvailable = Boolean(dockerInfo?.enabled);
+	useEffect(() => {
+		if (docker && !dockerAvailable) setDocker(false);
+	}, [docker, dockerAvailable]);
 	const ttlInfo = ttlForSite(target);
 	const ttlMax = gpu > 0 ? (ttlInfo?.gpu_max_hours ?? 24) : (ttlInfo?.cpu_max_hours ?? 24);
 	const ttlOptions = [2, 8, 24, 48].filter((h) => h <= ttlMax);
@@ -591,7 +600,10 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 			// Omit the field entirely when empty: sandbox-control reads "absent" as
 			// "use this site's default", and an empty string is not the same thing.
 			await createSandbox(target, {
-				name, gpu, ttl_hours: ttl, image: chosen || undefined,
+				name, gpu, ttl_hours: ttl,
+				// A Docker box omits `image` so the server picks its Docker-enabled image (a plain image has no dockerd).
+				image: docker ? undefined : chosen || undefined,
+				...(docker ? { docker: true } : {}),
 				// Only for a CPU sandbox, and only when the site published a menu: a GPU box keeps
 				// the server's defaults, and an older server gets exactly the request it always did.
 				...(gpu === 0 && cpuOptions.length ? { cpu, memory_gi: cpuMemoryGi } : {}),
@@ -601,7 +613,8 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 				data_sources: sources.length ? sources : undefined,
 				// Omitted = the server's default (host home when you have one). "volume" opts out;
 				// an alias picks which host's /home — they are different directories.
-				...(homeChoice === "volume" ? { home: "volume" as const }
+				// A Docker box always uses the sandbox home volume (the server refuses a host home for it).
+				...(docker || homeChoice === "volume" ? { home: "volume" as const }
 					: homeChoice ? { home: "host" as const, host: homeChoice } : {}),
 				// Blank boxes are not zeros. Filtered here so an untouched second
 				// field never becomes a request to publish port 0.
@@ -783,14 +796,28 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 					)}
 					<label className="text-xs text-ink-600">
 						GPUs{gpuLabel ? <span className="ml-1 text-ink-600">{gpuLabel}</span> : null}
-						<select value={gpu} onChange={(e) => setGpu(Number(e.target.value))}
-							className="mt-1 block rounded-md border border-ink-300 px-2 py-1 text-sm">
+						<select value={gpu} onChange={(e) => setGpu(Number(e.target.value))} disabled={docker}
+							title={docker ? "Docker sandboxes are CPU only" : undefined}
+							className="mt-1 block rounded-md border border-ink-300 px-2 py-1 text-sm disabled:opacity-50">
 							{gpuOptions.map((n) => (
 								<option key={n} value={n}>{n === 0 ? "none" : n}</option>
 							))}
 						</select>
 						{gpuBoxSize && <span className="mt-1 block text-xs text-ink-500">with {gpuBoxSize}</span>}
 					</label>
+					{dockerAvailable && (
+						<label className="flex items-start gap-2 text-xs text-ink-600">
+							<input type="checkbox" checked={docker} className="mt-0.5"
+								onChange={(e) => { setDocker(e.target.checked); if (e.target.checked) setGpu(0); }} />
+							<span>
+								Docker inside
+								<span className="block text-ink-500">
+									Run docker, build and compose in this box. CPU only, up to {dockerInfo?.max_disk_gi ?? 50} GiB for
+									images and containers, uses the sandbox home.
+								</span>
+							</span>
+						</label>
+					)}
 					{gpu === 0 && cpuOptions.length > 0 && (
 						<label className="text-xs text-ink-600">
 							CPU cores
