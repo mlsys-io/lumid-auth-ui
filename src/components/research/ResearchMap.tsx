@@ -22,7 +22,7 @@ import VersionChain from "@/components/research/VersionChain";
 import { buildEvolution } from "@/lib/evolution";
 import ApprovalCard, { readNotNow, writeNotNow } from "@/components/research/ApprovalCard";
 import { useWorkflowColors, type WfSwatch } from "@/hooks/useWorkflowColors";
-import { useStageHeight, STAGE_MIN_W, STAGE_MIN_H } from "@/components/research/stage-height";
+import { useStageHeight } from "@/components/research/stage-height";
 import EmptyResearchSpace from "@/components/research/EmptyResearchSpace";
 import Space3D from "@/components/research/Space3D";
 import RunVersions from "@/components/research/RunVersions";
@@ -667,7 +667,9 @@ export default function ResearchMap({ app }: { app: string }) {
 		return () => window.clearTimeout(t);
 	}, [app]);
 	const mapReady = !!graph && (!!data || waited);
-	const wide = useWide();
+	// The space on a wide screen, or on any touch screen (a phone shows it too —
+	// the list made the page run long, "can overlap with graph", 2026-11-27).
+	const wide = useWide() || useMedia("(pointer: coarse)");
 	const panelPx = useMedia("(min-width: 1536px)") ? PANEL_PX_2XL : PANEL_PX;
 	const live = useShellActivity()?.runningApps.includes(app) ?? false;
 	const grow = useOncePerSession(`research-map:${app}`);
@@ -850,7 +852,7 @@ export default function ResearchMap({ app }: { app: string }) {
 			    the space, or — below the minimum — a note saying it needs more. */}
 			<div ref={stage.ref} data-stage-fits={stage.fits ? "1" : "0"} className={cn(!wide && "hidden")}>
 				{wide && stage.fits && !asList ? mapWithPanel : wide && !asList ? (
-					<SmallStageNotice height={stage.height} onList={() => setAsList(true)} />
+					<SmallStageNotice height={stage.free} min={stage.min} onList={() => setAsList(true)} />
 				) : null}
 			</div>
 			{(!wide || asList) && (
@@ -883,16 +885,37 @@ const EMPTY_ROWS = new Map<string, MeWorkflowRow>();
 /** In place of the space when there is less than STAGE_MIN_W × STAGE_MIN_H of
  *  room: a drawn space that small is a tangle of labels, so say so and offer
  *  what fits. */
-function SmallStageNotice({ height, onList }: { height: number; onList: () => void }) {
+function SmallStageNotice({ height, min, onList }: { height: number; min: { w: number; h: number }; onList: () => void }) {
+	// Never taller than the room it stands in, or the notice itself scrolls —
+	// a phone held sideways has ~150 px under the header (Galaxy S24 Ultra in
+	// landscape, 832 × 384 CSS px, 2026-11-27). Short room: one line.
+	const touch = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
+	const h = Math.max(44, Math.min(height, min.h));
+	const what = touch && window.innerWidth > window.innerHeight
+		? "Turn your phone upright to see the research space"
+		: "The research space needs a larger window";
+	if (h < 120) {
+		return (
+			<div data-small-stage style={{ height: h }}
+				className="flex items-center justify-center gap-3 overflow-hidden rounded-xl border border-dashed border-ink-200 bg-card px-4">
+				<Sparkles className="h-4 w-4 flex-shrink-0 text-plum-500" aria-hidden />
+				<span className="min-w-0 truncate text-caption font-medium text-ink-800">{what}</span>
+				<button type="button" onClick={onList}
+					className="flex-shrink-0 rounded-lg border border-ink-200 bg-card px-2.5 py-1 text-micro text-ink-800 hover:bg-ink-50">Show as a list</button>
+			</div>
+		);
+	}
 	return (
-		<div data-small-stage style={{ height: Math.min(height, STAGE_MIN_H) }}
-			className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-ink-200 bg-card px-6 text-center">
-			<Sparkles className="h-4 w-4 text-plum-500" aria-hidden />
-			<p className="text-meta font-medium text-ink-800">The research space needs a larger window</p>
-			<p className="max-w-sm text-caption text-ink-600">
-				It draws best in at least {STAGE_MIN_W} × {STAGE_MIN_H} pixels. Make the window larger, hide the chat
-				panel, or collapse the sidebar — it comes back on its own.
-			</p>
+		<div data-small-stage style={{ height: h }}
+			className="flex flex-col items-center justify-center gap-1.5 overflow-hidden rounded-xl border border-dashed border-ink-200 bg-card px-6 text-center">
+			<Sparkles className="h-4 w-4 flex-shrink-0 text-plum-500" aria-hidden />
+			<p className="text-meta font-medium text-ink-800">{what}</p>
+			{h >= 200 && (
+				<p className="max-w-sm text-caption text-ink-600">
+					It draws in at least {min.w} × {min.h} pixels. Make the window larger, hide the chat
+					panel, or collapse the sidebar — it comes back on its own.
+				</p>
+			)}
 			<button type="button" onClick={onList}
 				className="mt-1 inline-flex items-center gap-1 rounded-lg border border-ink-200 bg-card px-3 py-1.5 text-caption text-ink-800 hover:bg-ink-50">
 				Show it as a list <ArrowRight className="h-3.5 w-3.5" aria-hidden />

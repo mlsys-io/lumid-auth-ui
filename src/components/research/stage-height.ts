@@ -17,7 +17,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 export const STAGE_MIN_W = 500;
 export const STAGE_MIN_H = 360;
-const STAGE_MIN = STAGE_MIN_H;
+// A touch screen (a phone, a tablet) is held close and turned with a finger:
+// the space reads fine far smaller than with a mouse. The laptop minimum kept
+// it off a phone in landscape entirely (2026-11-27, Galaxy S24 Ultra).
+export const TOUCH_MIN_W = 300;
+export const TOUCH_MIN_H = 220;
+const STAGE_MIN = TOUCH_MIN_H;
 const GAP = 4;
 
 export interface StageSize {
@@ -26,7 +31,12 @@ export interface StageSize {
 	 *  object ref read once at mount never saw the element (2026-11-27). */
 	ref: (el: HTMLElement | null) => void;
 	height: number;
+	/** Room the stage really has: the estimate less what the page still
+	 *  overflows by, NOT clamped to the minimum — what a too-small notice uses. */
+	free: number;
 	fits: boolean;
+	/** The minimum that applies here (touch or pointer). */
+	min: { w: number; h: number };
 }
 
 function scrollParent(el: HTMLElement): HTMLElement | null {
@@ -43,7 +53,12 @@ export function useStageHeight(): StageSize {
 	// Free space before clamping, and the stage's width: what decides whether it fits.
 	const [free, setFree] = useState({ w: 9999, h: 9999 });
 	const [tick, setTick] = useState(0); // one per estimate, so the fit pass follows it
+	const [room, setRoom] = useState(9999); // estimate less overflow, unclamped
 	const estimateRef = useRef(0); // the last estimate: the most the fit may grow back to
+	// Adjustments the fit has made since the last estimate. Capped, so shrink and
+	// grow can never ping-pong — that showed as a flashing scrollbar and blinking
+	// shadows (2026-11-27) — while a page settling after load still recovers.
+	const adjusts = useRef(0);
 
 	// Pass 1: estimate — on mount, on a window resize, when the stage's WIDTH
 	// changes (the chat rail opening narrows it without any window event), and
@@ -60,6 +75,8 @@ export function useStageHeight(): StageSize {
 			const raw = bottom - el.getBoundingClientRect().top - GAP;
 			setFree({ w: el.clientWidth, h: raw });
 			estimateRef.current = Math.round(Math.max(STAGE_MIN, raw));
+			adjusts.current = 0;
+			setRoom(Math.round(raw));
 			setH(estimateRef.current);
 			setTick((t) => t + 1);
 		};
@@ -93,8 +110,10 @@ export function useStageHeight(): StageSize {
 		const content = sc.firstElementChild as HTMLElement | null;
 		const fit = () => {
 			const over = sc.scrollHeight - sc.clientHeight;
+			if (adjusts.current >= 4) return;
 			if (over > 0) {
-				setFree((f) => ({ ...f, h: f.h - over }));
+				adjusts.current += 1;
+				setRoom((r) => Math.round(r - over));
 				setH((cur) => Math.round(Math.max(STAGE_MIN, cur - over)));
 				return;
 			}
@@ -102,11 +121,8 @@ export function useStageHeight(): StageSize {
 			// the page loaded), never past the estimate.
 			const slack = content ? Math.floor(sc.clientHeight - content.getBoundingClientRect().height) : 0;
 			if (slack > 2) {
-				setH((cur) => {
-					const next = Math.min(estimateRef.current, cur + slack);
-					if (next > cur) setFree((f) => ({ ...f, h: f.h + (next - cur) }));
-					return next > cur ? next : cur;
-				});
+				adjusts.current += 1;
+				setH((cur) => Math.max(cur, Math.min(estimateRef.current, cur + slack)));
 			}
 		};
 		raf = requestAnimationFrame(fit);
@@ -116,5 +132,12 @@ export function useStageHeight(): StageSize {
 		return () => { cancelAnimationFrame(raf); ro?.disconnect(); };
 	}, [tick, el]);
 
-	return { ref, height: h, fits: free.w >= STAGE_MIN_W && free.h >= STAGE_MIN_H };
+	// Whether the space fits is decided from the MEASURE alone — the window and
+	// the stage's place in it — never from the page's own content. Deciding it
+	// after the fit pass flickered: the notice is shorter than the space, so the
+	// page had room, the space came back, overflowed, and gave way to the notice
+	// again, forever (2026-11-27).
+	const touch = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
+	const min = touch ? { w: TOUCH_MIN_W, h: TOUCH_MIN_H } : { w: STAGE_MIN_W, h: STAGE_MIN_H };
+	return { ref, height: h, free: Math.max(0, room), fits: free.w >= min.w && free.h >= min.h, min };
 }
