@@ -72,7 +72,15 @@ export function experimentStatus(e: MeExperiment): { tone: Tone; text: string } 
 	}
 	if (!e.n_results) {
 		if (e.unfed) return { tone: "attention", text: "Can't start — no workflow runs it" };
-		if (e.starved) return { tone: "failing", text: "Stuck — the workflow that runs it is failing" };
+		// `starved` covers three cases (identity markStarved/markUndispatched):
+		// its workflow never ran, it waits to be dispatched, or the workflow
+		// failed its recent runs. Only the last is "failing" — a brand-new
+		// experiment read "Stuck" in red (2026-11-27, Quant Research 0.8.0).
+		if (e.starved) {
+			return /\bfailed\b/i.test(e.starved_reason || "")
+				? { tone: "failing", text: "Stuck — the workflow that runs it is failing" }
+				: { tone: "idle", text: "Not started yet — none of its versions has run" };
+		}
 		// The workflow ran, but never AS one of these versions (runs started by
 		// hand) — so the honest next step is to run the versions, not to debug.
 		if (e.unrecorded && (e.arms?.length ?? 0) > 0 && !Object.keys(e.variants || {}).length) return { tone: "idle", text: "None of its versions has run yet" };
