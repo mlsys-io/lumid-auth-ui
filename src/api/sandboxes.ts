@@ -272,6 +272,8 @@ export interface SandboxList {
 	ports?: PortPool;
 	/** CPU-sandbox size menu; absent on older servers. See SiteCpuInfo. */
 	cpu?: SiteCpuInfo;
+	/** Absent on servers older than 2026-11-27. See SiteSizeDefaults. */
+	size_defaults?: SiteSizeDefaults;
 }
 
 // ---------------------------------------------------------------------------
@@ -346,12 +348,32 @@ export interface SiteCpuInfo {
 	sizes: number[];
 	max_cpu: number;
 	max_memory_gi: number;
+	/** GiB of memory per core for a CPU box. Absent/null on a server that sets no ratio — the
+	 *  form then keeps the historical 4 GiB per core. */
+	mem_per_core_gi?: number | null;
+}
+
+/**
+ * What a box gets for the cpu / memory_gi a client leaves out (sandbox-control SIZE DEFAULTS,
+ * 2026-11-27). The form sends neither for a GPU box, so `gpu_*` is exactly what a GPU box gets.
+ * Null fields = the server's old 2 CPU / 8 GiB default.
+ */
+export interface SiteSizeDefaults {
+	cpu_mem_per_core_gi: number | null;
+	gpu_cpu_per_gpu: number | null;
+	gpu_mem_per_gpu_gi: number | null;
 }
 
 const siteCpu = new Map<string, SiteCpuInfo>();
 
 export function cpuForSite(site: string): SiteCpuInfo | undefined {
 	return siteCpu.get(site);
+}
+
+const siteSizeDefaults = new Map<string, SiteSizeDefaults>();
+
+export function sizeDefaultsForSite(site: string): SiteSizeDefaults | undefined {
+	return siteSizeDefaults.get(site);
 }
 
 const siteDatasetsWritable = new Map<string, boolean>();
@@ -569,6 +591,7 @@ export async function listSandboxesForSite(site: string): Promise<Sandbox[]> {
 	}
 	if (r.data?.ports) sitePortPools.set(site, r.data.ports);
 	if (r.data?.cpu && Array.isArray(r.data.cpu.sizes)) siteCpu.set(site, r.data.cpu);
+	if (r.data?.size_defaults) siteSizeDefaults.set(site, r.data.size_defaults);
 	return (r.data?.sandboxes ?? []).map((s) => ({ ...s, site, gpus_free: s.gpus_free ?? gpusFree }));
 }
 
