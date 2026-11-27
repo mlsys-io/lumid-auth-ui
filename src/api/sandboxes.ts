@@ -274,6 +274,8 @@ export interface SandboxList {
 	cpu?: SiteCpuInfo;
 	/** Absent on servers older than 2026-11-27. See SiteSizeDefaults. */
 	size_defaults?: SiteSizeDefaults;
+	/** Lifetime ceilings; absent on servers older than the 48h-CPU build. See SiteTtlInfo. */
+	ttl?: SiteTtlInfo;
 }
 
 // ---------------------------------------------------------------------------
@@ -368,6 +370,22 @@ const siteCpu = new Map<string, SiteCpuInfo>();
 
 export function cpuForSite(site: string): SiteCpuInfo | undefined {
 	return siteCpu.get(site);
+}
+
+/**
+ * How long a sandbox may run at a site (`ttl` on GET /api/sandboxes, 2026-11-27). CPU boxes may run
+ * longer than GPU ones: the GPU ceiling protects exclusive cards, a CPU box holds only its own cores.
+ * Absent on an older sandbox-control, whose single ceiling was 24h for both.
+ */
+export interface SiteTtlInfo {
+	cpu_max_hours: number;
+	gpu_max_hours: number;
+}
+
+const siteTtl = new Map<string, SiteTtlInfo>();
+
+export function ttlForSite(site: string): SiteTtlInfo | undefined {
+	return siteTtl.get(site);
 }
 
 const siteSizeDefaults = new Map<string, SiteSizeDefaults>();
@@ -592,6 +610,7 @@ export async function listSandboxesForSite(site: string): Promise<Sandbox[]> {
 	if (r.data?.ports) sitePortPools.set(site, r.data.ports);
 	if (r.data?.cpu && Array.isArray(r.data.cpu.sizes)) siteCpu.set(site, r.data.cpu);
 	if (r.data?.size_defaults) siteSizeDefaults.set(site, r.data.size_defaults);
+	if (r.data?.ttl && typeof r.data.ttl.cpu_max_hours === "number") siteTtl.set(site, r.data.ttl);
 	return (r.data?.sandboxes ?? []).map((s) => ({ ...s, site, gpus_free: s.gpus_free ?? gpusFree }));
 }
 

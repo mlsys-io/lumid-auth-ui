@@ -46,6 +46,7 @@ import {
 	listDatasets,
 	portPoolForSite,
 	cpuForSite,
+	ttlForSite,
 	sizeDefaultsForSite,
 	gpuProfileForSite,
 	imagesForSite,
@@ -490,6 +491,15 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 	// sandbox-control refuses any other count (400), so offering one here would be a control
 	// that can only produce an error. No menu published (older server) → no control, no cpu sent.
 	const cpuInfo = cpuForSite(target);
+	// Lifetime menu: whatever of 2/8/24/48h the site's ceiling for THIS kind of box allows. A server
+	// that publishes no ceilings is the old single 24h cap. Offering more than the server accepts
+	// would be the GPU-selector bug again in a different field.
+	const ttlInfo = ttlForSite(target);
+	const ttlMax = gpu > 0 ? (ttlInfo?.gpu_max_hours ?? 24) : (ttlInfo?.cpu_max_hours ?? 24);
+	const ttlOptions = [2, 8, 24, 48].filter((h) => h <= ttlMax);
+	useEffect(() => {
+		if (ttl > ttlMax) setTtl(ttlOptions[ttlOptions.length - 1] ?? 8);
+	}, [ttl, ttlMax]); // eslint-disable-line react-hooks/exhaustive-deps
 	const cpuOptions = cpuInfo?.sizes ?? [];
 	useEffect(() => {
 		if (cpuOptions.length && !cpuOptions.includes(cpu)) setCpu(cpuOptions.includes(2) ? 2 : cpuOptions[0]);
@@ -963,11 +973,9 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 						Expires after
 						<select value={ttl} onChange={(e) => setTtl(Number(e.target.value))}
 							className="mt-1 block rounded-md border border-ink-300 px-2 py-1 text-sm">
-							{/* 24h is the ceiling, and sandbox-control enforces the same number
-							    (MAX_TTL_HOURS). Offering 3d here while the server refused it would
-							    be the GPU-selector bug again in a different field. */}
-							<option value={2}>2h</option><option value={8}>8h</option>
-							<option value={24}>24h</option>
+							{/* The site's ceiling for this kind of box (ttlOptions): 48h for CPU, 24h for
+							    GPU since 2026-11-27; sandbox-control enforces the same numbers. */}
+							{ttlOptions.map((h) => <option key={h} value={h}>{h}h</option>)}
 						</select>
 					</label>
 					<button onClick={onCreate} disabled={busy || !name}
