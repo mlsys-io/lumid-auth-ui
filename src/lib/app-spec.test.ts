@@ -1,5 +1,5 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
-import { readAppSpec, addWorkflows, setWorkflowNode, addNode, renameNode, moveNode, removeNode, setFeedback, nodeIdFrom } from "./app-spec";
+import { readAppSpec, addWorkflows, setWorkflowNode, addNode, renameNode, moveNode, removeNode, setFeedback, nodeIdFrom, chainStages } from "./app-spec";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -113,6 +113,40 @@ check("feedback edits replace the steps", () => {
 	const fb = readAppSpec(out).workflows[0].feedback;
 	eq([fb.length, fb[0].metrics[0].target, fb[1].metrics[0].better], [2, 2, "lower"]);
 	eq(readAppSpec(setFeedback(V2, "simulate", [])).workflows[0].feedback, []);
+});
+
+check("chains: reads steps.workflows (ids and {use, inputs})", () => {
+	const text = V2.replace("nodes:", `  - id: chain_x
+    steps:
+      workflows:
+        - simulate
+        - {use: coach, inputs: {days: 7}}
+        - {inputs: {lost: 1}}   # no workflow named: dropped
+nodes:`);
+	const w = readAppSpec(text).workflows.find((x) => x.id === "chain_x")!;
+	eq(w.steps, { workflows: ["simulate", { use: "coach", inputs: { days: 7 } }] });
+	eq(chainStages(w.steps), [{ use: "simulate", inputs: {} }, { use: "coach", inputs: { days: 7 } }]);
+	eq(w.run, "manual");
+});
+check("chains: addWorkflows writes steps.workflows, run manual, comments kept", () => {
+	const out = addWorkflows(V2, [{
+		id: "sim_then_coach", title: "Simulate, then coach",
+		steps: { workflows: ["simulate", { use: "coach", inputs: { days: 7 } }, { use: "simulate", inputs: {} }] },
+		feedback: [{ step: "simulator", metrics: [{ name: "objective", better: "higher" }] }],
+	}]);
+	if (!out.includes("# the simulator") || !out.includes("# MLSys Research")) throw new Error("comments lost");
+	const w = readAppSpec(out).workflows.find((x) => x.id === "sim_then_coach")!;
+	// A stage with no changed inputs is written as its bare id.
+	eq([w.run, w.steps, w.feedback.length], ["manual", { workflows: ["simulate", { use: "coach", inputs: { days: 7 } }, "simulate"] }, 1]);
+	if (!/workflows:\n\s+- simulate\n\s+- use: coach\n\s+inputs:\n\s+days: 7/.test(out)) throw new Error(`unexpected YAML:\n${out}`);
+});
+check("chains: refuses an unknown stage, itself, and an empty chain", () => {
+	throws(() => addWorkflows(V2, [{ id: "c", steps: { workflows: ["ghost"] } }]), /no workflow "ghost" to chain/);
+	throws(() => addWorkflows(V2, [{ id: "c", steps: { workflows: ["simulate", "c"] } }]), /stage of itself/);
+	throws(() => addWorkflows(V2, [{ id: "c", steps: { workflows: [] } }]), /at least one workflow/);
+	// A stage may be a workflow added earlier in the same batch.
+	const out = addWorkflows(V2, [{ id: "a", steps: { python: "a" } }, { id: "c", steps: { workflows: ["a", "simulate"] } }]);
+	eq(readAppSpec(out).workflows.find((x) => x.id === "c")!.steps, { workflows: ["a", "simulate"] });
 });
 
 export function run(): number {

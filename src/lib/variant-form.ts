@@ -10,7 +10,9 @@
 // form has no schedule field on purpose (runs are started by hand).
 
 import { parse as parseYaml } from "yaml";
-import { nodeIdFrom, type AppSpec, type FeedbackStep, type NewWorkflow, type SpecNode, type SpecWorkflow } from "./app-spec";
+import { chainStages, nodeIdFrom, type AppSpec, type ChainStage, type FeedbackStep, type NewWorkflow, type SpecNode, type SpecWorkflow } from "./app-spec";
+import { humanMetric } from "./run-answer";
+import { loopLabel } from "./workflow-names";
 
 /** How the variant differs from its parent. "describe" never reaches buildVariants. */
 export type ChangeKind = "describe" | "steps" | "code" | "same";
@@ -203,7 +205,7 @@ export function buildVariants(form: VariantForm, spec: AppSpec, parent?: SpecWor
 
 /** The parent's definition, as lines a chat can read. */
 export function definitionLines(w: SpecWorkflow): string[] {
-	const steps = w.steps.dag ? `the step graph ${dagPath(w.steps.dag)}` : w.steps.python ? `the Python step ${codePath(w.steps.python)}` : w.steps.skills?.length ? `the skills ${w.steps.skills.join(", ")}` : "no steps declared";
+	const steps = w.steps.workflows?.length ? `the workflows ${chainStages(w.steps).map((st) => st.use).join(" → ")}, in order` : w.steps.dag ? `the step graph ${dagPath(w.steps.dag)}` : w.steps.python ? `the Python step ${codePath(w.steps.python)}` : w.steps.skills?.length ? `the skills ${w.steps.skills.join(", ")}` : "no steps declared";
 	const lines = [`Steps: ${steps}`];
 	lines.push(`Inputs: ${Object.keys(w.inputs).length ? JSON.stringify(w.inputs) : "none"}`);
 	lines.push(`Data: ${w.data.length ? w.data.join(", ") : "none"}`);
@@ -233,6 +235,124 @@ export function describePrompt(app: string, description: string, parent?: SpecWo
 		"",
 		`Keep everything else the same. Give it its own id, set parent: ${parent.id}, and stage it as a proposal for me to approve. It runs only when started by hand (run: manual). Start nothing.`,
 	].join("\n");
+}
+
+// ── a new workflow (the WorkflowSheet) ───────────────────────────────────
+
+/** What a new workflow is called on screen: its title, else its id in words. */
+export function newWorkflowName(id: string, title = ""): string {
+	return title.trim() || loopLabel("", id.trim()) || "the new workflow";
+}
+
+/** The one sentence shown before saving. Nothing new runs on its own. */
+export function createsSentence(name: string, appName: string): string {
+	return `Creates \u2018${name}\u2019 in ${appName}. It runs only when you press Run.`;
+}
+
+/** The toast after a new workflow is saved. */
+export function createdToast(name: string): string {
+	return `Created ${name} \u2014 run it when you're ready`;
+}
+
+/** "or describe it in chat": what it asks. Never how often — it is created to run when pressed. */
+export function newWorkflowChatPrompt(appName: string): string {
+	return `I'd like to add a new workflow to ${appName}. Ask me what it should do and how a result should be judged, `
+		+ "then draft it for me to approve before anything is saved. It will be created to run only when I press Run (run: manual), so start nothing.";
+}
+
+// ── a chain of workflows ("Chain other workflows") ───────────────────────
+
+/** One stage being built: which workflow, and its inputs as editable rows. */
+export interface ChainRow { use: string; inputs: InputRow[] }
+
+export interface ChainForm {
+	id: string;
+	title: string;
+	stages: ChainRow[];
+	feedback: FeedbackStep[];
+	placement: Exclude<Placement, { mode: "new" }>;
+}
+
+/** The workflows a chain can use: the app's own, not housekeeping ones. */
+export function chainable(spec: AppSpec): SpecWorkflow[] {
+	return spec.workflows.filter((w) => !w.helper);
+}
+
+/** A stage as first added: the workflow's own inputs, ready to change. */
+export function chainRowFor(w: SpecWorkflow): ChainRow {
+	return { use: w.id, inputs: inputRowsFrom(w.inputs) };
+}
+
+/**
+ * Rows → the stage as written in the spec. Only inputs that differ from the
+ * workflow's own are kept (the rest are its defaults anyway), so an unchanged
+ * stage is just its id.
+ */
+export function chainStageFrom(row: ChainRow, w?: SpecWorkflow): ChainStage {
+	const own = w?.inputs ?? {};
+	const all = inputsFrom(row.inputs, own);
+	const changed = Object.fromEntries(Object.entries(all).filter(([k, v]) => !(k in own) || JSON.stringify(own[k]) !== JSON.stringify(v)));
+	return Object.keys(changed).length ? { use: row.use, inputs: changed } : row.use;
+}
+
+/** The feedback a chain starts with: its last stage's (copied, so edits don't leak). */
+export function chainFeedback(spec: AppSpec, stages: ChainRow[]): FeedbackStep[] {
+	const last = spec.workflows.find((w) => w.id === stages[stages.length - 1]?.use);
+	return (last?.feedback ?? []).map((f) => ({ step: f.step, ...(f.service ? { service: f.service } : {}), metrics: f.metrics.map((m) => ({ ...m })) }));
+}
+
+/**
+ * What flows from stage n-1 to stage n, in words. The engine hands stage n the
+ * previous stage's metrics as `prev_<metric>` inputs — but only the ones stage
+ * n declares (code can also read them all from LUMID_PREV_METRICS). `uses`
+ * names the prev_ inputs the next workflow declares: those are connected.
+ */
+export function passesOn(prev: SpecWorkflow | undefined, next: SpecWorkflow | undefined, n: number): { line: string; inputs: string[]; uses: string[] } {
+	const metrics = [...new Set((prev?.feedback ?? []).flatMap((f) => f.metrics.map((m) => m.name)))];
+	const inputs = metrics.map((m) => `prev_${m}`);
+	const declared = Object.keys(next?.inputs ?? {}).filter((k) => k.startsWith("prev_"));
+	const uses = declared.filter((k) => inputs.includes(k) || !metrics.length);
+	const line = metrics.length
+		? `Stage ${n} can use stage ${n - 1}'s results (${metrics.map((m) => humanMetric(m).label).join(", ")}) as ${inputs.join(", ")}`
+		: `Stage ${n} runs after stage ${n - 1} and can read its results`;
+	return { line, inputs, uses };
+}
+
+/** Turn the chain form into addWorkflows' arguments. Throws a sentence. */
+export function buildChain(form: ChainForm, spec: AppSpec): BuiltVariants {
+	const id = form.id.trim();
+	const why = idProblem(id, spec.workflows.map((w) => w.id));
+	if (why) throw new Error(why);
+	if (!form.stages.length) throw new Error("Add at least one workflow to the chain");
+	const byId = new Map(spec.workflows.map((w) => [w.id, w]));
+	const workflows = form.stages.map((row, i) => {
+		const w = byId.get(row.use);
+		if (!w) throw new Error(`Stage ${i + 1}: there is no workflow "${row.use}" any more`);
+		try {
+			return chainStageFrom(row, w);
+		} catch (e) {
+			throw new Error(`Stage ${i + 1} (${newWorkflowName(w.id, w.title)}): ${(e as Error).message}`);
+		}
+	});
+	const p = form.placement;
+	if (p.mode === "into" && !spec.nodes.some((n) => n.id === p.node)) throw new Error(`There is no node "${p.node}"`);
+	const entry: NewWorkflow = {
+		id,
+		...(form.title.trim() ? { title: form.title.trim() } : {}),
+		...(p.mode === "into" ? { node: p.node } : {}),
+		steps: { workflows },
+		feedback: cleanFeedback(form.feedback),
+	};
+	return { entries: [entry], files: [], ids: [id] };
+}
+
+/**
+ * Whether "Chain other workflows" is offered. The engine that runs a chain is
+ * not live everywhere yet: it shows when the browser opted in
+ * (localStorage lumid:chain-workflows = 1) or the app already has a chain.
+ */
+export function chainEnabled(spec: AppSpec, optedIn: boolean): boolean {
+	return optedIn || spec.workflows.some((w) => (w.steps.workflows?.length ?? 0) > 0);
 }
 
 /** A failed save in words. 409 survives useAppGraph's one retry only when the spec keeps moving. */
