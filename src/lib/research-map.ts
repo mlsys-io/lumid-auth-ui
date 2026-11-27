@@ -8,7 +8,8 @@
 // No created_at / forked_from is served yet, so the tree is app → experiments
 // → versions, with suggestions as dashed branches off the app.
 
-import type { MeExperiment } from "@/api/me";
+import type { MeExperiment, MeWorkflowRow } from "@/api/me";
+import { fmtAgo } from "@/lib/activity";
 import { humanMetric, fmtMetricValue } from "@/lib/run-answer";
 
 export type Tone = "ok" | "running" | "failing" | "attention" | "idle";
@@ -387,4 +388,13 @@ export function comparabilityNote(e: MeExperiment): string | null {
 	const dims = (e.compare_within || []).map((d) => humanId(d).toLowerCase());
 	const what = dims.length ? `They differ in ${dims.join(" and ")}` : "They ran under different setups";
 	return `${what}, so a gap between them may come from the setup rather than the version. To compare them, run every version under the same setup.`;
+}
+
+/** A workflow's state in words, from its row (no extra request per dot). */
+export function rowStatus(row?: MeWorkflowRow): { text: string; tone: "ok" | "failing" | "running" | "idle" } {
+	if (!row) return { text: "Hasn't run yet", tone: "idle" };
+	if (row.running) return { text: "Running now", tone: "running" };
+	if (!row.last_run_ts) return { text: "Hasn't run yet", tone: "idle" };
+	const ago = fmtAgo(row.last_run_ts);
+	return row.last_run_ok === false ? { text: `Last run failed ${ago}`, tone: "failing" } : { text: `Last run succeeded ${ago}`, tone: "ok" };
 }
