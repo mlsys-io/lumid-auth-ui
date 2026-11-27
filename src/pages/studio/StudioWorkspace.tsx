@@ -65,7 +65,10 @@ export default function StudioWorkspace() {
 		<div className="flex flex-1 min-h-0 h-full">
 			{/* LEFT + MIDDLE */}
 			<div className="flex-1 min-w-0 flex flex-col border-r border-border">
-				<div className="flex-1 min-h-0 overflow-y-auto">
+				{/* overflow-x-hidden: a 3D space's labels near the edge must never put a
+				    sideways scrollbar under the page ("no scroll bar", 2026-11-27);
+				    wide tables scroll inside their own containers. */}
+				<div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden">
 					{app
 						? <div className="px-5 py-5"><AppOverview app={app} embedded /></div>
 						: <div className="px-5 py-10 text-sm text-muted-foreground">No apps installed yet — browse the marketplace from the Library.</div>}
