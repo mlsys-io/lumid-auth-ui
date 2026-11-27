@@ -14,6 +14,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Play, Loader2, AlertTriangle, Table2 } from 'lucide-react';
 import { me } from '@/api/me';
+import { sqlError } from '@/lib/ask-data';
 
 // Must be a query that actually RUNS — this is prefilled, so the first thing a
 // new user does is press Run on it. `SELECT * FROM market.ohlcv LIMIT 20` was
@@ -60,7 +61,9 @@ export default function SqlConsole() {
 			// reach for `e.response.data.message` here -- that is the axios shape,
 			// which this client never produces, so it would silently always miss
 			// and fall through to the generic text.
-			setErr(e instanceof Error && e.message ? e.message : 'query failed');
+			// A timeout is the one case worth words first: the raw text is a Go
+			// transport error naming an internal host (see sqlError).
+			setErr(sqlError(e instanceof Error && e.message ? e.message : 'query failed'));
 			setRows(null);
 			setMs(null);
 		} finally {

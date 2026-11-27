@@ -10,7 +10,7 @@ import { lazy, Suspense, useMemo, useState } from "react";
 import { Loader2, Sparkles, Copy, Check } from "lucide-react";
 import { LAKE_INSTANCES, askAgentRaw, fetchAnswerRows } from "@/api/dataLake";
 import {
-	ASK_STORE_IDS, askError, cellText, exampleQuestion, parseAgentStream, parseJsonlRows, rowsSummary,
+	ASK_STORE_IDS, answerNote, askError, cellText, exampleQuestion, noRowsLine, parseAgentStream, parseJsonlRows, rowsSummary,
 	type AgentOutcome,
 } from "@/lib/ask-data";
 
@@ -51,6 +51,8 @@ export default function AskData() {
 	};
 
 	const sql = answer?.outcome.sql.join(";\n\n") ?? "";
+	const note = answer ? answerNote(answer.outcome) : null;
+	const empty = answer ? noRowsLine(answer.outcome) : null;
 	return (
 		<div className="flex h-full flex-col gap-3 overflow-auto pr-1">
 			<div className="rounded-xl border border-ink-200 bg-card p-3">
@@ -93,10 +95,13 @@ export default function AskData() {
 
 			{answer && (
 				<div className="rounded-xl border border-ink-200 bg-card p-3">
+					{note && (
+						<p role="status" className="mb-2 rounded-lg border border-ember-200 bg-ember-50 px-3 py-2 text-micro text-ember-700">{note}</p>
+					)}
 					{answer.table && answer.table.columns.length > 0 ? (
 						<>
 							<div className="mb-1 text-micro text-ink-600">
-								{rowsSummary(answer.outcome.rowcount, answer.table.rows.length)} · {answer.seconds}s
+								{note ? "Its last query: " : ""}{rowsSummary(answer.outcome.rowcount, answer.table.rows.length)} · {answer.seconds}s
 							</div>
 							<div className="max-h-96 overflow-auto rounded border border-ink-200">
 								<table className="w-full text-micro">
@@ -113,9 +118,9 @@ export default function AskData() {
 								</table>
 							</div>
 						</>
-					) : (
-						<p className="text-micro text-ink-600">No rows came back.</p>
-					)}
+					) : empty ? (
+						<p className="text-micro text-ink-600">{empty}</p>
+					) : null}
 					{answer.outcome.answer && (
 						<p className="mt-2 whitespace-pre-wrap text-micro text-ink-700">{answer.outcome.answer}</p>
 					)}
