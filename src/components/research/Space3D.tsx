@@ -690,8 +690,12 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				else {
 					if (!mem.since) mem.since = t;
 					// Slower to hide (0.7 s) than to show (0.5 s): a brief crossing
-					// leaves the label alone.
-					if (t - mem.since > (want ? 500 : 700)) { mem.shown = want; mem.since = 0; }
+					// leaves the label alone. Under reduced motion nothing moves, so
+					// there is nothing to blink against — and the loop stops after a
+					// still frame, so a delayed change would never be applied: on a
+					// laptop set to reduce motion, the first load showed 0 labels at 2 s
+					// and 18 of 29 after (2026-11-27). Decide at once there.
+					if (reduced || t - mem.since > (want ? 500 : 700)) { mem.shown = want; mem.since = 0; }
 				}
 				if (mem.shown) placed.push(core);
 				setS(lab.el, "opacity", mem.shown ? "" : "0");
@@ -986,6 +990,14 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 			{hint && (
 				<div className="absolute left-3 top-2.5 z-[6000] text-nano text-ink-600 pointer-events-none transition-opacity">
 					Drag to turn · two fingers or both buttons to move · pinch or ⌘/ctrl + scroll to zoom · click a dot to open it
+				</div>
+			)}
+			{/* Said, not guessed at: under the system's reduced-motion setting the
+			    space never turns on its own, which read as "broken" on a laptop
+			    set that way while the same page turned on a phone (2026-11-27). */}
+			{reduced && (
+				<div className={`absolute left-3 ${hint ? "top-7" : "top-2.5"} z-[6000] text-nano text-ink-600 pointer-events-none`} data-reduced-motion>
+					Holding still: this device asks for less motion. Drag or use the arrow keys to turn it.
 				</div>
 			)}
 		</div>
