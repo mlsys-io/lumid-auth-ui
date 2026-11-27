@@ -5,7 +5,7 @@
 // Inbox's "Needs you", so a suggestion reads and acts the same in both.
 // Kept out of ResearchMap.tsx so the Inbox does not load the map's graph code.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { AlarmClock, Check, ChevronDown, ChevronLeft, ChevronRight, Loader2, MessagesSquare, Sparkles } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -52,20 +52,33 @@ export default function ApprovalCard({ app, list, index, onIndex, onDone, showAp
 }) {
 	const [busy, setBusy] = useState(false);
 	const [full, setFull] = useState(false);
+	// Edit before Go ahead (round 9 "control"): which versions to run and how
+	// many results each needs. null = as suggested.
+	const [editing, setEditing] = useState(false);
+	const [keep, setKeep] = useState<string[] | null>(null);
+	const [need, setNeed] = useState<number | null>(null);
 	const p = list[index];
+	useEffect(() => { setEditing(false); setKeep(null); setNeed(null); }, [p?.id]);
 	if (!p) return null;
 	const loop = p.dispatch_loop || p.dispatch?.loop;
 	const metric = p.metric || (p.metric_name ? { name: p.metric_name } : undefined);
 	const done = criteriaInWords(p.success_criteria);
 	const check = proposalCheck(p);
 	const missing = !loop ? "which workflow runs it" : !metric ? "what it measures" : "";
+	const allArms = (p.arms || []).map((a) => ({ id: String(a.id ?? ""), description: typeof a.description === "string" ? a.description : undefined })).filter((a) => a.id);
+	const arms = keep ? (p.arms || []).filter((a) => keep.includes(String(a.id))) : p.arms;
+	const perVersion = need ?? p.min_samples;
+	const edited = keep !== null || need !== null;
+	// The cost follows the edit: versions × results each, when both are known.
+	const estRuns = edited && perVersion && (arms?.length ?? 0) > 0 ? perVersion * (arms?.length ?? 0) : p.est_runs;
+	const tooFew = allArms.length > 0 && (arms?.length ?? 0) < 2;
 	const goAhead = async () => {
 		if (!loop || !metric) return;
 		setBusy(true);
 		try {
 			await me.upsertExperiment(app, {
 				id: p.id, loop, metric, dataset_id: p.dataset_id, kind: p.kind, hypothesis: p.hypothesis,
-				success_criteria: p.success_criteria, min_samples: p.min_samples, arms: p.arms,
+				success_criteria: p.success_criteria, min_samples: perVersion, arms,
 			});
 			// Go ahead adds the experiment; it runs nothing (a separate press does).
 			toast.success(`Added ‘${humanId(p.id)}’ to ${loopLabel("", loop)}. Run its versions when you're ready.`);
@@ -129,7 +142,41 @@ export default function ApprovalCard({ app, list, index, onIndex, onDone, showAp
 					{p.instrument && (
 						<div><dt className="inline font-semibold text-plum-700">Measured by: </dt><dd className="inline text-ink-800">{(measuredBy(p.instrument) ?? "").replace(/^Measured by /, "")}</dd></div>
 					)}
-					<div><dt className="inline font-semibold text-plum-700">Cost: </dt><dd className="inline text-ink-800">{p.est_runs ? `about ${p.est_runs} runs` : "not estimated"}{loop ? ` of ${loopLabel("", loop)}` : ""}</dd></div>
+					<div className="flex flex-wrap items-baseline gap-x-1">
+						<dt className="inline font-semibold text-plum-700">Cost: </dt>
+						<dd className="inline text-ink-800">{estRuns ? `about ${estRuns} runs` : "not estimated"}{loop ? ` of ${loopLabel("", loop)}` : ""}{edited ? " (edited)" : ""}</dd>
+						{(allArms.length > 0 || p.min_samples) && (
+							<button type="button" onClick={() => setEditing((v) => !v)} aria-expanded={editing}
+								className="ml-auto text-micro text-ink-700 underline decoration-dotted hover:text-ink-900">{editing ? "Done editing" : "Edit what it runs"}</button>
+						)}
+					</div>
+					{editing && (
+						<div className="space-y-2 rounded-lg border border-ink-200 bg-muted/30 px-2.5 py-2 text-caption">
+							{allArms.length > 0 && (
+								<fieldset className="space-y-1">
+									<legend className="text-micro font-medium text-ink-700">Versions to run</legend>
+									{allArms.map((a) => {
+										const on = keep ? keep.includes(a.id) : true;
+										return (
+											<label key={a.id} className="flex items-start gap-2">
+												<input type="checkbox" checked={on} className="mt-0.5 accent-plum-700"
+													onChange={() => setKeep((k) => { const cur = k ?? allArms.map((x) => x.id); return on ? cur.filter((x) => x !== a.id) : [...cur, a.id]; })} />
+												<span className="min-w-0"><span className="font-medium text-ink-900">{humanId(a.id)}</span>{a.description && <span className="text-ink-600"> — {a.description}</span>}</span>
+											</label>
+										);
+									})}
+									{tooFew && <p className="text-micro text-ember-700">Keep at least two versions, or there is nothing to compare.</p>}
+								</fieldset>
+							)}
+							<label className="flex items-center gap-2">
+								<span className="text-micro font-medium text-ink-700">Results needed per version</span>
+								<input type="number" min={1} max={500} value={perVersion ?? ""} placeholder="as suggested"
+									onChange={(e) => { const n = Math.round(Number(e.target.value)); setNeed(Number.isFinite(n) && n > 0 ? Math.min(500, n) : null); }}
+									className="h-7 w-20 rounded-md border border-ink-200 bg-card px-2 text-caption tabular-nums text-ink-900" />
+							</label>
+							{edited && <button type="button" onClick={() => { setKeep(null); setNeed(null); }} className="text-micro text-ink-600 underline hover:text-ink-900">Back to as suggested</button>}
+						</div>
+					)}
 					{done && <div><dt className="inline font-semibold text-plum-700">Done when: </dt><dd className="inline text-ink-800">{done}</dd></div>}
 					{/* Said only when there is something to say: "not checked yet" is noise here. */}
 					{check && check.tone !== "idle" && (
@@ -161,7 +208,7 @@ export default function ApprovalCard({ app, list, index, onIndex, onDone, showAp
 					className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-plum-200 bg-plum-50 text-meta font-medium text-plum-800 transition-colors hover:bg-plum-100">
 					<MessagesSquare className="h-3.5 w-3.5" aria-hidden /> Help me decide
 				</button>
-				<button type="button" onClick={goAhead} disabled={busy || !!missing}
+				<button type="button" onClick={goAhead} disabled={busy || !!missing || tooFew}
 					className="inline-flex h-9 items-center justify-center gap-1.5 rounded-lg border border-gold-300 bg-gold-50 text-meta font-medium text-gold-800 transition-colors hover:bg-gold-100 disabled:opacity-50">
 					{busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" aria-hidden />} Go ahead
 				</button>
