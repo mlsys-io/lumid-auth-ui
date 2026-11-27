@@ -46,6 +46,7 @@ import {
 	listDatasets,
 	portPoolForSite,
 	cpuForSite,
+	sizeDefaultsForSite,
 	gpuProfileForSite,
 	imagesForSite,
 	isSshTaskActive,
@@ -493,9 +494,19 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 	useEffect(() => {
 		if (cpuOptions.length && !cpuOptions.includes(cpu)) setCpu(cpuOptions.includes(2) ? 2 : cpuOptions[0]);
 	}, [cpuOptions, cpu]);
-	// Memory follows cores at 4 GiB each — the 2-core / 8 GiB ratio every sandbox had before
-	// sizes existed — capped at the site's ceiling.
-	const cpuMemoryGi = cpuInfo ? Math.min(cpu * 4, cpuInfo.max_memory_gi) : undefined;
+	// Memory follows cores at the site's published ratio (NUS: 8 GiB per core since 2026-11-27),
+	// else 4 GiB each — the 2-core / 8 GiB ratio every sandbox had before sizes existed — capped
+	// at the site's ceiling. Sent explicitly, so the box is exactly what the menu says.
+	const memPerCore = cpuInfo?.mem_per_core_gi || 4;
+	const memFor = (n: number) => Math.min(n * memPerCore, cpuInfo?.max_memory_gi ?? n * memPerCore);
+	const cpuMemoryGi = cpuInfo ? memFor(cpu) : undefined;
+	// A GPU box sends no cpu/memory, so the server's per-GPU defaults ARE its size. Shown only
+	// when the site publishes them; otherwise it is the old 2 CPU / 8 GiB and we say nothing.
+	const sizeDefaults = sizeDefaultsForSite(target);
+	const gpuBoxSize = gpu > 0 && sizeDefaults?.gpu_cpu_per_gpu && sizeDefaults?.gpu_mem_per_gpu_gi
+		? `${Math.min(gpu * sizeDefaults.gpu_cpu_per_gpu, cpuInfo?.max_cpu ?? Infinity)} cores · ${
+			Math.min(gpu * sizeDefaults.gpu_mem_per_gpu_gi, cpuInfo?.max_memory_gi ?? Infinity)} GiB RAM`
+		: null;
 	// Only real, in-range, de-duplicated numbers reach the request. sandbox-control
 	// validates all of this again — it has to, since the pool is shared — but
 	// refusing here keeps a typo from costing a create round-trip.
@@ -768,6 +779,7 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 								<option key={n} value={n}>{n === 0 ? "none" : n}</option>
 							))}
 						</select>
+						{gpuBoxSize && <span className="mt-1 block text-xs text-ink-500">with {gpuBoxSize}</span>}
 					</label>
 					{gpu === 0 && cpuOptions.length > 0 && (
 						<label className="text-xs text-ink-600">
@@ -776,7 +788,7 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 								className="mt-1 block rounded-md border border-ink-300 px-2 py-1 text-sm">
 								{cpuOptions.map((n) => (
 									<option key={n} value={n}>
-										{n} {n === 1 ? "core" : "cores"} · {Math.min(n * 4, cpuInfo?.max_memory_gi ?? n * 4)} GiB
+										{n} {n === 1 ? "core" : "cores"} · {memFor(n)} GiB
 									</option>
 								))}
 							</select>
