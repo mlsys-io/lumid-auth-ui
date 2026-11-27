@@ -230,13 +230,31 @@ function Dot({ size, className, label, labelClass, sub, subClass, rings, orb = t
 
 // ── the map ───────────────────────────────────────────────────────────────
 
-function useViewportHeight(): number {
-	const [h, setH] = useState(() => (typeof window === "undefined" ? 900 : window.innerHeight));
+/** The stage's height: from where it starts down to the bottom of the window
+ *  ("the research graph should align with the screen height", 2026-11-27).
+ *  Measured from the stage's own top, with the scroll offset added back, so
+ *  scrolling never resizes it — only the window (or the header above it) does.
+ *  Was clamp(vh − 300, 520, 680), which left a tall screen half empty. */
+const STAGE_BOTTOM_GAP = 16;
+const STAGE_MIN = 420;
+function useStageHeight(anchor: React.RefObject<HTMLElement | null>): number {
+	const [h, setH] = useState(() => (typeof window === "undefined" ? 600 : Math.max(STAGE_MIN, window.innerHeight - 300)));
 	useEffect(() => {
-		const on = () => setH(window.innerHeight);
-		window.addEventListener("resize", on);
-		return () => window.removeEventListener("resize", on);
-	}, []);
+		const measure = () => {
+			const el = anchor.current;
+			if (!el) return;
+			let scroll = 0;
+			for (let p = el.parentElement; p; p = p.parentElement) {
+				if (p.scrollHeight > p.clientHeight && /(auto|scroll)/.test(getComputedStyle(p).overflowY)) { scroll = p.scrollTop; break; }
+			}
+			const top = el.getBoundingClientRect().top + scroll + (scroll ? 0 : window.scrollY);
+			const next = Math.round(Math.max(STAGE_MIN, window.innerHeight - top - STAGE_BOTTOM_GAP));
+			setH((cur) => (Math.abs(cur - next) > 2 ? next : cur));
+		};
+		const raf = requestAnimationFrame(measure);
+		window.addEventListener("resize", measure);
+		return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", measure); };
+	}, [anchor]);
 	return h;
 }
 
@@ -400,25 +418,27 @@ function MapCanvas({ app, exps, proposals, workflows, groups, rows, marks, selec
 		return <Dot size={8} orb={false} className="bg-card border border-dashed border-gold-500" label={`Suggested: ${humanId(n.ref)}`} labelClass="text-micro text-gold-700" mark={mark} />;
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [app, running, mainCount, expById, versionOf, wfById, rows, tree, branchOf, childCount, marks, groupById]);
-	// One stage size for every app, set by the screen alone — never by what's
-	// in it, whether suggestions wait, or a panel is open (two apps side by
+	// One stage size for every app, set by the screen alone (window height less
+	// where the stage starts) — never by what's in it, whether suggestions wait, or a panel is open (two apps side by
 	// side read as two sizes otherwise; user 2026-11-25). The approval card
 	// docks over its foot, so it doesn't need room taken off.
-	const vh = useViewportHeight();
-	const height = Math.round(Math.max(520, Math.min(680, vh - 300)));
+	const anchor = useRef<HTMLDivElement>(null);
+	const height = useStageHeight(anchor);
 	// Draw once. The spec answers first (a handful of workflow nodes) and the
 	// experiments seconds later (tens of setups); drawing the first and then
 	// the second re-divided the whole circle mid-turn, so everything on screen
 	// jumped (2026-11-26, "rotate a while and then change a lot").
 	if (!ready) {
-		return <div style={{ height }} className="lumen-skeleton rounded-xl" role="status" aria-label="Reading the map…" />;
+		return <div ref={anchor} style={{ height }} className="lumen-skeleton rounded-xl" role="status" aria-label="Reading the map…" />;
 	}
 	return (
-		<Space3D nodes={tree.nodes} edges={tree.edges} renderCard={renderCard} renderDot={renderDot} describe={describe} edgeClass={edgeClass}
-			// Workflows carry an overview panel: hovering lights it up, no card swap.
-			hoverCard={(n) => n.kind !== "workflow"}
-			selected={selected} lit={lit} grow={grow} order={order} height={height} evidence={evidence} insetBottom={insetBottom} insetRight={insetRight}
-			onSelect={onSelect} />
+		<div ref={anchor}>
+			<Space3D nodes={tree.nodes} edges={tree.edges} renderCard={renderCard} renderDot={renderDot} describe={describe} edgeClass={edgeClass}
+				// Workflows carry an overview panel: hovering lights it up, no card swap.
+				hoverCard={(n) => n.kind !== "workflow"}
+				selected={selected} lit={lit} grow={grow} order={order} height={height} evidence={evidence} insetBottom={insetBottom} insetRight={insetRight}
+				onSelect={onSelect} />
+		</div>
 	);
 }
 
