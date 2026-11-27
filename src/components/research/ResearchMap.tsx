@@ -33,6 +33,8 @@ import { useStageHeight } from "@/components/research/stage-height";
 import EmptyResearchSpace from "@/components/research/EmptyResearchSpace";
 import Space3D from "@/components/research/Space3D";
 import RunVersions from "@/components/research/RunVersions";
+import EvidenceGrid from "@/components/research/EvidenceGrid";
+import { experimentSteps } from "@/lib/evidence";
 import YourCall from "@/components/research/YourCall";
 import WorkflowPanel, { NodePanel, CompareView, wfLabel, type CompareSide, type PanelView } from "@/components/research/WorkflowPanel";
 import TrySetups from "@/components/research/TrySetups";
@@ -466,7 +468,9 @@ function Wrap({ panel, children }: { panel: boolean; children: React.ReactNode }
 	);
 }
 
-function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, onPickVersion, pickedVersion }: {
+function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, onPickVersion, pickedVersion, spec, specText }: {
+	/** The app's spec (and its text): the feedback steps of the experiment's workflow. */
+	spec?: import("@/lib/app-spec").AppSpec; specText?: string;
 	/** A version card was clicked: select it (graph + panel). */
 	onPickVersion?: (arm: string) => void; pickedVersion?: string | null;
 	app: string; e: MeExperiment;
@@ -529,6 +533,9 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 	const spark = !(evolution && metric && e.comparable !== false) && evo.some((x) => x.points.length > 1) && !!metric;
 	const tagOf = (id: string) => { const v = versions.find((x) => x.id === id); return v ? { text: v.tag, className: TAG_CLS[v.tag] ?? TAG_CLS.current } : null; };
 	const note = comparabilityNote(e);
+	// Each version at each feedback step of its workflow (renders once a result lands).
+	const steps = useMemo(() => experimentSteps(spec, e, specText), [spec, e, specText]);
+	const grid = <EvidenceGrid app={app} e={e} steps={steps} onPickVersion={onPickVersion} pickedVersion={pickedVersion} />;
 
 	const head = (
 		<>
@@ -622,6 +629,7 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 				<div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3.5 py-3">
 					{note && <p className="rounded-lg bg-muted/50 px-2.5 py-2 text-micro leading-relaxed text-ink-700">{note}</p>}
 					{chart}
+					{grid}
 					{chain}
 					<PickVersions app={app} e={e} />
 					<YourCall app={app} e={e} compact />
@@ -640,6 +648,7 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 			{note && <div className="text-caption text-ink-700">{note}</div>}
 			{about}
 			{chart}
+			{grid}
 			{chain}
 			<YourCall app={app} e={e} />
 			<RunVersions app={app} e={e} />
@@ -896,7 +905,7 @@ export default function ResearchMap({ app }: { app: string }) {
 		<VersionPanel key={selected!} app={app} e={selExp} version={selected!.split(":")[2]} style={panelStyle} onClose={close}
 			onBack={() => onSelect(`exp:${selExp.id}`)} onCompare={() => setPicking(true)} />
 	) : selExp ? (
-		<ExperimentDetail key={selExp.id} app={app} e={selExp} panel onClose={close} style={panelStyle}
+		<ExperimentDetail key={selExp.id} app={app} e={selExp} panel onClose={close} style={panelStyle} spec={graph?.spec} specText={graph?.text}
 			onCompare={selVersionSide ? () => setPicking(true) : undefined}
 			onPickVersion={(arm) => onSelect(`ver:${selExp.id}:${arm}`)} pickedVersion={selKind === "ver" ? selected!.split(":")[2] : null} />
 	) : selKind === "app" && graph ? (
