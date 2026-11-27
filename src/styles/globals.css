@@ -399,36 +399,21 @@ html {
 	color: var(--primary-foreground) !important;
 }
 
-/* Thin, modern scrollbars */
+/* No scrollbars anywhere (operator, 2026-11-27: "just don't show scroll bars
+ * ever"). Everything still scrolls by wheel, trackpad, touch and keyboard.
+ * A classic scrollbar also takes width when it appears: the content narrows,
+ * the research graph re-fits shorter, the bar goes away, the content widens,
+ * and the loop repeats. A hidden bar takes no width, so that flicker can't
+ * start. !important beats per-component [&::-webkit-scrollbar] overrides. */
 * {
-	scrollbar-width: thin;
-	scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+	scrollbar-width: none !important;
+	-ms-overflow-style: none;
 }
 
 *::-webkit-scrollbar {
-	width: 5px;
-	height: 5px;
-}
-
-*::-webkit-scrollbar-track {
-	background: transparent;
-}
-
-*::-webkit-scrollbar-thumb {
-	background: rgba(0, 0, 0, 0.12);
-	border-radius: 9999px;
-}
-
-*::-webkit-scrollbar-thumb:hover {
-	background: rgba(0, 0, 0, 0.25);
-}
-
-.dark *::-webkit-scrollbar-thumb {
-	background: rgba(255, 255, 255, 0.15);
-}
-
-.dark *::-webkit-scrollbar-thumb:hover {
-	background: rgba(255, 255, 255, 0.3);
+	display: none !important;
+	width: 0 !important;
+	height: 0 !important;
 }
 
 /* Hide scrollbar completely for ticker bars and horizontal scroll areas */
