@@ -130,9 +130,24 @@ export interface BatchProgress {
 	waiting: number; running: number; done: number; failed: number;
 	finished: boolean; lastError: string | null; text: string;
 }
-export function batchProgress(rows: Array<{ req_id: string; state: string; branch_label?: string | null; last_error?: string | null }>, intents: string[], labels: string[]): BatchProgress {
+export function batchProgress(
+	rows: Array<{ req_id: string; state: string; branch_label?: string | null; last_error?: string | null; experiment_id?: string | null; variant_id?: string | null; submitted_at?: number | string }>,
+	intents: string[], labels: string[],
+	/** How to find a run when the queue's own id (eq_…) isn't the intent id it
+	 *  was asked under: by experiment, version and time sent (2026-11-27: the
+	 *  batch never matched, so progress sat at "queued" until a reload). */
+	by?: { experiment: string; versions: string[]; sentAt: number },
+): BatchProgress {
+	const taken = new Set<string>();
+	const sec = (v: number | string | undefined) => (typeof v === "number" ? v : v ? Date.parse(v) / 1000 : NaN);
 	const runs = intents.map((id, i) => {
-		const row = rows.find((r) => r.req_id === id || r.req_id.startsWith(`${id}:`));
+		let row = rows.find((r) => r.req_id === id || r.req_id.startsWith(`${id}:`));
+		if (!row && by) {
+			const v = by.versions[i];
+			row = rows.find((r) => !taken.has(r.req_id) && r.experiment_id === by.experiment && (r.branch_label === v || r.variant_id === v)
+				&& !(sec(r.submitted_at) < by.sentAt - 120));
+		}
+		if (row) taken.add(row.req_id);
 		const st = (row?.state || "").toLowerCase();
 		const state: BatchRunState = /^(done|succeeded|success|completed)$/.test(st) ? "done"
 			: /^(failed|error|cancelled|canceled|dead)$/.test(st) ? "failed"
@@ -352,8 +367,14 @@ export function pathTo(nodes: MapNode[], id: string): Set<string> {
 	const out = new Set<string>();
 	let cur = by.get(id);
 	while (cur) { out.add(cur.id); cur = cur.parent ? by.get(cur.parent) : undefined; }
-	// Selecting an experiment also lights its versions — they ARE its answer.
-	for (const n of nodes) if (n.parent === id) out.add(n.id);
+	// Selecting something lights everything under it too — an experiment's
+	// versions ARE its answer, and a workflow's experiments, versions and
+	// variants are what you picked it to see; the camera frames the lot
+	// (2026-11-27: "when picking a workflow, should rebalance to better display").
+	const kids = new Map<string, string[]>();
+	for (const n of nodes) if (n.parent) kids.set(n.parent, [...(kids.get(n.parent) ?? []), n.id]);
+	const stack = [...(kids.get(id) ?? [])];
+	while (stack.length) { const k = stack.pop()!; if (out.has(k)) continue; out.add(k); stack.push(...(kids.get(k) ?? [])); }
 	return out;
 }
 

@@ -8,14 +8,17 @@
 //   Summary   five lines — asks · found · measured on · cost · built from —
 //             then its last runs as dots and what's under it
 //   Runs      its runs, live first; a row opens its answer in place
-//   Setup     what it's made of, and its feedback (editable)
+//   Steps     the workflow drawn as a graph (data → steps → feedback, or a
+//             chain's stages), then what it's made of and its feedback (editable)
 //   (Compare  A against B, only while a B is picked on the graph)
 //
 // Round 9 (2026-11-27, "the pop up panel needs scrubbing and simplification"):
 // empty rows are hidden, never "—"; the five-button footer became the header.
 // Every run starts from a button press here (manual dispatch, for this stage).
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import type { LoopDefinition } from "@/api/me";
+import { isEmptyLoop } from "@/workflow/adapters/xpio";
 import { Link } from "react-router-dom";
 import { ArrowRight, GitBranch, MessagesSquare, Play, Plus, Scale, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -214,12 +217,13 @@ export default function WorkflowPanel({ app, wf, spec, row, exps, view, onView, 
 				<Button size="sm" variant="secondary" onClick={onMakeVariant} disabled={!editable} title={editable ? "A workflow made from this one: changed steps, data, compute or feedback" : "Install your own copy to change it"}>
 					<GitBranch className="h-3.5 w-3.5" />New variant
 				</Button>
+				<MoreVerbs app={app} wf={wf} row={row} editable={editable} />
 			</div>
 		</div>
 	);
 	const askAbout = () => ask(`How is ${wfLabel(wf)} in ${appTitle(app)} doing, and what should it try next? Look at its recent runs and their metrics first; cite run ids. Suggest the next runs, but start nothing.`, { app, workflow: wf.id });
 	// Compare is a tab only while a B is picked (⇧-click on the graph).
-	const tabs = [{ value: "overview", label: "Summary" }, { value: "runs", label: "Runs" }, { value: "feedback", label: "Setup" }];
+	const tabs = [{ value: "overview", label: "Summary" }, { value: "runs", label: "Runs" }, { value: "feedback", label: "Steps" }];
 	if (view === "compare" || compareWith) tabs.push({ value: "compare", label: "Compare" });
 	return (
 		<PanelShell kicker={wf.parent ? "Variant" : "Workflow"} title={wfLabel(wf)} sub={sub} onClose={onClose} label={`Workflow: ${wfLabel(wf)}`} style={style} page={page}
@@ -228,7 +232,7 @@ export default function WorkflowPanel({ app, wf, spec, row, exps, view, onView, 
 					className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-700 hover:bg-ink-100 hover:text-ink-900">
 					<MessagesSquare className="h-4 w-4" />
 				</button>
-				<MoreMenu app={app} wf={wf} row={row} editable={editable} onTrySetups={onTrySetups} onMakeVariant={onMakeVariant} />
+
 			</>}>
 			<div className="border-b border-ink-100 px-3 py-1.5">
 				<Segmented size="sm" aria-label="Panel view" value={view === "compare" && !tabs.some((t) => t.value === "compare") ? "overview" : view} onChange={(v) => onView(v as PanelView)} options={tabs} />
@@ -245,18 +249,12 @@ export default function WorkflowPanel({ app, wf, spec, row, exps, view, onView, 
 
 // ── ⋯ : Pause / Resume (only where a schedule exists) and Delete ──────────
 
-function MoreMenu({ app, wf, row, editable, onTrySetups, onMakeVariant }: { app: string; wf: SpecWorkflow; row?: MeWorkflowRow; editable: boolean; onTrySetups: () => void; onMakeVariant: () => void }) {
-	const [open, setOpen] = useState(false);
+/** The rest of the verbs, in plain sight beside Run (2026-11-27: "the ... menu
+ *  in variant is obscure, just move the items out"). */
+function MoreVerbs({ app, wf, row, editable }: { app: string; wf: SpecWorkflow; row?: MeWorkflowRow; editable: boolean }) {
 	const scheduled = wf.run !== "manual";
 	const paused = row?.enabled === false;
-	useEffect(() => {
-		if (!open) return;
-		const close = (ev: MouseEvent) => { if (!(ev.target as HTMLElement)?.closest?.("[data-more-menu]")) setOpen(false); };
-		window.addEventListener("mousedown", close);
-		return () => window.removeEventListener("mousedown", close);
-	}, [open]);
 	const toggle = async () => {
-		setOpen(false);
 		try {
 			await me.patchLoop(app, wf.id, { enabled: paused });
 			window.dispatchEvent(new CustomEvent("studio:data", { detail: { scopes: ["workflows", "loops"] } }));
@@ -264,27 +262,15 @@ function MoreMenu({ app, wf, row, editable, onTrySetups, onMakeVariant }: { app:
 		} catch (e) { toast.error("Couldn't change it", { description: String((e as Error).message || e) }); }
 	};
 	const del = async () => {
-		setOpen(false);
 		const { deleteWorkflow } = await import("@/lib/delete-workflow");
 		await deleteWorkflow(app, appTitle(app), wf.id, wfLabel(wf));
 	};
-	const item = "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-caption text-ink-800 hover:bg-ink-100 disabled:opacity-50 disabled:hover:bg-transparent";
-	return (
-		<div className="relative" data-more-menu>
-			<button type="button" aria-label="More actions" aria-expanded={open} onClick={() => setOpen((v) => !v)}
-				className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-700 hover:bg-ink-100 hover:text-ink-900">⋯</button>
-			{open && (
-				<div role="menu" className="absolute right-0 top-full z-10 mt-1 w-56 rounded-lg border border-ink-200 bg-popover p-1 shadow-e2">
-					<Link role="menuitem" to={workflowPath(app, wf.id)} className={item} onClick={() => setOpen(false)}>
-						<ArrowRight className="h-3.5 w-3.5 text-ink-600" />Open its page
-					</Link>
-					{editable && <div className="my-1 border-t border-ink-100" />}
-					{editable && scheduled && <button type="button" role="menuitem" onClick={toggle} className={item}>{paused ? "Resume its schedule" : "Pause its schedule"}</button>}
-					{editable && <button type="button" role="menuitem" onClick={del} className={cn(item, "text-brick-700 hover:bg-brick-50")}><Trash2 className="h-3.5 w-3.5" />Delete workflow…</button>}
-				</div>
-			)}
-		</div>
-	);
+	const quiet = "inline-flex h-8 items-center gap-1 rounded-md px-2 text-caption text-ink-700 hover:bg-ink-100 hover:text-ink-900";
+	return <>
+		<Link to={workflowPath(app, wf.id)} className={quiet} title="Its own page: every run, its data and its definition"><ArrowRight className="h-3.5 w-3.5" />Its page</Link>
+		{editable && scheduled && <button type="button" onClick={toggle} className={quiet}>{paused ? "Resume schedule" : "Pause schedule"}</button>}
+		{editable && <button type="button" onClick={del} className={cn(quiet, "text-brick-700 hover:bg-brick-50 hover:text-brick-800")} title="Delete this workflow (asks first)"><Trash2 className="h-3.5 w-3.5" />Delete</button>}
+	</>;
 }
 
 // ── Summary ───────────────────────────────────────────────────────────────
@@ -376,6 +362,67 @@ function OverviewView({ app, wf, spec, row, cycles, variants, exps, onSelect, on
 	);
 }
 
+// ── Steps: the workflow as a graph ────────────────────────────────────────
+
+const WorkflowCanvas = lazy(() => import("@/components/workflow/WorkflowCanvas"));
+
+/** How the workflow is built, drawn (2026-11-27: "I don't know what 'setup' is
+ *  used for — why not a workflow construction DAG like n8n?"). A workflow with
+ *  declared steps draws on the node canvas; a code or chain workflow draws its
+ *  shape — data → its steps → how each run is measured. */
+function StepsGraph({ app, wf, spec, cycles }: { app: string; wf: SpecWorkflow; spec: AppSpec; cycles: MeCycleListItem[] | null }) {
+	const [def, setDef] = useState<LoopDefinition | null | undefined>(undefined);
+	const [cycle, setCycle] = useState<MeCycleDetail | null>(null);
+	useEffect(() => {
+		let live = true;
+		setDef(undefined);
+		me.workflowDetail(`${app}:${wf.id}`).then((r) => { if (live) setDef((r.definition || null) as LoopDefinition | null); }).catch(() => { if (live) setDef(null); });
+		return () => { live = false; };
+	}, [app, wf.id]);
+	const last = cycles?.find((c) => !c.running && c.ok !== undefined);
+	useEffect(() => {
+		if (!last) { setCycle(null); return; }
+		let live = true;
+		me.cycleDetail(app, wf.id, last.ts).then((d) => { if (live) setCycle(d); }).catch(() => {});
+		return () => { live = false; };
+	}, [app, wf.id, last?.ts, last]);
+	if (def === undefined) return <div className="h-40 rounded-lg lumen-skeleton" role="status" aria-label="Reading its steps" />;
+	if (def && !isEmptyLoop(def)) {
+		return (
+			<div className="overflow-hidden rounded-lg border border-ink-200" data-steps-canvas>
+				<Suspense fallback={<div className="h-56 lumen-skeleton" />}>
+					<WorkflowCanvas definition={def} cycle={cycle} mode="showcase" height={260} />
+				</Suspense>
+			</div>
+		);
+	}
+	// No declared steps (a code workflow, or a chain): draw its shape.
+	const stages = wf.steps.workflows?.map((st) => (typeof st === "string" ? st : st.use)) ?? [];
+	const box = "rounded-lg border bg-card px-2.5 py-1.5 text-caption shadow-e1";
+	const nodes: Array<{ kind: string; title: string; sub?: string; tone: string }> = [];
+	if (wf.data.length) nodes.push({ kind: "Data", title: wf.data.join(", "), tone: "border-lagoon-200" });
+	if (stages.length) stages.forEach((id, i) => nodes.push({ kind: `Stage ${i + 1}`, title: wfLabel(spec.workflows.find((w) => w.id === id) ?? ({ id } as SpecWorkflow)), sub: i ? "gets the stage before's results" : undefined, tone: "border-plum-300" }));
+	else if (wf.steps.python) nodes.push({ kind: "Steps", title: `commands/${wf.steps.python}.py`, sub: Object.keys(wf.inputs).length ? `inputs: ${Object.keys(wf.inputs).join(", ")}` : undefined, tone: "border-plum-300" });
+	else if (wf.steps.dag) nodes.push({ kind: "Steps", title: wf.steps.dag, tone: "border-plum-300" });
+	else if (wf.steps.skills?.length) wf.steps.skills.forEach((k, i) => nodes.push({ kind: `Step ${i + 1}`, title: k, tone: "border-plum-300" }));
+	for (const f of feedbackSteps(wf)) nodes.push({ kind: "Measured by", title: humanId(f.step), sub: f.metrics.map((m) => mLabel(m.name)).join(", "), tone: "border-gold-300" });
+	if (!nodes.length) return <p className="text-caption text-ink-600">It declares no steps yet.</p>;
+	return (
+		<ol className="flex flex-col items-stretch gap-0" aria-label="How it is built" data-steps-flow>
+			{nodes.map((n, i) => (
+				<li key={i} className="flex flex-col items-center">
+					{i > 0 && <span aria-hidden className="h-3 w-px bg-ink-300" />}
+					<div className={cn(box, "w-full", n.tone)}>
+						<div className="eyebrow">{n.kind}</div>
+						<div className="truncate font-medium text-ink-900" title={n.title}>{n.title}</div>
+						{n.sub && <div className="truncate text-micro text-ink-600">{n.sub}</div>}
+					</div>
+				</li>
+			))}
+		</ol>
+	);
+}
+
 // ── Setup: what it's made of + its feedback ───────────────────────────────
 
 function SetupView({ app, wf, spec, row, cycles, helpers, save, editable }: {
@@ -393,6 +440,7 @@ function SetupView({ app, wf, spec, row, cycles, helpers, save, editable }: {
 	if (helpers.length) rows.push(["Helpers", helpers.map(wfLabel).join(", ")]);
 	return (
 		<div className="space-y-4">
+			<StepsGraph app={app} wf={wf} spec={spec} cycles={cycles} />
 			<section aria-label="What it's made of" className="space-y-1">
 				<h3 className="eyebrow">What it&apos;s made of</h3>
 				<dl className="grid grid-cols-[5.5rem_1fr] gap-x-2 gap-y-1 text-caption">

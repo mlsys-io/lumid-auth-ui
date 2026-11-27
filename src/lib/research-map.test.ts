@@ -176,6 +176,15 @@ check("batchProgress reads a queued batch back in words", () => {
 	eq(q.finished, true);
 	eq(q.text, "1 finished, 1 failed: no GPU");
 	eq(batchProgress([], ["a"], ["x"]).text, "1 run queued — waiting for a free machine");
+	// The queue names its rows eq_…; the batch is found by experiment + version + time.
+	const byRows = [
+		{ req_id: "eq_1", state: "done", experiment_id: "kol", branch_label: "musk_v1", submitted_at: 1000 },
+		{ req_id: "eq_2", state: "running", experiment_id: "kol", branch_label: "current", submitted_at: 1001 },
+		{ req_id: "eq_0", state: "done", experiment_id: "kol", branch_label: "current", submitted_at: 100 },
+	];
+	const r = batchProgress(byRows, ["u1", "u2"], ["Musk v1", "Current"], { experiment: "kol", versions: ["musk_v1", "current"], sentAt: 999 });
+	eq(r.runs.map((x) => x.state), ["done", "running"]);
+	eq(r.text, "Running 1 of 2 · 1 done");
 	eq(batchProgress([{ req_id: "a:0", state: "done" }], ["a"], ["x"]).text, "All 1 run finished — results added.");
 });
 
