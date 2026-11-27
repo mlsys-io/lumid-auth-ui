@@ -811,6 +811,7 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 	// claiming the strip.
 	const appSlotTarget = usePortalTarget("topstrip-wf-slot", !!embedded && !nestedInSurface);
 	const crumbTarget = usePortalTarget("topstrip-crumb-slot", !!embedded && !nestedInSurface);
+	const appMenuTarget = usePortalTarget("topstrip-app-menu", !!embedded && !nestedInSurface);
 	// "Describe it in chat": prefill the chat (the person presses send); the
 	// chat asks what it should do and how often, then drafts it for approval.
 	const askNewWorkflow = () => window.dispatchEvent(new CustomEvent("studio:ask", { detail: {
@@ -1119,31 +1120,10 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 						// (incl. single-workflow) shows Overview + the selector, so the bar
 						// is consistent — a single workflow (e.g. case_cycle) lives INSIDE
 						// the selector dropdown, not as a separate static tab.
-						const cluster = (
+						// The app's "⋯" menu sits right beside the app's name in the strip
+						// (its own slot, topstrip-app-menu — 2026-11-27); inline elsewhere.
+						const appMenu = (
 							<>
-								{/* An app that declares its own nav already has an Overview tab
-								    (nav[0] → surface `home`), styled identically. Two lit pills for
-								    one destination, and this one tracked ?selected= while the tabs
-								    track ?surface=, so it stayed lit on every surface. The app's
-								    tab bar owns navigation; this pill only exists for apps without one. */}
-								{!identity?.hasSurface && (
-									<button
-										type="button"
-										onClick={selectOverview}
-										title="The app's research graph — every workflow at a glance"
-										className={cn(
-											"px-2.5 py-1 rounded-lg text-caption flex-shrink-0 transition-colors",
-											overviewMode ? "bg-ink-800 text-white" : "text-ink-600 hover:text-ink-800 hover:bg-ink-100",
-										)}
-									>Graph</button>
-								)}
-								{rows.length >= 1 && !(embedded && crumbTarget) && (
-									<WorkflowSelect rows={rows} selected={effSelected} onSelect={select}
-										onNew={() => navigate(`/studio/a/${encodeURIComponent(app)}/manage?new=1`)} onAsk={askNewWorkflow} />
-								)}
-								{/* Slot: the open workflow panel hoists its run controls (status ·
-								    version dots · pull/publish · plan-next · pause) onto this line. */}
-								<span id="topstrip-wf-controls" className="flex items-center gap-1.5 flex-shrink-0" />
 							{/* App actions ("⋯") — Manage / Advanced / Remove. Workflow apps
 								    were missing this; only surface apps (AppSurface) had it. */}
 								<DropdownMenu>
@@ -1253,6 +1233,33 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 								</DropdownMenu>
 							</>
 						);
+						const cluster = (
+							<>
+								{/* An app that declares its own nav already has an Overview tab
+								    (nav[0] → surface `home`), styled identically. Two lit pills for
+								    one destination, and this one tracked ?selected= while the tabs
+								    track ?surface=, so it stayed lit on every surface. The app's
+								    tab bar owns navigation; this pill only exists for apps without one. */}
+								{!identity?.hasSurface && (
+									<button
+										type="button"
+										onClick={selectOverview}
+										title="The app's research graph — every workflow at a glance"
+										className={cn(
+											"px-2.5 py-1 rounded-lg text-caption flex-shrink-0 transition-colors",
+											overviewMode ? "bg-ink-800 text-white" : "text-ink-600 hover:text-ink-800 hover:bg-ink-100",
+										)}
+									>Graph</button>
+								)}
+								{rows.length >= 1 && !(embedded && crumbTarget) && (
+									<WorkflowSelect rows={rows} selected={effSelected} onSelect={select}
+										onNew={() => navigate(`/studio/a/${encodeURIComponent(app)}/manage?new=1`)} onAsk={askNewWorkflow} />
+								)}
+								{/* Slot: the open workflow panel hoists its run controls (status ·
+								    version dots · pull/publish · plan-next · pause) onto this line. */}
+								<span id="topstrip-wf-controls" className="flex items-center gap-1.5 flex-shrink-0" />
+							</>
+						);
 						// Embedded → portal into the top strip beside the app name; the
 						// portal target may resolve a tick late, so fall back to inline.
 						//
@@ -1279,8 +1286,9 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 										</span>, crumbTarget) : null;
 								})()}
 								{createPortal(<div className="flex items-center gap-2 min-w-0">{cluster}</div>, appSlotTarget)}
+								{appMenuTarget ? createPortal(appMenu, appMenuTarget) : createPortal(appMenu, appSlotTarget)}
 							</>
-							: <div className="flex items-center gap-2 flex-wrap">{cluster}</div>;
+							: <div className="flex items-center gap-2 flex-wrap">{cluster}{appMenu}</div>;
 					})()}
 					<Suspense fallback={<Skeleton lines={3} />}>
 						{overviewMode ? (

@@ -22,6 +22,8 @@ import VersionChain from "@/components/research/VersionChain";
 import { buildEvolution } from "@/lib/evolution";
 import ApprovalCard, { readNotNow, writeNotNow } from "@/components/research/ApprovalCard";
 import { useWorkflowColors, type WfSwatch } from "@/hooks/useWorkflowColors";
+import { useStageHeight } from "@/components/research/stage-height";
+import EmptyResearchSpace from "@/components/research/EmptyResearchSpace";
 import Space3D from "@/components/research/Space3D";
 import RunVersions from "@/components/research/RunVersions";
 import YourCall from "@/components/research/YourCall";
@@ -48,6 +50,8 @@ import { useOncePerSession } from "@/components/activity/hooks";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 import { cn } from "@/lib/utils";
 import { sharedLine } from "@/lib/measure";
+
+const NeedsFixingMenu = lazy(() => import("@/components/activity/NeedsFixingMenu"));
 
 const TONE_TEXT: Record<Tone, string> = {
 	ok: "text-gold-700", running: "text-lagoon-700", failing: "text-brick-700", attention: "text-ember-700", idle: "text-ink-600",
@@ -230,33 +234,6 @@ function Dot({ size, className, label, labelClass, sub, subClass, rings, orb = t
 
 // ── the map ───────────────────────────────────────────────────────────────
 
-/** The stage's height: from where it starts down to the bottom of the window
- *  ("the research graph should align with the screen height", 2026-11-27).
- *  Measured from the stage's own top, with the scroll offset added back, so
- *  scrolling never resizes it — only the window (or the header above it) does.
- *  Was clamp(vh − 300, 520, 680), which left a tall screen half empty. */
-const STAGE_BOTTOM_GAP = 16;
-const STAGE_MIN = 420;
-function useStageHeight(anchor: React.RefObject<HTMLElement | null>): number {
-	const [h, setH] = useState(() => (typeof window === "undefined" ? 600 : Math.max(STAGE_MIN, window.innerHeight - 300)));
-	useEffect(() => {
-		const measure = () => {
-			const el = anchor.current;
-			if (!el) return;
-			let scroll = 0;
-			for (let p = el.parentElement; p; p = p.parentElement) {
-				if (p.scrollHeight > p.clientHeight && /(auto|scroll)/.test(getComputedStyle(p).overflowY)) { scroll = p.scrollTop; break; }
-			}
-			const top = el.getBoundingClientRect().top + scroll + (scroll ? 0 : window.scrollY);
-			const next = Math.round(Math.max(STAGE_MIN, window.innerHeight - top - STAGE_BOTTOM_GAP));
-			setH((cur) => (Math.abs(cur - next) > 2 ? next : cur));
-		};
-		const raf = requestAnimationFrame(measure);
-		window.addEventListener("resize", measure);
-		return () => { cancelAnimationFrame(raf); window.removeEventListener("resize", measure); };
-	}, [anchor]);
-	return h;
-}
 
 /** A workflow's state in words, from its row (no extra request per dot). */
 function rowStatus(row?: MeWorkflowRow): { text: string; tone: "ok" | "failing" | "running" | "idle" } {
@@ -749,7 +726,8 @@ export default function ResearchMap({ app }: { app: string }) {
 	}, [selected, picking, sideOf]);
 
 	if (!data && !graph) return null;
-	if (workflows.length === 0 && exps.length === 0 && pending.length === 0) return null;
+	// Nothing yet: the same stage, showing what will grow there and how to start.
+	if (workflows.length === 0 && exps.length === 0 && pending.length === 0) return <EmptyResearchSpace app={app} />;
 
 	const selKind = selected?.split(":")[0];
 	const selWf = selKind === "wf" ? workflows.find((w) => `wf:${w.id}` === selected) : undefined;
@@ -827,6 +805,9 @@ export default function ResearchMap({ app }: { app: string }) {
 				</button>
 				<span className="ml-auto min-w-0 truncate whitespace-nowrap font-mono text-nano uppercase tracking-wider text-ink-600">{mapSummary(exps, pending, workflows)}</span>
 				<span className="hidden whitespace-nowrap font-mono text-nano text-ink-600 md:inline" title="When this was read">· {updated}</span>
+				{/* This app's broken workflows: up at the graph's top right, beside
+				    what it is about (moved from the top strip, 2026-11-27). */}
+				<Suspense fallback={null}><NeedsFixingMenu app={app} /></Suspense>
 			</div>
 			{wide ? mapWithPanel : (
 				<ResearchList app={app} exps={exps} onPick={setSelected} />
