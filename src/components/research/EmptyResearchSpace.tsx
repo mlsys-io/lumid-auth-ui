@@ -12,7 +12,6 @@
 // chat (it drafts the workflow for approval; nothing is saved without a press)
 // or build it step by step.
 
-import { useRef } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, MessagesSquare, Sparkles } from "lucide-react";
 import { appTitle } from "@/components/workflow/AppCard";
@@ -28,8 +27,7 @@ const STEPS = [
 const CX = 46, CY = 40;
 
 export default function EmptyResearchSpace({ app }: { app: string }) {
-	const anchor = useRef<HTMLDivElement>(null);
-	const height = useStageHeight(anchor);
+	const { ref: stageRef, height } = useStageHeight();
 	const title = appTitle(app);
 	const askNewWorkflow = () => window.dispatchEvent(new CustomEvent("studio:ask", { detail: {
 		prompt: `I'd like to add the first workflow to ${title}. Ask me what it should measure and how a result should be judged, then draft it for me to approve before anything is saved.`,
@@ -43,7 +41,7 @@ export default function EmptyResearchSpace({ app }: { app: string }) {
 				<h2 className="whitespace-nowrap text-meta font-medium text-ink-800">Research space</h2>
 				<span className="ml-auto whitespace-nowrap font-mono text-nano uppercase tracking-wider text-ink-600">Nothing here yet</span>
 			</div>
-			<div ref={anchor} data-empty-space style={{ height }}
+			<div ref={stageRef} data-empty-space style={{ height }}
 				className="relative overflow-hidden rounded-xl border border-ink-200 bg-card">
 				{/* The space, drawn faintly: rings in perspective, the app at the centre,
 				    and a dashed branch to where each step will put something. */}

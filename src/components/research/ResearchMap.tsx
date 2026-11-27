@@ -22,7 +22,7 @@ import VersionChain from "@/components/research/VersionChain";
 import { buildEvolution } from "@/lib/evolution";
 import ApprovalCard, { readNotNow, writeNotNow } from "@/components/research/ApprovalCard";
 import { useWorkflowColors, type WfSwatch } from "@/hooks/useWorkflowColors";
-import { useStageHeight } from "@/components/research/stage-height";
+import { useStageHeight, STAGE_MIN_W, STAGE_MIN_H } from "@/components/research/stage-height";
 import EmptyResearchSpace from "@/components/research/EmptyResearchSpace";
 import Space3D from "@/components/research/Space3D";
 import RunVersions from "@/components/research/RunVersions";
@@ -244,7 +244,8 @@ function rowStatus(row?: MeWorkflowRow): { text: string; tone: "ok" | "failing" 
 	return row.last_run_ok === false ? { text: `Last run failed ${ago}`, tone: "failing" } : { text: `Last run succeeded ${ago}`, tone: "ok" };
 }
 
-function MapCanvas({ app, exps, proposals, workflows, groups, rows, marks, selected, onSelect, grow, insetBottom = 0, insetRight = 0, ready = true }: {
+function MapCanvas({ app, exps, proposals, workflows, groups, rows, marks, selected, onSelect, grow, insetBottom = 0, insetRight = 0, ready = true, stageHeight }: {
+	stageHeight: number;
 	app: string; exps: MeExperiment[]; proposals: Proposal[];
 	/** The app's workflows (from its spec) and the child nodes a user made. */
 	workflows: SpecWorkflow[]; groups: SpecNode[];
@@ -399,17 +400,18 @@ function MapCanvas({ app, exps, proposals, workflows, groups, rows, marks, selec
 	// where the stage starts) — never by what's in it, whether suggestions wait, or a panel is open (two apps side by
 	// side read as two sizes otherwise; user 2026-11-25). The approval card
 	// docks over its foot, so it doesn't need room taken off.
-	const anchor = useRef<HTMLDivElement>(null);
-	const height = useStageHeight(anchor);
+	// The stage's height is measured by ResearchMap (it also decides whether the
+	// space fits at all); the canvas just uses it.
+	const height = stageHeight;
 	// Draw once. The spec answers first (a handful of workflow nodes) and the
 	// experiments seconds later (tens of setups); drawing the first and then
 	// the second re-divided the whole circle mid-turn, so everything on screen
 	// jumped (2026-11-26, "rotate a while and then change a lot").
 	if (!ready) {
-		return <div ref={anchor} style={{ height }} className="lumen-skeleton rounded-xl" role="status" aria-label="Reading the map…" />;
+		return <div style={{ height }} className="lumen-skeleton rounded-xl" role="status" aria-label="Reading the map…" />;
 	}
 	return (
-		<div ref={anchor}>
+		<div>
 			<Space3D nodes={tree.nodes} edges={tree.edges} renderCard={renderCard} renderDot={renderDot} describe={describe} edgeClass={edgeClass}
 				// Workflows carry an overview panel: hovering lights it up, no card swap.
 				hoverCard={(n) => n.kind !== "workflow"}
@@ -648,7 +650,7 @@ function ResearchList({ app, exps, onPick }: { app: string; exps: MeExperiment[]
 	);
 }
 
-// How far the approval card reaches up over the map (matches `!-mt-14`).
+// How far the approval card covers the map's foot before it is measured.
 const DOCK_PX = 56;
 // The experiment panel over the map: w-[22rem], 2xl:w-[26rem].
 const PANEL_PX = 352, PANEL_PX_2XL = 416;
@@ -671,6 +673,25 @@ export default function ResearchMap({ app }: { app: string }) {
 	const grow = useOncePerSession(`research-map:${app}`);
 	const [selected, setSelected] = useState<string | null>(null);
 	const [view, setView] = useState<PanelView>("overview");
+	// The stage: measured here so the canvas, the docked card and the
+	// too-small notice agree on one size.
+	const stage = useStageHeight();
+	const [asList, setAsList] = useState(false);
+	// The docked approval card: its real height tells the space how much of its
+	// foot is covered; on a short stage it starts folded to its title.
+	const dockRef = useRef<HTMLDivElement>(null);
+	const [dockPx, setDockPx] = useState(DOCK_PX);
+	// null = decide by room: open when the stage is tall enough to hold the card
+	// and still show the space (≥ 640 px); a press decides from then on.
+	const [cardChoice, setCardChoice] = useState<boolean | null>(null);
+	const cardOpen = cardChoice ?? stage.height >= 640;
+	useEffect(() => {
+		const el = dockRef.current;
+		if (!el || typeof ResizeObserver === "undefined") return;
+		const ro = new ResizeObserver(() => setDockPx(Math.round(el.getBoundingClientRect().height) + 16));
+		ro.observe(el);
+		return () => ro.disconnect();
+	});
 	// A/B: A is what the panel shows; B is picked on the graph (⇧-click, or
 	// "Compare with…" then a click).
 	const [compareB, setCompareB] = useState<string | null>(null);
@@ -775,11 +796,12 @@ export default function ResearchMap({ app }: { app: string }) {
 		<ExperimentDetail key={selExp.id} app={app} e={selExp} panel onClose={close} style={panelStyle}
 			onCompare={selVersionSide ? () => setPicking(true) : undefined} />
 	) : null;
+	const selProposalIdx = selKind === "sug" ? pending.findIndex((p) => `sug:${p.id}` === selected) : -1;
 	const mapWithPanel = (
 		<div className="relative min-w-0">
 			<MapCanvas app={app} exps={exps} proposals={pending} workflows={workflows} groups={groups} rows={rows} marks={marks}
-				selected={selected} onSelect={onSelect} grow={grow} ready={mapReady}
-				insetBottom={pending.length ? DOCK_PX : 0} insetRight={panelOpen ? panelPx + 12 : 0} />
+				selected={selected} onSelect={onSelect} grow={grow} ready={mapReady} stageHeight={stage.height}
+				insetBottom={pending.length ? dockPx : 0} insetRight={panelOpen ? panelPx + 12 : 0} />
 			{picking && (
 				<div role="status" className="absolute left-1/2 top-3 z-[6200] -translate-x-1/2 rounded-full border border-plum-200 bg-card px-3 py-1 text-caption text-plum-800 shadow-e2">
 					Click what to compare with — a workflow, a variant or a setup ·{" "}
@@ -787,9 +809,24 @@ export default function ResearchMap({ app }: { app: string }) {
 				</div>
 			)}
 			{panel}
+			{pending.length > 0 && (
+				// Docked INSIDE the foot of the space, the way Novix's approval card
+				// sits. It used to hang below the stage, past the window's bottom ("for
+				// your approval goes out of the screen", 2026-11-27). Capped at 60% of
+				// the stage (its action row must show); on a short stage it starts
+				// folded to its title. Above the space's labels (z), never under them.
+				<div ref={dockRef} className="absolute inset-x-5 bottom-4 z-[6100]" style={panelOpen ? { right: panelPx + 24 } : undefined}>
+					<div className="scrollbar-hide overflow-y-auto rounded-xl" style={{ maxHeight: Math.round(stage.height * 0.6) }}>
+						<ApprovalCard app={app} list={pending} index={selProposalIdx >= 0 ? selProposalIdx : Math.min(pIndex, pending.length - 1)}
+							onIndex={showProposal} onDone={dismiss}
+							// An open panel has the reader's attention, and a short window
+							// has no room: the card folds to its title until asked.
+							folded={panelOpen || !cardOpen} onUnfold={() => { setSelected(null); setCardChoice(true); }} />
+					</div>
+				</div>
+			)}
 		</div>
 	);
-	const selProposalIdx = selKind === "sug" ? pending.findIndex((p) => `sug:${p.id}` === selected) : -1;
 	const updated = new Date(data?.asOf ?? Date.now()).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
 
 	return (
@@ -800,7 +837,7 @@ export default function ResearchMap({ app }: { app: string }) {
 				<h2 className="whitespace-nowrap text-meta font-medium text-ink-800">Research space</h2>
 				{live && <span className="inline-flex items-center gap-1 rounded-md bg-plum-50 px-1.5 py-px text-nano font-medium text-plum-700"><span className="h-1.5 w-1.5 rounded-full bg-plum-500 animate-lumen-breathe" aria-hidden />Live</span>}
 				<button type="button" onClick={() => window.dispatchEvent(new CustomEvent("studio:ask", { detail: { prompt: `What should I run next in ${appTitle(app)}? Look at each workflow's recent runs, their feedback metrics and the experiments first; cite run ids. Propose the next runs (setups or variants) for my approval — start nothing.`, context: { app } } }))}
-					className="hidden items-center gap-1 rounded-md px-1.5 py-0.5 text-micro text-ink-700 hover:bg-ink-100 hover:text-ink-900 lg:inline-flex">
+					className="hidden flex-shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5 text-micro text-ink-700 hover:bg-ink-100 hover:text-ink-900 lg:inline-flex">
 					<MessagesSquare className="h-3 w-3" />What should I run next?
 				</button>
 				<span className="ml-auto min-w-0 truncate whitespace-nowrap font-mono text-nano uppercase tracking-wider text-ink-600">{mapSummary(exps, pending, workflows)}</span>
@@ -809,16 +846,25 @@ export default function ResearchMap({ app }: { app: string }) {
 				    what it is about (moved from the top strip, 2026-11-27). */}
 				<Suspense fallback={null}><NeedsFixingMenu app={app} /></Suspense>
 			</div>
-			{wide ? mapWithPanel : (
-				<ResearchList app={app} exps={exps} onPick={setSelected} />
+			{/* The stage is always measured; what fills it depends on the room:
+			    the space, or — below the minimum — a note saying it needs more. */}
+			<div ref={stage.ref} data-stage-fits={stage.fits ? "1" : "0"} className={cn(!wide && "hidden")}>
+				{wide && stage.fits && !asList ? mapWithPanel : wide && !asList ? (
+					<SmallStageNotice height={stage.height} onList={() => setAsList(true)} />
+				) : null}
+			</div>
+			{(!wide || asList) && (
+				<>
+					{asList && wide && (
+						<button type="button" onClick={() => setAsList(false)} className="text-micro text-ink-700 underline hover:text-ink-900">Back to the research space</button>
+					)}
+					<ResearchList app={app} exps={exps} onPick={setSelected} />
+				</>
 			)}
-			{pending.length > 0 && (
-				// Docked over the foot of the space, the way Novix's approval card sits.
-				<div className={cn("relative z-10", wide && "!-mt-14 mx-5")} style={panelOpen ? { marginRight: panelPx + 24 } : undefined}>
+			{pending.length > 0 && !wide && (
+				<div className="relative z-10">
 					<ApprovalCard app={app} list={pending} index={selProposalIdx >= 0 ? selProposalIdx : Math.min(pIndex, pending.length - 1)}
-						onIndex={showProposal} onDone={dismiss}
-						// An open panel has the reader's attention: the card folds to its title.
-						folded={panelOpen} onUnfold={() => setSelected(null)} />
+						onIndex={showProposal} onDone={dismiss} folded={panelOpen} onUnfold={() => setSelected(null)} />
 				</div>
 			)}
 			{selExp && !wide && <ExperimentDetail app={app} e={selExp} />}
@@ -833,6 +879,27 @@ export default function ResearchMap({ app }: { app: string }) {
 }
 
 const EMPTY_ROWS = new Map<string, MeWorkflowRow>();
+
+/** In place of the space when there is less than STAGE_MIN_W × STAGE_MIN_H of
+ *  room: a drawn space that small is a tangle of labels, so say so and offer
+ *  what fits. */
+function SmallStageNotice({ height, onList }: { height: number; onList: () => void }) {
+	return (
+		<div data-small-stage style={{ height: Math.min(height, STAGE_MIN_H) }}
+			className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-ink-200 bg-card px-6 text-center">
+			<Sparkles className="h-4 w-4 text-plum-500" aria-hidden />
+			<p className="text-meta font-medium text-ink-800">The research space needs a larger window</p>
+			<p className="max-w-sm text-caption text-ink-600">
+				It draws best in at least {STAGE_MIN_W} × {STAGE_MIN_H} pixels. Make the window larger, hide the chat
+				panel, or collapse the sidebar — it comes back on its own.
+			</p>
+			<button type="button" onClick={onList}
+				className="mt-1 inline-flex items-center gap-1 rounded-lg border border-ink-200 bg-card px-3 py-1.5 text-caption text-ink-800 hover:bg-ink-50">
+				Show it as a list <ArrowRight className="h-3.5 w-3.5" aria-hidden />
+			</button>
+		</div>
+	);
+}
 
 // The Make a variant sheet loads with its editors only when opened.
 const VariantSheet = lazy(() => import("@/components/research/VariantSheet"));
