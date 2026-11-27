@@ -178,6 +178,7 @@ pages:                                  # the app's own pages, after Studio's Gr
 | `run: manual` / cron | `schedule: '@trigger'` / cron |
 | `steps.python: m` + `inputs` | `engine: {type: command, module: m, args: ["--k={{ args.k \| default('v') }}"]}` |
 | `steps.dag: workflows/n.yaml` | `engine: {type: lumilake, workflow: n}` (+ `compute` → `site`, `hardware.gpu_memory`) |
+| `steps.workflows: [a, {use: b, inputs}]` | `engine: {type: chain, stages: [{loop: a}, {loop: b, inputs}]}` (see below) |
 | `about` + `notes` file | `description` |
 | `helper: true` | `role: helper` |
 | first `feedback` metric | `metrics.primary` |
@@ -187,6 +188,30 @@ pages:                                  # the app's own pages, after Studio's Gr
 | `baseline: c32` | `baseline: {arm: c32}` |
 | `versions[]` (`inputs` flattened) | `arms[]` |
 | `pages[]` | `ui.surfaces` + `ui.nav` (non-hidden) + `ui.sidebar` |
+
+**`steps.workflows` (chain).** A workflow made of other workflows of the same app, run in order by
+`app_runner._run_chain_engine`. Each stage is a normal run of its workflow, linked to the chain's run
+(`parent_run_id` = the chain run's ts, `branch_label: "stage <i> of <chain>"`). A stage gets its own
+`inputs` plus the previous stage's `metrics` as `prev_<metric>` args (scalars only; nested keys joined
+with `_`, e.g. `prev_observe_n`), which fill `{{ args.prev_<metric> }}` — so a stage reads one by
+declaring it in its own `inputs` — and env `LUMID_PREV_CYCLE` (previous stage's cycle dir) and
+`LUMID_PREV_METRICS` (the same flat metrics, JSON). The first stage whose run is not ok stops the chain;
+the rest are `skipped`. The chain's summary: `engine: chain`, `stages: [{loop, ts, ok, duration_s,
+metrics, status: done|failed|skipped, error?}]`, `metrics` = the last stage's (when it ran), `ok` = every
+stage ran ok, `error: "Stage 2 (sandbox) failed: <reason>"`. A stage naming an unknown workflow, the
+chain itself, or a loop through other chains is refused on save (identity) and at run time; chains
+nest at most 3 deep. A chain has no `python`/`dag`/`skills` of its own.
+
+```yaml
+- id: strategy_pipeline
+  title: Strategy pipeline
+  run: manual
+  steps:
+    workflows:                 # other workflows of this app, run in order
+    - backtest
+    - use: forward_test
+      inputs: {days: 7}
+```
 
 Studio edits this file for you: **Make a variant** appends a workflow (with its DAG, notes or Python
 file, saved together); moving a workflow into a node sets its `node`; the Feedback view edits

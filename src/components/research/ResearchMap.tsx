@@ -23,6 +23,7 @@ import VersionChain from "@/components/research/VersionChain";
 import { buildEvolution } from "@/lib/evolution";
 import ApprovalCard, { readNotNow, writeNotNow } from "@/components/research/ApprovalCard";
 import ResearchDashboard from "@/components/research/ResearchDashboard";
+import { bestResult } from "@/lib/research-dashboard";
 import ResearchTable from "@/components/research/ResearchTable";
 import { compareHref } from "@/lib/run-routes";
 import { Segmented } from "@/components/ui/segmented";
@@ -200,7 +201,9 @@ const VERSION_DOT: Record<string, string> = {
 	trying: "bg-plum-400", "can't tell apart": "bg-plum-300", "not run yet": "bg-card border border-dashed border-plum-400",
 };
 
-function Dot({ size, className, label, labelClass, sub, subClass, rings, orb = true, panel, ringClass, panelClass, mark }: { size: number; className: string; label: string; labelClass: string; sub?: string; subClass?: string; rings?: boolean | "live";
+function Dot({ size, className, label, labelClass, sub, subClass, rings, orb = true, panel, ringClass, panelClass, mark, ping }: { size: number; className: string; label: string; labelClass: string; sub?: string; subClass?: string; rings?: boolean | "live";
+	/** A new winner since the last visit: rings out three times, then rests. */
+	ping?: boolean;
 	/** A/B, when this node is a side of the panel's comparison. */
 	mark?: "A" | "B";
 	/** Shade it as a small lit sphere (off for hollow dots). */
@@ -223,6 +226,7 @@ function Dot({ size, className, label, labelClass, sub, subClass, rings, orb = t
 					</>}
 				</>
 			)}
+			{ping && <span aria-hidden className="absolute rounded-full border-2 border-gold-500 space3d-ping [animation-iteration-count:3]" style={{ width: size + 12, height: size + 12 }} />}
 			<span className={cn("rounded-full ring-[3px] ring-plum-200/60", ringClass, orb && "space3d-orb", className)} style={{ width: size, height: size }} />
 			{mark && <span aria-label={`Compared as ${mark}`} className={cn("absolute -left-2 -top-2 z-10 rounded px-1 text-nano font-semibold leading-tight text-white", mark === "A" ? "bg-ink-800" : "bg-plum-700")}>{mark}</span>}
 			{panel ? (
@@ -240,8 +244,10 @@ function Dot({ size, className, label, labelClass, sub, subClass, rings, orb = t
 // ── the map ───────────────────────────────────────────────────────────────
 
 
-function MapCanvas({ app, exps, proposals, workflows, groups, rows, marks, selected, onSelect, grow, insetBottom = 0, insetRight = 0, ready = true, stageHeight }: {
+function MapCanvas({ fresh, app, exps, proposals, workflows, groups, rows, marks, selected, onSelect, grow, insetBottom = 0, insetRight = 0, ready = true, stageHeight }: {
 	stageHeight: number;
+	/** Experiments whose leader changed since this browser last looked. */
+	fresh?: Set<string>;
 	app: string; exps: MeExperiment[]; proposals: Proposal[];
 	/** The app's workflows (from its spec) and the child nodes a user made. */
 	workflows: SpecWorkflow[]; groups: SpecNode[];
@@ -375,7 +381,7 @@ function MapCanvas({ app, exps, proposals, workflows, groups, rows, marks, selec
 			const vs = e ? versionsOf(e) : [];
 			const sw = branchOf.get(n.id);
 			return <Dot size={DOT_SIZE.experiment} className={cn(sw?.bar ?? "bg-plum-400", st?.tone === "failing" && "!ring-brick-500")} ringClass={sw?.ring} label={e ? humanId(e.id) : n.ref} labelClass="text-micro font-medium text-ink-900"
-				sub={st ? `${st.text} · ${vs.length} setup${vs.length === 1 ? "" : "s"}` : undefined} mark={mark} />;
+				sub={st ? `${st.text} · ${vs.length} setup${vs.length === 1 ? "" : "s"}` : undefined} mark={mark} ping={!!e && !!fresh?.has(e.id)} />;
 		}
 		if (n.kind === "version") {
 			const v = versionOf(n.id);
@@ -391,7 +397,7 @@ function MapCanvas({ app, exps, proposals, workflows, groups, rows, marks, selec
 		}
 		return <Dot size={DOT_SIZE.suggested} orb={false} className="bg-card border border-dashed border-gold-600" label={`Suggested: ${humanId(n.ref)}`} labelClass="text-micro font-medium text-gold-700" mark={mark} />;
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [app, running, mainCount, expById, versionOf, wfById, rows, tree, branchOf, childCount, marks, groupById]);
+	}, [app, running, mainCount, expById, versionOf, wfById, rows, tree, branchOf, childCount, marks, groupById, fresh]);
 	// One stage size for every app, set by the screen alone (window height less
 	// where the stage starts) — never by what's in it, whether suggestions wait, or a panel is open (two apps side by
 	// side read as two sizes otherwise; user 2026-11-25). The approval card
@@ -519,8 +525,15 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare }: 
 	const head = (
 		<>
 			{panel && (
-				<div className="flex items-center gap-2">
+				<div className="flex items-center gap-1">
 					<span className="eyebrow text-plum-700">Experiment</span>
+					<span className="ml-auto" />
+					{/* The same frame as a workflow's panel: its verbs beside its name. */}
+					<button type="button" aria-label="Ask about it" title="Ask the chat where it stands and what to do next"
+						onClick={() => window.dispatchEvent(new CustomEvent("studio:ask", { detail: { prompt: `Where does the ${humanId(e.id)} experiment stand, and what should I do next?`, context: { app, loop } } }))}
+						className="inline-flex h-6 w-6 items-center justify-center rounded-md text-ink-700 hover:bg-ink-100 hover:text-ink-900"><MessagesSquare className="h-3.5 w-3.5" /></button>
+					{loop && <Link to={workflowPath(app, loop, { tab: "experiments" })} aria-label={`Open ${loopLabel("", loop)}`} title={`Open ${loopLabel("", loop)}`}
+						className="inline-flex h-6 w-6 items-center justify-center rounded-md text-ink-700 hover:bg-ink-100 hover:text-ink-900"><ArrowRight className="h-3.5 w-3.5" /></Link>}
 					<button type="button" onClick={onClose} aria-label="Close" title="Close (Esc)"
 						className="ml-auto -mr-1 inline-flex h-6 w-6 items-center justify-center rounded-md text-ink-600 hover:bg-ink-100 hover:text-ink-900">
 						<X className="h-3.5 w-3.5" />
@@ -602,12 +615,13 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare }: 
 					{note && <p className="rounded-lg bg-muted/50 px-2.5 py-2 text-micro leading-relaxed text-ink-700">{note}</p>}
 					{chart}
 					{chain}
+					<PickVersions app={app} e={e} />
 					<YourCall app={app} e={e} compact />
 					{about}
 				</div>
 				<div className="flex flex-wrap items-center gap-1.5 border-t border-ink-100 bg-muted/30 px-3 py-2">
 					<RunVersions app={app} e={e} />
-					<div className="ml-auto flex items-center gap-0.5">{links}</div>
+					{onCompare && <div className="ml-auto"><Button size="sm" variant="ghost" onClick={onCompare}>Compare with…</Button></div>}
 				</div>
 			</div>
 		);
@@ -623,6 +637,32 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare }: 
 			<RunVersions app={app} e={e} />
 			<div className="flex items-center gap-2 flex-wrap pt-0.5">{links}</div>
 		</div>
+	);
+}
+
+/** Versions with results, each with a checkbox: two to five → Compare N. */
+function PickVersions({ app, e }: { app: string; e: MeExperiment }) {
+	const vs = versionsOf(e).filter((v) => v.n > 0);
+	const [picked, setPicked] = useState<string[]>([]);
+	if (vs.length < 2) return null;
+	const toggle = (id: string) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : p.length >= 5 ? p : [...p, id]));
+	return (
+		<section aria-label="Compare versions" className="space-y-1">
+			<div className="flex items-center gap-2">
+				<h3 className="eyebrow">Compare versions</h3>
+				{picked.length >= 2 ? (
+					<Link to={compareHref(app, { versions: picked.map((version) => ({ exp: e.id, version })) })}
+						className="ml-auto rounded-md bg-plum-700 px-2 py-0.5 text-micro font-medium text-white hover:bg-plum-800">Compare {picked.length}</Link>
+				) : <span className="ml-auto text-micro text-ink-600">pick two or more</span>}
+			</div>
+			{vs.map((v) => (
+				<label key={v.id} className="flex items-center gap-2 rounded-md px-1 py-0.5 text-caption hover:bg-ink-50">
+					<input type="checkbox" checked={picked.includes(v.id)} onChange={() => toggle(v.id)} className="h-3.5 w-3.5 accent-plum-700" />
+					<span className="min-w-0 truncate font-medium text-ink-900">{v.label}</span>
+					<span className="ml-auto truncate tabular-nums text-ink-600">{v.line}</span>
+				</label>
+			))}
+		</section>
 	);
 }
 
@@ -649,6 +689,9 @@ export default function ResearchMap({ app }: { app: string }) {
 	const live = useShellActivity()?.runningApps.includes(app) ?? false;
 	const grow = useOncePerSession(`research-map:${app}`);
 	const [selected, setSelected] = useState<string | null>(null);
+	// Leaders seen at the previous visit — read during render, before the
+	// dashboard's effect records today's. A changed leader rings once.
+	const [seenLeaders] = useState<Record<string, string> | null>(() => { try { return JSON.parse(localStorage.getItem(`research-leaders-seen:${app}`) || "null"); } catch { return null; } });
 	// New workflow: the header button, the empty state, the sidebar and ?new=1.
 	const [newOpen, setNewOpen] = useState(false);
 	useNewWorkflowRequests(app, () => setNewOpen(true));
@@ -708,6 +751,7 @@ export default function ResearchMap({ app }: { app: string }) {
 	const exps = data?.exps ?? [];
 	const proposals = data?.proposals ?? [];
 	const pending = proposals.filter((p) => !exps.some((e) => e.id === p.id) && !notNow.includes(p.id));
+	const fresh = useMemo(() => new Set(exps.filter((e) => { const b = bestResult(e); return !!b && !!seenLeaders && seenLeaders[e.id] !== undefined && seenLeaders[e.id] !== b.leader; }).map((e) => e.id)), [exps, seenLeaders]);
 
 	const sideOf = useCallback((id: string | null): CompareSide | null => {
 		if (!id) return null;
@@ -811,7 +855,7 @@ export default function ResearchMap({ app }: { app: string }) {
 						compareHref={(v) => compareHref(app, { versions: v.map((k) => { const i = k.indexOf(":"); return { exp: k.slice(0, i), version: k.slice(i + 1) }; }) })} />
 				</div>
 			) : (
-				<MapCanvas app={app} exps={exps} proposals={pending} workflows={workflows} groups={groups} rows={rows} marks={marks}
+				<MapCanvas fresh={fresh} app={app} exps={exps} proposals={pending} workflows={workflows} groups={groups} rows={rows} marks={marks}
 					selected={selected} onSelect={onSelect} grow={grow} ready={mapReady} stageHeight={stage.height}
 					insetBottom={0} insetRight={panelOpen ? sidePx + 12 : 0} />
 			)}
