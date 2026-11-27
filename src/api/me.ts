@@ -1195,6 +1195,9 @@ export interface MeWorkflowRow {
   slug: string;
   kind: "scheduled" | "visual";
   name: string;
+  /** The workflow's title from the app's spec ("Stock backtests"), when it
+   *  declares one — `name` is usually the loop slug. */
+  title?: string | null;
   app?: string;
   // App bundle version (manifest.json) — sent by /me/workflows; the app
   // index reads the freshest row's version for the app card.

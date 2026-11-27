@@ -50,6 +50,9 @@ import { run as runTimelineChecks, caseCount as timelineCaseCount } from "@/lib/
 import { run as runEvolutionChecks, caseCount as evolutionCaseCount } from "@/lib/evolution.test";
 import { run as runRunAnswerChecks, caseCount as runAnswerCaseCount } from "@/lib/run-answer.test";
 import { run as runDataJobsChecks, caseCount as dataJobsCaseCount } from "@/lib/data-jobs.test";
+import { run as runProgressDotsChecks, caseCount as progressDotsCaseCount } from "@/lib/progress-dots.test";
+import { run as runCompareSidesChecks, caseCount as compareSidesCaseCount } from "@/lib/compare-sides.test";
+import { run as runRunsListChecks, caseCount as runsListCaseCount } from "@/lib/runs-list.test";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -378,7 +381,7 @@ check("isEmptyLoop is true only when nothing is declared", () => {
 export function run(): number {
 	// The document round-trip suite runs in the same process — it is the
 	// invariant everything else is built on, so it must never be skippable.
-	let failed = runDocChecks() + runEditChecks() + runFmChecks() + runXpioChecks() + runImportChecks() + runCycleIdChecks() + runAwaitChecks() + runRunStatusChecks() + runRouteChecks() + runFleetProvChecks() + runChunkChecks() + runSandboxChecks() + runDataLakeChecks() + runDataActivityChecks() + runRunSiteChecks() + runRunImagesChecks() + runFleetResultChecks() + runAskDataChecks() + runRunFilesChecks() + runTableColumnsChecks() + runDataJobsChecks() + runReturnToChecks() + runActivityChecks() + runRunAnswerChecks() + runResearchMapChecks() + runTimelineChecks() + runEvolutionChecks() + runModelLabelChecks() + runSpaceChecks() + runAppSpecChecks() + runVariantFormChecks() + runCompareChecks() + runMeasureChecks() + runComputeChecks() + runPauseChecks();
+	let failed = runDocChecks() + runEditChecks() + runFmChecks() + runXpioChecks() + runImportChecks() + runCycleIdChecks() + runAwaitChecks() + runRunStatusChecks() + runRouteChecks() + runFleetProvChecks() + runChunkChecks() + runSandboxChecks() + runDataLakeChecks() + runDataActivityChecks() + runRunSiteChecks() + runRunImagesChecks() + runFleetResultChecks() + runAskDataChecks() + runRunFilesChecks() + runTableColumnsChecks() + runDataJobsChecks() + runReturnToChecks() + runActivityChecks() + runRunAnswerChecks() + runResearchMapChecks() + runTimelineChecks() + runEvolutionChecks() + runModelLabelChecks() + runSpaceChecks() + runAppSpecChecks() + runVariantFormChecks() + runCompareChecks() + runMeasureChecks() + runComputeChecks() + runPauseChecks() + runProgressDotsChecks() + runCompareSidesChecks() + runRunsListChecks();
 	for (const c of checks) {
 		try {
 			c.run();
@@ -403,10 +406,10 @@ if (typeof describe === "function" && typeof it === "function") {
 	const proc = (globalThis as { process?: { exitCode?: number } }).process;
 	if (failed > 0) {
 		// eslint-disable-next-line no-console
-		console.error(`${failed} of ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount + runStatusCaseCount + routeCaseCount + fleetProvCaseCount + chunkCaseCount + sandboxCaseCount + dataLakeCaseCount + dataActivityCaseCount + runSiteCaseCount + runImagesCaseCount + fleetResultCaseCount + askDataCaseCount + runFilesCaseCount + tableColumnsCaseCount + dataJobsCaseCount + returnToCaseCount + activityCaseCount + runAnswerCaseCount + researchMapCaseCount + timelineCaseCount + evolutionCaseCount + modelLabelCaseCount + spaceCaseCount + appSpecCaseCount + variantFormCaseCount + compareCaseCount + measureCaseCount + computeCaseCount + pauseCaseCount} case(s) failed`);
+		console.error(`${failed} of ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount + runStatusCaseCount + routeCaseCount + fleetProvCaseCount + chunkCaseCount + sandboxCaseCount + dataLakeCaseCount + dataActivityCaseCount + runSiteCaseCount + runImagesCaseCount + fleetResultCaseCount + askDataCaseCount + runFilesCaseCount + tableColumnsCaseCount + dataJobsCaseCount + returnToCaseCount + activityCaseCount + runAnswerCaseCount + researchMapCaseCount + timelineCaseCount + evolutionCaseCount + modelLabelCaseCount + spaceCaseCount + appSpecCaseCount + variantFormCaseCount + compareCaseCount + measureCaseCount + computeCaseCount + pauseCaseCount + progressDotsCaseCount + compareSidesCaseCount + runsListCaseCount} case(s) failed`);
 		if (proc) proc.exitCode = 1;
 	} else {
 		// eslint-disable-next-line no-console
-		console.log(`workflow core: all ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount + runStatusCaseCount + routeCaseCount + fleetProvCaseCount + chunkCaseCount + sandboxCaseCount + dataLakeCaseCount + dataActivityCaseCount + runSiteCaseCount + runImagesCaseCount + fleetResultCaseCount + askDataCaseCount + runFilesCaseCount + tableColumnsCaseCount + dataJobsCaseCount + returnToCaseCount + activityCaseCount + runAnswerCaseCount + researchMapCaseCount + timelineCaseCount + evolutionCaseCount + modelLabelCaseCount + spaceCaseCount + appSpecCaseCount + variantFormCaseCount + compareCaseCount + measureCaseCount + computeCaseCount + pauseCaseCount} cases passed`);
+		console.log(`workflow core: all ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount + runStatusCaseCount + routeCaseCount + fleetProvCaseCount + chunkCaseCount + sandboxCaseCount + dataLakeCaseCount + dataActivityCaseCount + runSiteCaseCount + runImagesCaseCount + fleetResultCaseCount + askDataCaseCount + runFilesCaseCount + tableColumnsCaseCount + dataJobsCaseCount + returnToCaseCount + activityCaseCount + runAnswerCaseCount + researchMapCaseCount + timelineCaseCount + evolutionCaseCount + modelLabelCaseCount + spaceCaseCount + appSpecCaseCount + variantFormCaseCount + compareCaseCount + measureCaseCount + computeCaseCount + pauseCaseCount + progressDotsCaseCount + compareSidesCaseCount + runsListCaseCount} cases passed`);
 	}
 }

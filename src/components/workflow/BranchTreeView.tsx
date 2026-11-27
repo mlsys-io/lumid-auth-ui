@@ -26,9 +26,8 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { ArrowLeft, GitBranch, Loader2, GitCommitVertical } from "lucide-react";
-import { me, type MeCycleListItem, type MeCycleDetail } from "@/api/me";
+import { me, type MeCycleListItem } from "@/api/me";
 import RunContextMenu, { type RunMenuActions, type RunMenuTarget } from "@/components/workflow/RunContextMenu";
-import { cn } from "@/lib/utils";
 
 // ── node geometry (mirrors TrajectoryGraph's vertical tree) ──
 const NODE_W = 184;
@@ -345,91 +344,5 @@ export default function BranchTreeView({
 	);
 }
 
-// ── Comparison view (#16) — side-by-side metric delta of two runs ──────────
-// Reuses cycleDetail's summary.metrics for each run and diffs them. Generic over
-// whatever numeric metrics the runs recorded.
-
-function readMetrics(d: MeCycleDetail | null): Record<string, number> {
-	const out: Record<string, number> = {};
-	const m = (d?.summary?.metrics ?? {}) as Record<string, unknown>;
-	for (const [k, v] of Object.entries(m)) {
-		if (typeof v === "number" && Number.isFinite(v) && !/^(xpio_ingested|auto_reflect)/.test(k)) out[k] = v;
-	}
-	// fold in cost/duration as comparable numbers too
-	if (typeof d?.summary?.cost?.cost_usd === "number") out["cost_usd"] = d.summary.cost.cost_usd!;
-	return out;
-}
-
-export function RunCompareView({ app, loop, tsA, tsB, onBack }: {
-	app: string; loop: string; tsA: string; tsB: string; onBack: () => void;
-}) {
-	const [a, setA] = useState<MeCycleDetail | null | undefined>(undefined);
-	const [b, setB] = useState<MeCycleDetail | null | undefined>(undefined);
-
-	useEffect(() => {
-		let live = true;
-		setA(undefined); setB(undefined);
-		me.cycleDetail(app, loop, tsA).then((d) => { if (live) setA(d); }).catch(() => { if (live) setA(null); });
-		me.cycleDetail(app, loop, tsB).then((d) => { if (live) setB(d); }).catch(() => { if (live) setB(null); });
-		return () => { live = false; };
-	}, [app, loop, tsA, tsB]);
-
-	const loading = a === undefined || b === undefined;
-	const mA = readMetrics(a ?? null);
-	const mB = readMetrics(b ?? null);
-	const keys = [...new Set([...Object.keys(mA), ...Object.keys(mB)])].sort();
-	const betterDown = (m: string) => /loss|error|regress|drawdown|latency|cost|fail/i.test(m);
-	const num = (v: number) => (v >= -1 && v <= 1 ? `${Math.round(v * 100)}%` : Number.isInteger(v) ? String(v) : String(+v.toFixed(3)));
-
-	return (
-		<div className="h-full flex flex-col rounded-xl border border-ink-200 bg-card overflow-hidden animate-in fade-in duration-200">
-			<div className="flex items-center gap-2 px-3 py-2.5 border-b border-ink-100">
-				<button onClick={onBack} className="flex-shrink-0 inline-flex items-center gap-1 text-caption text-ink-600 hover:text-ink-900 px-2 py-1 -ml-1 rounded-lg hover:bg-ink-100 transition-colors"><ArrowLeft className="w-3.5 h-3.5" /> History</button>
-				<div className="flex items-center gap-1.5 min-w-0">
-					<GitBranch className="w-3.5 h-3.5 text-lagoon-600 flex-shrink-0" />
-					<span className="text-sm font-medium text-ink-900">Compare runs</span>
-				</div>
-			</div>
-			<div className="flex-1 min-h-0 overflow-y-auto p-3">
-				{loading ? (
-					<div className="h-full flex items-center justify-center text-xs text-ink-600"><Loader2 className="w-4 h-4 animate-spin mr-2" /> Loading both runs…</div>
-				) : keys.length === 0 ? (
-					<div className="h-full flex flex-col items-center justify-center gap-2 text-center text-ink-600">
-						<div className="text-sm text-ink-600">No numeric metrics recorded on either run.</div>
-						<div className="text-xs max-w-xs">These runs didn't log comparable metrics — open each run's steps to inspect them.</div>
-					</div>
-				) : (
-					<table className="w-full text-caption">
-						<thead>
-							<tr className="text-nano uppercase tracking-wide text-ink-600">
-								<th className="text-left font-semibold py-1.5">metric</th>
-								<th className="text-right font-semibold py-1.5 px-2 truncate" title={tsA}>{cycleDate(tsA)}</th>
-								<th className="text-right font-semibold py-1.5 px-2 truncate" title={tsB}>{cycleDate(tsB)}</th>
-								<th className="text-right font-semibold py-1.5">Δ</th>
-							</tr>
-						</thead>
-						<tbody>
-							{keys.map((k) => {
-								const va = mA[k]; const vb = mB[k];
-								const has = typeof va === "number" && typeof vb === "number";
-								const delta = has ? vb - va : NaN;
-								const changed = has && Math.abs(delta) > 1e-9;
-								const good = changed && (betterDown(k) ? delta < 0 : delta > 0);
-								return (
-									<tr key={k} className={cn("border-t border-ink-100", changed && "bg-ink-50/40")}>
-										<td className="py-1.5 text-ink-600">{k.replace(/_/g, " ")}{changed && <span className="ml-1 text-nano uppercase tracking-wide text-ink-600">changed</span>}</td>
-										<td className="py-1.5 px-2 text-right tabular-nums text-ink-700">{typeof va === "number" ? num(va) : "—"}</td>
-										<td className="py-1.5 px-2 text-right tabular-nums text-ink-700">{typeof vb === "number" ? num(vb) : "—"}</td>
-										<td className={cn("py-1.5 text-right tabular-nums font-medium", !changed ? "text-ink-600" : good ? "text-gold-600" : "text-brick-600")}>
-											{has ? (changed ? `${delta > 0 ? "+" : ""}${num(delta)}` : "·") : "—"}
-										</td>
-									</tr>
-								);
-							})}
-						</tbody>
-					</table>
-				)}
-			</div>
-		</div>
-	);
-}
+// The 2-run comparison view that lived here (#16) became the Compare page
+// (round 9: components/research/CompareRuns.tsx, lib/run-routes compareHref).

@@ -24,6 +24,22 @@ import { DataTable, DTHead, DTh, DTr, DTd } from "@/components/ui/data-table";
 import { StrandMark } from "@/components/illustrations/StrandMark";
 import { StrandAvatar } from "@/components/illustrations/StrandAvatar";
 import * as Scenes from "@/components/illustrations/scenes";
+import { RunDots, StepProgress, type RunDot, type StepDot } from "@/components/research/ProgressDots";
+
+// Progress-dots demo data (fixed times, so the gallery is stable).
+const DEMO_T = Math.floor(Date.now() / 1000) - 600;
+const DEMO_RUNS: RunDot[] = Array.from({ length: 26 }, (_, i) => ({
+	id: `r${i}`, ts: DEMO_T - (26 - i) * 3600, ok: i % 7 !== 3, running: i === 25, label: "Backtest",
+}));
+const DEMO_STEPS: StepDot[] = [
+	{ id: "1", label: "Read the tape", state: "done", startedAt: DEMO_T, durationS: 19 },
+	{ id: "2", label: "Pick a signal", state: "done", startedAt: DEMO_T + 19, durationS: 44, note: "Picked momentum: the last hour trended up on 3 of 4 symbols." },
+	{ id: "3", label: "Poll the outbox", state: "skipped", startedAt: DEMO_T + 63, durationS: 0 },
+	{ id: "4", label: "Submit", state: "failed", startedAt: DEMO_T + 63, durationS: 3, note: "Server error (HTTP 500)" },
+	{ id: "5", label: "Backtest", state: "running", startedAt: DEMO_T + 66 },
+	{ id: "6", label: "Forward test", state: "waiting" },
+	{ id: "7", label: "Report", state: "waiting" },
+];
 
 function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
 	return (
@@ -198,6 +214,15 @@ export default function DesignGallery() {
 					</div>
 				</Section>
 
+				<Section id="dots" title="Progress dots — a dot is a run, or a step">
+					<div className="grid gap-8 md:grid-cols-2">
+						<div className="space-y-3">
+							<div><RunDots runs={DEMO_RUNS} /></div>
+							<div><RunDots runs={DEMO_RUNS.slice(-6)} label="This week" /></div>
+						</div>
+						<StepProgress steps={DEMO_STEPS} />
+					</div>
+				</Section>
 				<Section id="brand" title="Brand · StrandMark">
 					<div key={replay} className="flex items-end gap-10">
 						<div className="flex flex-col items-center gap-2">
