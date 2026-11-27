@@ -11,19 +11,21 @@
 import { useCallback, useEffect, useState } from "react";
 import { me, type MeWorkflowRow } from "@/api/me";
 
-export interface WfSwatch { bar: string; ring: string; stroke: string; border: string }
+export interface WfSwatch { bar: string; ring: string; stroke: string; border: string;
+	/** A dashed outline in the same hue (a version that hasn't run yet). */
+	dash: string }
 
 // Full class strings (Tailwind only emits classes it can see).
 export const WF_SWATCHES: WfSwatch[] = [
-	{ bar: "bg-lagoon-500", ring: "!ring-lagoon-300", stroke: "stroke-lagoon-400", border: "border-l-lagoon-500" },
-	{ bar: "bg-gold-500", ring: "!ring-gold-300", stroke: "stroke-gold-400", border: "border-l-gold-500" },
-	{ bar: "bg-plum-500", ring: "!ring-plum-300", stroke: "stroke-plum-400", border: "border-l-plum-500" },
-	{ bar: "bg-ink-500", ring: "!ring-ink-300", stroke: "stroke-ink-400", border: "border-l-ink-500" },
+	{ bar: "bg-lagoon-500", ring: "!ring-lagoon-300", stroke: "stroke-lagoon-400", border: "border-l-lagoon-500" , dash: "border-lagoon-500" },
+	{ bar: "bg-gold-500", ring: "!ring-gold-300", stroke: "stroke-gold-400", border: "border-l-gold-500" , dash: "border-gold-500" },
+	{ bar: "bg-plum-500", ring: "!ring-plum-300", stroke: "stroke-plum-400", border: "border-l-plum-500" , dash: "border-plum-500" },
+	{ bar: "bg-ink-500", ring: "!ring-ink-300", stroke: "stroke-ink-400", border: "border-l-ink-500" , dash: "border-ink-500" },
 	// Second round darker, not lighter: light tints read as "no colour" on the sidebar.
-	{ bar: "bg-lagoon-700", ring: "!ring-lagoon-400", stroke: "stroke-lagoon-600", border: "border-l-lagoon-700" },
-	{ bar: "bg-gold-700", ring: "!ring-gold-400", stroke: "stroke-gold-600", border: "border-l-gold-700" },
-	{ bar: "bg-plum-700", ring: "!ring-plum-400", stroke: "stroke-plum-600", border: "border-l-plum-700" },
-	{ bar: "bg-ink-700", ring: "!ring-ink-400", stroke: "stroke-ink-600", border: "border-l-ink-700" },
+	{ bar: "bg-lagoon-700", ring: "!ring-lagoon-400", stroke: "stroke-lagoon-600", border: "border-l-lagoon-700" , dash: "border-lagoon-700" },
+	{ bar: "bg-gold-700", ring: "!ring-gold-400", stroke: "stroke-gold-600", border: "border-l-gold-700" , dash: "border-gold-700" },
+	{ bar: "bg-plum-700", ring: "!ring-plum-400", stroke: "stroke-plum-600", border: "border-l-plum-700" , dash: "border-plum-700" },
+	{ bar: "bg-ink-700", ring: "!ring-ink-400", stroke: "stroke-ink-600", border: "border-l-ink-700" , dash: "border-ink-700" },
 ];
 
 /** The workflow's loop id from a row ("<app>:<loop>" slug). */

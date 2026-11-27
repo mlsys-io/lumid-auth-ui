@@ -21,7 +21,7 @@ import BestScoreChart from "@/components/research/BestScoreChart";
 import VersionChain from "@/components/research/VersionChain";
 import { buildEvolution } from "@/lib/evolution";
 import ApprovalCard, { readNotNow, writeNotNow } from "@/components/research/ApprovalCard";
-import { useWorkflowColors } from "@/hooks/useWorkflowColors";
+import { useWorkflowColors, type WfSwatch } from "@/hooks/useWorkflowColors";
 import Space3D from "@/components/research/Space3D";
 import RunVersions from "@/components/research/RunVersions";
 import YourCall from "@/components/research/YourCall";
@@ -32,7 +32,7 @@ import type { SpecNode, SpecWorkflow } from "@/lib/app-spec";
 import type { MeWorkflowRow } from "@/api/me";
 import { fmtAgo } from "@/lib/activity";
 import {
-	buildResearchTree, comparabilityNote, criteriaInWords, experimentLoop, experimentStatus, humanId, mapSummary, pathTo, versionsOf, OTHER_NODE,
+	buildResearchTree, comparabilityNote, criteriaInWords, experimentStatus, humanId, mapSummary, pathTo, versionsOf, OTHER_NODE,
 	type MapEdge, type MapNode, type Proposal, type Tone, type VersionInfo,
 	shortStatus,
 } from "@/lib/research-map";
@@ -182,6 +182,10 @@ function SuggestedCard3D({ p, selected }: { p: Proposal; selected: boolean }) {
 const VERSION_FILL: Record<string, string> = {
 	winning: "fill-plum-700", leading: "fill-plum-600", current: "fill-plum-400", trying: "fill-plum-400", "can't tell apart": "fill-plum-300",
 };
+// A version's certainty as a shade of its branch's colour.
+const VERSION_SHADE: Record<string, string> = {
+	winning: "", leading: "opacity-90", current: "opacity-60", trying: "opacity-60", "can't tell apart": "opacity-45",
+};
 const VERSION_DOT: Record<string, string> = {
 	winning: "bg-plum-700", leading: "bg-plum-600", current: "bg-plum-400",
 	trying: "bg-plum-400", "can't tell apart": "bg-plum-300", "not run yet": "bg-card border border-dashed border-plum-400",
@@ -319,15 +323,24 @@ function MapCanvas({ app, exps, proposals, workflows, groups, rows, marks, selec
 	}, [app, running, mainCount, expById, propById, versionOf, wfById, rows, childCount, groupById]);
 	// Each workflow's colour (sidebar bar = map branch = running box).
 	const colorOf = useWorkflowColors();
-	const loopOfNode = useCallback((id: string): string | null => {
-		if (id.startsWith("wf:")) return id.slice(3);
-		if (id.startsWith("exp:")) { const x = expById.get(id.slice(4)); return x ? experimentLoop(x) : null; }
-		return null;
-	}, [expById]);
-	const edgeClass = useCallback((e: MapEdge) => {
-		const loop = loopOfNode(e.target);
-		return loop ? colorOf(app, loop)?.stroke : undefined;
-	}, [app, loopOfNode, colorOf]);
+	// ONE colour per branch (2026-11-27: "the balls and lines are inconsistent in
+	// colour within the same branch"): every node and edge takes the colour of
+	// its top-most workflow — the first-ring workflow it hangs from — so a
+	// variant, its experiments and their versions all wear their branch's hue.
+	// Edges used to take each workflow's own colour while dots stayed plum.
+	const branchOf = useMemo(() => {
+		const byId = new Map(tree.nodes.map((n) => [n.id, n]));
+		const out = new Map<string, WfSwatch | null>();
+		for (const n of tree.nodes) {
+			let top: string | null = null;
+			for (let cur: MapNode | undefined = n; cur; cur = cur.parent ? byId.get(cur.parent) : undefined) {
+				if (cur.kind === "workflow") top = cur.ref;
+			}
+			out.set(n.id, top ? colorOf(app, top) : null);
+		}
+		return out;
+	}, [tree, app, colorOf]);
+	const edgeClass = useCallback((e: MapEdge) => branchOf.get(e.target)?.stroke, [branchOf]);
 	const renderDot = useCallback((n: MapNode) => {
 		const mark = marks.get(n.id);
 		if (n.kind === "app") return <Dot size={14} rings={running ? "live" : true} className="bg-plum-600" label={appTitle(app)} labelClass="text-meta font-semibold text-ink-900"
@@ -353,8 +366,10 @@ function MapCanvas({ app, exps, proposals, workflows, groups, rows, marks, selec
 					) : null}
 				</>
 			);
-			const sw = colorOf(app, n.ref);
-			return <Dot size={w?.parent ? 10 : 12} className={st.tone === "failing" ? "bg-brick-500" : st.tone === "running" ? "bg-lagoon-500" : "bg-plum-500"} label={w ? wfLabel(w) : n.ref} labelClass="text-caption font-medium text-ink-900" panel={panel}
+			const sw = branchOf.get(n.id);
+			// The branch's hue always; status is a brick ring (failing) or a breath
+			// (running) on top of it, and said in words in the panel.
+			return <Dot size={w?.parent ? 10 : 12} className={cn(sw?.bar ?? "bg-plum-500", st.tone === "failing" && "!ring-brick-500", st.tone === "running" && "animate-lumen-breathe")} label={w ? wfLabel(w) : n.ref} labelClass="text-caption font-medium text-ink-900" panel={panel}
 				ringClass={sw?.ring} panelClass={sw ? cn("border-l-[3px]", sw.border) : undefined} mark={mark} />;
 		}
 		if (n.kind === "node") {
@@ -366,18 +381,25 @@ function MapCanvas({ app, exps, proposals, workflows, groups, rows, marks, selec
 			const e = expById.get(n.ref);
 			const st = e ? shortStatus(e) : null;
 			const vs = e ? versionsOf(e) : [];
-			return <Dot size={8} className={st?.tone === "failing" ? "bg-brick-500" : "bg-plum-400"} label={e ? humanId(e.id) : n.ref} labelClass="text-micro font-medium text-ink-800"
+			const sw = branchOf.get(n.id);
+			return <Dot size={8} className={cn(sw?.bar ?? "bg-plum-400", st?.tone === "failing" && "!ring-brick-500")} ringClass={sw?.ring} label={e ? humanId(e.id) : n.ref} labelClass="text-micro font-medium text-ink-800"
 				sub={st ? `${st.text} · ${vs.length} setup${vs.length === 1 ? "" : "s"}` : undefined} mark={mark} />;
 		}
 		if (n.kind === "version") {
 			const v = versionOf(n.id);
 			// The version's state in a word when it has one worth saying.
 			const tag = v && (v.tag === "winning" || v.tag === "leading" || v.tag === "can't tell apart") ? v.tag : undefined;
-			return <Dot size={6} className={VERSION_DOT[v?.tag ?? "current"] ?? "bg-ink-500"} label={v?.label ?? n.ref} labelClass="text-micro text-ink-700" sub={tag} mark={mark} />;
+			const sw = branchOf.get(n.id);
+			const vtag = v?.tag ?? "current";
+			// Certainty as a shade of the branch's hue (was plum steps).
+			const cls = !sw ? (VERSION_DOT[vtag] ?? "bg-ink-500")
+				: vtag === "not run yet" ? cn("bg-card border border-dashed", sw.dash)
+					: cn(sw.bar, VERSION_SHADE[vtag] ?? "opacity-60");
+			return <Dot size={6} className={cls} ringClass={sw?.ring} orb={vtag !== "not run yet"} label={v?.label ?? n.ref} labelClass="text-micro text-ink-700" sub={tag} mark={mark} />;
 		}
 		return <Dot size={8} orb={false} className="bg-card border border-dashed border-gold-500" label={`Suggested: ${humanId(n.ref)}`} labelClass="text-micro text-gold-700" mark={mark} />;
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [app, running, mainCount, expById, versionOf, wfById, rows, tree, colorOf, childCount, marks, groupById]);
+	}, [app, running, mainCount, expById, versionOf, wfById, rows, tree, branchOf, childCount, marks, groupById]);
 	// One stage size for every app, set by the screen alone — never by what's
 	// in it, whether suggestions wait, or a panel is open (two apps side by
 	// side read as two sizes otherwise; user 2026-11-25). The approval card

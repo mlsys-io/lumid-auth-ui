@@ -12,6 +12,8 @@ import { groupActivity } from "@/lib/activity";
 export interface ShellActivity {
 	failing: number;
 	runningApps: string[];
+	/** Failing workflows per app (the number on each app's sidebar row). */
+	failingByApp?: Record<string, number>;
 }
 
 const KEY = "studio_shell_activity_v1";
@@ -30,9 +32,12 @@ async function refresh() {
 		const since = new Date(Date.now() - 3 * 86_400_000).toISOString();
 		const r = await me.listRuns({ since, limit: 500 });
 		const act = groupActivity(r.runs || []);
+		const failingByApp: Record<string, number> = {};
+		for (const wf of act.failing) if (wf.app) failingByApp[wf.app] = (failingByApp[wf.app] ?? 0) + 1;
 		state = {
 			failing: act.failing.length,
 			runningApps: [...new Set(act.running.map((x) => x.wf.app).filter(Boolean))],
+			failingByApp,
 		};
 		try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* private mode */ }
 		subs.forEach((f) => f(state));
