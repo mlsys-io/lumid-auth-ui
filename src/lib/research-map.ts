@@ -262,6 +262,12 @@ export interface GraphNode { id: string; title: string; parent: string }
 /** The id of the group node that holds parentless housekeeping workflows. */
 export const OTHER_NODE = "__other";
 
+/** One dot size (px) per kind, everywhere a research node is drawn: the 3D
+ *  space, the list and the panel. The step between kinds says how much a node
+ *  holds; depth may move a dot ~5% at most (2026-11-27: "some dots are too
+ *  big, some too small"). */
+export const DOT_SIZE = { app: 16, workflow: 12, variant: 11, node: 11, experiment: 9, suggested: 8, version: 7 } as const;
+
 /**
  * The research graph (2026-11-25): the app → its WORKFLOWS (first ring) →
  * under each workflow its EXPERIMENTS (runs of that workflow with different

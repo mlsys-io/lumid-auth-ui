@@ -34,7 +34,7 @@ import type { SpecNode, SpecWorkflow } from "@/lib/app-spec";
 import type { MeWorkflowRow } from "@/api/me";
 import { fmtAgo } from "@/lib/activity";
 import {
-	buildResearchTree, comparabilityNote, criteriaInWords, experimentStatus, humanId, mapSummary, pathTo, versionsOf, OTHER_NODE,
+	buildResearchTree, comparabilityNote, criteriaInWords, experimentStatus, humanId, mapSummary, pathTo, versionsOf, OTHER_NODE, DOT_SIZE,
 	type MapEdge, type MapNode, type Proposal, type Tone, type VersionInfo,
 	shortStatus,
 } from "@/lib/research-map";
@@ -188,7 +188,7 @@ const VERSION_FILL: Record<string, string> = {
 };
 // A version's certainty as a shade of its branch's colour.
 const VERSION_SHADE: Record<string, string> = {
-	winning: "", leading: "opacity-90", current: "opacity-60", trying: "opacity-60", "can't tell apart": "opacity-45",
+	winning: "", leading: "opacity-90", current: "opacity-75", trying: "opacity-75", "can't tell apart": "opacity-60",
 };
 const VERSION_DOT: Record<string, string> = {
 	winning: "bg-plum-700", leading: "bg-plum-600", current: "bg-plum-400",
@@ -225,7 +225,7 @@ function Dot({ size, className, label, labelClass, sub, subClass, rings, orb = t
 			) : (
 				<span className="absolute left-full ml-1 flex flex-col leading-tight space3d-label">
 					<span className={cn("whitespace-nowrap max-w-[13rem] truncate", labelClass)}>{label}</span>
-					{sub && <span className={cn("whitespace-nowrap max-w-[13rem] truncate text-nano", subClass ?? "text-ink-600")}>{sub}</span>}
+					{sub && <span className={cn("whitespace-nowrap max-w-[13rem] truncate text-nano", subClass ?? "text-ink-700")}>{sub}</span>}
 				</span>
 			)}
 		</span>
@@ -339,7 +339,7 @@ function MapCanvas({ app, exps, proposals, workflows, groups, rows, marks, selec
 	const edgeClass = useCallback((e: MapEdge) => branchOf.get(e.target)?.stroke, [branchOf]);
 	const renderDot = useCallback((n: MapNode) => {
 		const mark = marks.get(n.id);
-		if (n.kind === "app") return <Dot size={14} rings={running ? "live" : true} className="bg-plum-600" label={appTitle(app)} labelClass="text-meta font-semibold text-ink-900"
+		if (n.kind === "app") return <Dot size={DOT_SIZE.app} rings={running ? "live" : true} className="bg-plum-600" label={appTitle(app)} labelClass="text-meta font-semibold text-ink-900"
 			sub={`${mainCount} workflow${mainCount === 1 ? "" : "s"}${running ? " · running now" : ""}`} mark={mark} />;
 		if (n.kind === "workflow") {
 			const w = wfById.get(n.ref);
@@ -365,12 +365,12 @@ function MapCanvas({ app, exps, proposals, workflows, groups, rows, marks, selec
 			const sw = branchOf.get(n.id);
 			// The branch's hue always; status is a brick ring (failing) or a breath
 			// (running) on top of it, and said in words in the panel.
-			return <Dot size={w?.parent ? 10 : 12} className={cn(sw?.bar ?? "bg-plum-500", st.tone === "failing" && "!ring-brick-500", st.tone === "running" && "animate-lumen-breathe")} label={w ? wfLabel(w) : n.ref} labelClass="text-caption font-medium text-ink-900" panel={panel}
+			return <Dot size={w?.parent ? DOT_SIZE.variant : DOT_SIZE.workflow} className={cn(sw?.bar ?? "bg-plum-500", st.tone === "failing" && "!ring-brick-500", st.tone === "running" && "animate-lumen-breathe")} label={w ? wfLabel(w) : n.ref} labelClass="text-caption font-medium text-ink-900" panel={panel}
 				ringClass={sw?.ring} panelClass={sw ? cn("border-l-[3px]", sw.border) : undefined} mark={mark} />;
 		}
 		if (n.kind === "node") {
 			const k = childCount(n.id);
-			return <Dot size={10} orb={false} className="border-2 border-dashed border-plum-500 bg-card" label={nodeTitle(n.ref)} labelClass="text-caption font-medium text-plum-800"
+			return <Dot size={DOT_SIZE.node} orb={false} className="border-2 border-dashed border-plum-500 bg-card" label={nodeTitle(n.ref)} labelClass="text-caption font-medium text-plum-800"
 				sub={n.ref === OTHER_NODE ? "housekeeping" : `node · holds ${k}`} subClass="text-plum-700" mark={mark} />;
 		}
 		if (n.kind === "experiment") {
@@ -378,7 +378,7 @@ function MapCanvas({ app, exps, proposals, workflows, groups, rows, marks, selec
 			const st = e ? shortStatus(e) : null;
 			const vs = e ? versionsOf(e) : [];
 			const sw = branchOf.get(n.id);
-			return <Dot size={8} className={cn(sw?.bar ?? "bg-plum-400", st?.tone === "failing" && "!ring-brick-500")} ringClass={sw?.ring} label={e ? humanId(e.id) : n.ref} labelClass="text-micro font-medium text-ink-800"
+			return <Dot size={DOT_SIZE.experiment} className={cn(sw?.bar ?? "bg-plum-400", st?.tone === "failing" && "!ring-brick-500")} ringClass={sw?.ring} label={e ? humanId(e.id) : n.ref} labelClass="text-micro font-medium text-ink-900"
 				sub={st ? `${st.text} · ${vs.length} setup${vs.length === 1 ? "" : "s"}` : undefined} mark={mark} />;
 		}
 		if (n.kind === "version") {
@@ -391,9 +391,9 @@ function MapCanvas({ app, exps, proposals, workflows, groups, rows, marks, selec
 			const cls = !sw ? (VERSION_DOT[vtag] ?? "bg-ink-500")
 				: vtag === "not run yet" ? cn("bg-card border border-dashed", sw.dash)
 					: cn(sw.bar, VERSION_SHADE[vtag] ?? "opacity-60");
-			return <Dot size={6} className={cls} ringClass={sw?.ring} orb={vtag !== "not run yet"} label={v?.label ?? n.ref} labelClass="text-micro text-ink-700" sub={tag} mark={mark} />;
+			return <Dot size={DOT_SIZE.version} className={cls} ringClass={sw?.ring} orb={vtag !== "not run yet"} label={v?.label ?? n.ref} labelClass="text-micro text-ink-800" sub={tag} mark={mark} />;
 		}
-		return <Dot size={8} orb={false} className="bg-card border border-dashed border-gold-500" label={`Suggested: ${humanId(n.ref)}`} labelClass="text-micro text-gold-700" mark={mark} />;
+		return <Dot size={DOT_SIZE.suggested} orb={false} className="bg-card border border-dashed border-gold-600" label={`Suggested: ${humanId(n.ref)}`} labelClass="text-micro font-medium text-gold-700" mark={mark} />;
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [app, running, mainCount, expById, versionOf, wfById, rows, tree, branchOf, childCount, marks, groupById]);
 	// One stage size for every app, set by the screen alone (window height less
@@ -414,7 +414,7 @@ function MapCanvas({ app, exps, proposals, workflows, groups, rows, marks, selec
 		<div>
 			<Space3D nodes={tree.nodes} edges={tree.edges} renderCard={renderCard} renderDot={renderDot} describe={describe} edgeClass={edgeClass}
 				// Workflows carry an overview panel: hovering lights it up, no card swap.
-				hoverCard={(n) => n.kind !== "workflow"}
+				hoverCard={() => false}
 				selected={selected} lit={lit} grow={grow} order={order} height={height} evidence={evidence} insetBottom={insetBottom} insetRight={insetRight}
 				onSelect={onSelect} />
 		</div>

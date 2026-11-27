@@ -139,8 +139,15 @@ check("proposal check in words", () => {
 });
 
 check("app pages always lead with the home", () => {
-	eq(appPages([{ surface: "strategies", label: "Strategies" }, { surface: "data", label: "Data" }]).map((t) => t.label), ["Graph", "Strategies", "Data"]);
-	eq(appPages([{ surface: "home", label: "Work" }, { surface: "workflows" }]).map((t) => t.label), ["Work", "workflows"]);
+	// Research is always the first tab; an app's own home is an ordinary tab after it.
+	eq(appPages([{ surface: "strategies", label: "Strategies" }, { surface: "data", label: "Data" }]).map((t) => t.label), ["Research", "Strategies", "Data"]);
+	eq(appPages([{ surface: "home", label: "Work" }, { surface: "workflows" }]).map((t) => t.label), ["Research", "Work", "workflows"]);
+	eq(appPages([{ surface: "home" }]).map((t) => `${t.label}:${t.home}`), ["Research:true", "Overview:false"]);
+	eq(appPages([], true).map((t) => t.surface), ["research", "home"]);
+	eq(appPages([], false).map((t) => t.surface), ["research"]);
+	eq(appPages([{ surface: "data", label: "Data" }], true).map((t) => t.label), ["Research", "Data"]);
+	eq(appPages([{ surface: "home", label: "Work" }], true).map((t) => t.label), ["Research", "Work"]);
+	eq(pageHref("m", appPages([], true)[1], true), "/studio/apps/m?surface=home");
 	eq(pageHref("quant-research", appPages([])[0], true), "/studio/apps/quant-research");
 	eq(pageHref("q", { surface: "data", label: "Data", home: false }, true), "/studio/apps/q?surface=data");
 });

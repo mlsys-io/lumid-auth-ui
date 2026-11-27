@@ -212,8 +212,10 @@ function AppSurfaceImpl({
     // One source for the tab row on every page of the app: the installed
     // app's nav (`pages`, from the workspace), else this surface's own copy.
     const n = pages && pages.length ? pages : nav;
-    if (hideNav || !n || n.length === 0) return null;
-    return <AppPageTabs app={app} nav={n} current={surface || "home"} embedded={!!embedded} className="min-w-0 flex-shrink-0" />;
+    // Always shown (even with no nav): its Research tab is the way back to the
+    // research space, and this page is the app's "Overview" tab.
+    if (hideNav) return null;
+    return <AppPageTabs app={app} nav={n} hasSurface current={surface || "home"} embedded={!!embedded} className="min-w-0 flex-shrink-0" />;
   };
 
   // Slim chrome row: nav tabs left (when the app declares `ui.nav`), a single
