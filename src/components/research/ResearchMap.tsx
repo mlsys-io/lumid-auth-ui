@@ -13,7 +13,7 @@
 
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowRight, FlaskConical, MessagesSquare, Plus, Sparkles, X } from "lucide-react";
+import { ArrowRight, ChevronDown, FlaskConical, MessagesSquare, Plus, Sparkles, X } from "lucide-react";
 import { openNewWorkflow, useNewWorkflowParam, useNewWorkflowRequests } from "@/components/research/new-workflow";
 import apiClient from "@/api/client";
 import { me, type MeExperiment, type MeExperimentDetail } from "@/api/me";
@@ -25,6 +25,7 @@ import ApprovalCard, { readNotNow, writeNotNow } from "@/components/research/App
 import ResearchDashboard from "@/components/research/ResearchDashboard";
 import { bestResult } from "@/lib/research-dashboard";
 import ResearchTable from "@/components/research/ResearchTable";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { compareHref } from "@/lib/run-routes";
 import { Segmented } from "@/components/ui/segmented";
 import { useWorkflowColors, type WfSwatch } from "@/hooks/useWorkflowColors";
@@ -203,7 +204,7 @@ const VERSION_DOT: Record<string, string> = {
 
 function Dot({ size, className, label, labelClass, sub, subClass, rings, orb = true, panel, ringClass, panelClass, mark, ping }: { size: number; className: string; label: string; labelClass: string; sub?: string; subClass?: string; rings?: boolean | "live";
 	/** A new winner since the last visit: rings out three times, then rests. */
-	ping?: boolean;
+	ping?: boolean | "running";
 	/** A/B, when this node is a side of the panel's comparison. */
 	mark?: "A" | "B";
 	/** Shade it as a small lit sphere (off for hollow dots). */
@@ -226,7 +227,11 @@ function Dot({ size, className, label, labelClass, sub, subClass, rings, orb = t
 					</>}
 				</>
 			)}
-			{ping && <span aria-hidden className="absolute rounded-full border-2 border-gold-500 space3d-ping [animation-iteration-count:3]" style={{ width: size + 12, height: size + 12 }} />}
+			{ping === "running" ? <>
+				{/* Running: a lagoon ring that radiates for as long as it runs. */}
+				<span aria-hidden className="absolute rounded-full border-2 border-lagoon-500" style={{ width: size + 8, height: size + 8 }} />
+				<span aria-hidden className="absolute rounded-full border-2 border-lagoon-400 space3d-ping" style={{ width: size + 8, height: size + 8 }} />
+			</> : ping && <span aria-hidden className="absolute rounded-full border-2 border-gold-500 space3d-ping [animation-iteration-count:3]" style={{ width: size + 12, height: size + 12 }} />}
 			<span className={cn("rounded-full ring-[3px] ring-plum-200/60", ringClass, orb && "space3d-orb", className)} style={{ width: size, height: size }} />
 			{mark && <span aria-label={`Compared as ${mark}`} className={cn("absolute -left-2 -top-2 z-10 rounded px-1 text-nano font-semibold leading-tight text-white", mark === "A" ? "bg-ink-800" : "bg-plum-700")}>{mark}</span>}
 			{panel ? (
@@ -267,7 +272,8 @@ function MapCanvas({ fresh, app, exps, proposals, workflows, groups, rows, marks
 	// The graph (2026-11-25): app → workflows → experiments (setups) /
 	// variants / child nodes. Helpers fold into the workflow they serve.
 	const tree = useMemo(() => buildResearchTree(app, exps, proposals, workflows, groups), [app, exps, proposals, workflows, groups]);
-	const lit = useMemo(() => (selected ? pathTo(tree.nodes, selected) : null), [tree, selected]);
+	// The root selected opens its panel without dimming the whole space.
+	const lit = useMemo(() => (selected && !selected.startsWith("app:") ? pathTo(tree.nodes, selected) : null), [tree, selected]);
 	const expById = useMemo(() => new Map(exps.map((e) => [e.id, e])), [exps]);
 	const propById = useMemo(() => new Map(proposals.map((p) => [p.id, p])), [proposals]);
 	const wfById = useMemo(() => new Map(workflows.map((w) => [w.id, w])), [workflows]);
@@ -367,8 +373,8 @@ function MapCanvas({ fresh, app, exps, proposals, workflows, groups, rows, marks
 			const sw = branchOf.get(n.id);
 			// The branch's hue always; status is a brick ring (failing) or a breath
 			// (running) on top of it, and said in words in the panel.
-			return <Dot size={w?.parent ? DOT_SIZE.variant : DOT_SIZE.workflow} className={cn(sw?.bar ?? "bg-plum-500", st.tone === "failing" && "!ring-brick-500", st.tone === "running" && "animate-lumen-breathe")} label={w ? wfLabel(w) : n.ref} labelClass="text-caption font-medium text-ink-900" panel={panel}
-				ringClass={sw?.ring} panelClass={sw ? cn("border-l-[3px]", sw.border) : undefined} mark={mark} />;
+			return <Dot size={w?.parent ? DOT_SIZE.variant : DOT_SIZE.workflow} className={cn(sw?.bar ?? "bg-plum-500", st.tone === "failing" && "!ring-brick-500")} label={w ? wfLabel(w) : n.ref} labelClass="text-caption font-medium text-ink-900" panel={panel}
+				ringClass={sw?.ring} panelClass={sw ? cn("border-l-[3px]", sw.border, st.tone === "running" && "!border-lagoon-400") : undefined} mark={mark} ping={st.tone === "running" ? "running" : undefined} />;
 		}
 		if (n.kind === "node") {
 			const k = childCount(n.id);
@@ -460,7 +466,9 @@ function Wrap({ panel, children }: { panel: boolean; children: React.ReactNode }
 	);
 }
 
-function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare }: {
+function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, onPickVersion, pickedVersion }: {
+	/** A version card was clicked: select it (graph + panel). */
+	onPickVersion?: (arm: string) => void; pickedVersion?: string | null;
 	app: string; e: MeExperiment;
 	/** Set when a setup (version) is selected: pick another to compare it with. */
 	onCompare?: () => void;
@@ -565,7 +573,7 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare }: 
 	// The versions in the order they were tried, each with its state — unless
 	// the spark rows above already name each one.
 	const chain = spark ? null : evolution ? (
-		<VersionChain chain={evolution.chain} labelOf={labelOf} valueOf={(v) => fmtMetricValue(v, m?.unit ?? "", metric || "")} />
+		<VersionChain chain={evolution.chain} labelOf={labelOf} valueOf={(v) => fmtMetricValue(v, m?.unit ?? "", metric || "")} onPick={onPickVersion} picked={pickedVersion} />
 	) : (
 		<ul className="space-y-1">
 			{versions.map((v) => (
@@ -693,12 +701,13 @@ export default function ResearchMap({ app }: { app: string }) {
 	// dashboard's effect records today's. A changed leader rings once.
 	const [seenLeaders] = useState<Record<string, string> | null>(() => { try { return JSON.parse(localStorage.getItem(`research-leaders-seen:${app}`) || "null"); } catch { return null; } });
 	// New workflow: the header button, the empty state, the sidebar and ?new=1.
-	const [newOpen, setNewOpen] = useState(false);
-	useNewWorkflowRequests(app, () => setNewOpen(true));
-	useNewWorkflowParam(app, () => setNewOpen(true));
+	// false = closed; otherwise the sheet's first step.
+	const [newOpen, setNewOpen] = useState<false | "choose" | "steps" | "chain">(false);
+	useNewWorkflowRequests(app, () => setNewOpen("choose"));
+	useNewWorkflowParam(app, () => setNewOpen("choose"));
 	const newSheet = newOpen && graph && (
 		<Suspense fallback={null}>
-			<WorkflowSheet app={app} spec={graph.spec} save={save} onClose={() => setNewOpen(false)} onCreated={(id) => { setNewOpen(false); setSelected(`wf:${id}`); }} />
+			<WorkflowSheet app={app} spec={graph.spec} save={save} start={newOpen} onClose={() => setNewOpen(false)} onCreated={(id) => { setNewOpen(false); setSelected(`wf:${id}`); }} />
 		</Suspense>
 	);
 	const [view, setView] = useState<PanelView>("overview");
@@ -800,10 +809,13 @@ export default function ResearchMap({ app }: { app: string }) {
 	// Clicking a workflow, node, experiment or version opens its panel OVER the
 	// map, at the right edge; the camera frames the path in the space left.
 	const selProposalIdx = selKind === "sug" ? pending.findIndex((p) => `sug:${p.id}` === selected) : -1;
-	const panelOpen = !!(selWf || selNode || selExp || selProposalIdx >= 0);
+	const panelOpen = !!(selWf || selNode || selExp || selProposalIdx >= 0 || selKind === "app");
 	// An idea's card needs a little more width for its three answers.
-	const sidePx = selProposalIdx >= 0 ? Math.max(panelPx, 416) : panelPx;
-	const panelStyle = { bottom: 12 };
+	// The side panel takes a third of the stage (2026-11-27: "the experiment
+	// panel can take 1/3 of the graph space"), between 352 and 600 px; the graph
+	// frames itself in the rest.
+	const sidePx = stage.width ? Math.max(PANEL_PX, Math.min(600, Math.round(stage.width / 3))) : selProposalIdx >= 0 ? Math.max(panelPx, 416) : panelPx;
+	const panelStyle = { bottom: 12, width: sidePx, maxWidth: "calc(100% - 1.5rem)" };
 	const panel = selWf && graph ? (
 		<WorkflowPanel key={selWf.id} app={app} wf={selWf} spec={graph.spec} row={rows.get(selWf.id)} exps={exps}
 			view={view} onView={setView} compareWith={sideOf(compareB)} onPickCompare={() => setPicking(true)}
@@ -825,7 +837,50 @@ export default function ResearchMap({ app }: { app: string }) {
 		</div>
 	) : selExp ? (
 		<ExperimentDetail key={selExp.id} app={app} e={selExp} panel onClose={close} style={panelStyle}
-			onCompare={selVersionSide ? () => setPicking(true) : undefined} />
+			onCompare={selVersionSide ? () => setPicking(true) : undefined}
+			onPickVersion={(arm) => onSelect(`ver:${selExp.id}:${arm}`)} pickedVersion={selKind === "ver" ? selected!.split(":")[2] : null} />
+	) : selKind === "app" && graph ? (
+		// The root: what this app holds, and how to make something new in it
+		// (2026-11-27: "from the root node, how to create a new workflow?").
+		<div role="dialog" aria-label={`${appTitle(app)}: make something new`} style={panelStyle}
+			className="absolute right-3 top-3 z-[6100] flex flex-col overflow-hidden rounded-xl border border-ink-200 bg-card shadow-e3 map-panel-in">
+			<div className="space-y-1 border-b border-ink-100 px-3.5 pb-2.5 pt-3">
+				<div className="flex items-center gap-2">
+					<span className="eyebrow text-plum-700">App</span>
+					<button type="button" onClick={close} aria-label="Close" className="ml-auto inline-flex h-6 w-6 items-center justify-center rounded-md text-ink-600 hover:bg-ink-100"><X className="h-3.5 w-3.5" /></button>
+				</div>
+				<div className="text-title font-semibold text-ink-900">{appTitle(app)}</div>
+				<div className="text-caption text-ink-700">{mapSummary(exps, pending, workflows)}</div>
+			</div>
+			<div className="scrollbar-hide min-h-0 flex-1 space-y-4 overflow-y-auto px-3.5 py-3">
+				<section className="space-y-1.5">
+					<h3 className="eyebrow">Make a new workflow</h3>
+					<button type="button" onClick={() => setNewOpen("steps")} className="block w-full rounded-lg border border-ink-200 px-3 py-2 text-left hover:border-plum-300 hover:bg-plum-50">
+						<div className="text-caption font-medium text-ink-900">Write a new one</div>
+						<div className="text-micro text-ink-600">Its steps, data, compute and how it's measured</div>
+					</button>
+					<button type="button" onClick={() => setNewOpen("chain")} className="block w-full rounded-lg border border-ink-200 px-3 py-2 text-left hover:border-plum-300 hover:bg-plum-50">
+						<div className="text-caption font-medium text-ink-900">Chain workflows you have</div>
+						<div className="text-micro text-ink-600">Run them in order; each gets the one before's results</div>
+					</button>
+				</section>
+				{workflows.filter((w) => !w.helper).length > 0 && (
+					<section className="space-y-1">
+						<h3 className="eyebrow">Or start from one you have</h3>
+						<p className="text-micro text-ink-600">A copy you change — steps, data, compute or feedback. It keeps a link to where it came from.</p>
+						{workflows.filter((w) => !w.helper).map((w) => (
+							<div key={w.id} className="flex items-center gap-2 rounded-md px-1 py-1 text-caption hover:bg-ink-50">
+								<span className="h-2 w-2 flex-shrink-0 rounded-full bg-plum-500" />
+								<span className="min-w-0 flex-1 truncate text-ink-900">{wfLabel(w)}</span>
+								<button type="button" onClick={() => setVariantFor(w)} disabled={!graph.editable} className="flex-shrink-0 rounded-md border border-ink-200 px-1.5 py-0.5 text-micro text-ink-800 hover:border-plum-300 disabled:opacity-50">New variant</button>
+								<button type="button" onClick={() => setSetupsFor(w)} className="flex-shrink-0 rounded-md border border-ink-200 px-1.5 py-0.5 text-micro text-ink-800 hover:border-plum-300">New experiment</button>
+							</div>
+						))}
+					</section>
+				)}
+				<p className="text-micro text-ink-600">Nothing you make here runs until you press Run.</p>
+			</div>
+		</div>
 	) : selProposalIdx >= 0 ? (
 		// An idea to try opens here, in the panel — no longer docked over the
 		// foot of the graph, where it covered half the space (2026-11-27).
@@ -886,10 +941,28 @@ export default function ResearchMap({ app }: { app: string }) {
 					className="hidden flex-shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5 text-micro text-ink-700 hover:bg-ink-100 hover:text-ink-900 lg:inline-flex">
 					<MessagesSquare className="h-3 w-3" />What should I run next?
 				</button>
-				<button type="button" onClick={() => openNewWorkflow(app)} data-new-workflow title="Create a workflow — it runs only when you press Run"
-					className="inline-flex flex-shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5 text-micro text-ink-700 hover:bg-ink-100 hover:text-ink-900">
-					<Plus className="h-3 w-3" />New workflow
-				</button>
+				{/* Making something is a verb you can see (2026-11-27: "there is no way to
+				    spawn a new workflow/experiment"; "I still don't see how to set up a
+				    workflow"). Nothing made here runs until you press Run. */}
+				<DropdownMenu>
+					<DropdownMenuTrigger asChild>
+						<button type="button" data-new-workflow
+							className="inline-flex h-7 flex-shrink-0 items-center gap-1 whitespace-nowrap rounded-lg bg-ink-900 px-2.5 text-caption font-medium text-white hover:bg-ink-800">
+							<Plus className="h-3.5 w-3.5" />New<ChevronDown className="h-3 w-3 opacity-70" />
+						</button>
+					</DropdownMenuTrigger>
+					<DropdownMenuContent align="start" className="w-72">
+						<DropdownMenuItem onSelect={() => openNewWorkflow(app)} className="flex-col items-start gap-0">
+							<span className="font-medium">Workflow…</span>
+							<span className="text-micro text-ink-600">Its steps, data, compute and how it's measured — or chain workflows you have</span>
+						</DropdownMenuItem>
+						{workflows.filter((w) => !w.helper).length > 0 && <DropdownMenuSeparator />}
+						{workflows.filter((w) => !w.helper).length > 0 && <DropdownMenuLabel className="text-micro font-normal text-ink-600">Experiment on a workflow — try values of one input</DropdownMenuLabel>}
+						{workflows.filter((w) => !w.helper).map((w) => (
+							<DropdownMenuItem key={w.id} onSelect={() => graph && setSetupsFor(w)}>Experiment on {wfLabel(w)}…</DropdownMenuItem>
+						))}
+					</DropdownMenuContent>
+				</DropdownMenu>
 				<span className="ml-auto min-w-0 truncate whitespace-nowrap font-mono text-nano uppercase tracking-wider text-ink-600">{mapSummary(exps, pending, workflows)}</span>
 				<span className="hidden whitespace-nowrap font-mono text-nano text-ink-600 md:inline" title="When this was read">· {updated}</span>
 				<Suspense fallback={null}><NeedsFixingMenu app={app} /></Suspense>

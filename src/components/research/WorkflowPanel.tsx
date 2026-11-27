@@ -196,9 +196,25 @@ export default function WorkflowPanel({ app, wf, spec, row, exps, view, onView, 
 	const ownExps = exps.filter((e) => (e.dispatch?.loop || e.loops?.[0]) === wf.id);
 	const toneCls = status.tone === "ok" ? "text-gold-700" : status.tone === "failing" ? "text-brick-700" : "text-ink-600";
 	const sub = (
-		<div className={cn("flex items-center gap-1.5 text-caption font-medium", running ? "text-lagoon-700" : toneCls)}>
-			<span className={cn("h-1.5 w-1.5 rounded-full", running ? "bg-lagoon-500 animate-lumen-breathe" : status.tone === "ok" ? "bg-gold-500" : status.tone === "failing" ? "bg-brick-500" : "bg-ink-400")} />
-			{running ? "Running now" : status.text}
+		<div className="space-y-2">
+			<div className={cn("flex items-center gap-1.5 text-caption font-medium", running ? "text-lagoon-700" : toneCls)}>
+				<span className={cn("h-1.5 w-1.5 rounded-full", running ? "bg-lagoon-500 animate-lumen-breathe" : status.tone === "ok" ? "bg-gold-500" : status.tone === "failing" ? "bg-brick-500" : "bg-ink-400")} />
+				{running ? "Running now" : status.text}
+			</div>
+			{/* The verbs, in plain sight: run it, try values of one input (a new
+			    experiment), or make a changed copy (a new variant). Nothing new runs
+			    until you press Run. */}
+			<div className="flex flex-wrap items-center gap-1.5">
+				<Button size="sm" variant="accent" onClick={runNow} disabled={busy || running} aria-label={`Run ${wfLabel(wf)}`} title="Starts one run now">
+					<Play className="h-3.5 w-3.5" />{running ? "Running…" : "Run"}
+				</Button>
+				<Button size="sm" variant="secondary" onClick={onTrySetups} title="Try values of one input — one version per value, compared on a metric">
+					<Plus className="h-3.5 w-3.5" />New experiment
+				</Button>
+				<Button size="sm" variant="secondary" onClick={onMakeVariant} disabled={!editable} title={editable ? "A workflow made from this one: changed steps, data, compute or feedback" : "Install your own copy to change it"}>
+					<GitBranch className="h-3.5 w-3.5" />New variant
+				</Button>
+			</div>
 		</div>
 	);
 	const askAbout = () => ask(`How is ${wfLabel(wf)} in ${appTitle(app)} doing, and what should it try next? Look at its recent runs and their metrics first; cite run ids. Suggest the next runs, but start nothing.`, { app, workflow: wf.id });
@@ -208,9 +224,6 @@ export default function WorkflowPanel({ app, wf, spec, row, exps, view, onView, 
 	return (
 		<PanelShell kicker={wf.parent ? "Variant" : "Workflow"} title={wfLabel(wf)} sub={sub} onClose={onClose} label={`Workflow: ${wfLabel(wf)}`} style={style} page={page}
 			actions={<>
-				<Button size="sm" variant="accent" onClick={runNow} disabled={busy || running} aria-label={`Run ${wfLabel(wf)}`} title="Starts one run now">
-					<Play className="h-3.5 w-3.5" />{running ? "Running…" : "Run"}
-				</Button>
 				<button type="button" onClick={askAbout} aria-label="Ask about it" title="Ask the chat how it's doing and what to try next"
 					className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-700 hover:bg-ink-100 hover:text-ink-900">
 					<MessagesSquare className="h-4 w-4" />
@@ -262,12 +275,6 @@ function MoreMenu({ app, wf, row, editable, onTrySetups, onMakeVariant }: { app:
 				className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-700 hover:bg-ink-100 hover:text-ink-900">⋯</button>
 			{open && (
 				<div role="menu" className="absolute right-0 top-full z-10 mt-1 w-56 rounded-lg border border-ink-200 bg-popover p-1 shadow-e2">
-					<button type="button" role="menuitem" className={item} onClick={() => { setOpen(false); onTrySetups(); }}>
-						<Scale className="h-3.5 w-3.5 text-ink-600" />Try setups<span className="ml-auto text-micro text-ink-600">one run per value</span>
-					</button>
-					<button type="button" role="menuitem" className={item} disabled={!editable} title={editable ? undefined : "Install your own copy to change it"} onClick={() => { setOpen(false); onMakeVariant(); }}>
-						<GitBranch className="h-3.5 w-3.5 text-ink-600" />Make a variant
-					</button>
 					<Link role="menuitem" to={workflowPath(app, wf.id)} className={item} onClick={() => setOpen(false)}>
 						<ArrowRight className="h-3.5 w-3.5 text-ink-600" />Open its page
 					</Link>
