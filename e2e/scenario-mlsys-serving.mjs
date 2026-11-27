@@ -229,6 +229,37 @@ await step('3 tune: a run through the chat', async () => {
 	assert(RUN_ID.test(reply), 'the chat names the run it started');
 });
 
+await step('3 tune: a repeated setup is measured once', async () => {
+	// The simulator is seeded and pinned, so lum.id /me/measure answers an identical
+	// setup from the stored measurement. Ask for one setup twice (dispatched by the
+	// scenario itself, not the page): the first may run, the second must be reused.
+	const args = { overrides: 'serving.max_concurrency=16', seed: '11' };
+	const newestRun = async () => ((await api('GET', `/cycles?app=${APP}&loop=${TUNED}&limit=5`)).data?.cycles || [])
+		.filter((c) => !c.running).sort((x, y) => (x.ts < y.ts ? 1 : -1))[0];
+	let last = (await newestRun())?.ts;
+	for (const attempt of [1, 2]) {
+		await api('POST', `/agents/${APP}/workflows/${TUNED}/run`, { args });
+		const started = Date.now();
+		let fresh;
+		while (Date.now() - started < 8 * 60000) {
+			await page.waitForTimeout(10000);
+			fresh = await newestRun();
+			if (fresh && fresh.ts !== last) break;
+		}
+		assert(fresh && fresh.ts !== last, `run ${attempt} of the repeated setup finished`);
+		last = fresh?.ts;
+		if (attempt === 2) {
+			assert(fresh?.reused === true, `the repeat was answered from the stored measurement (${fresh?.measured_on || 'no measured_on'})`);
+			await openApp();
+			await openWorkflow(label(TUNED));
+			await panel().getByRole('radio', { name: 'Runs' }).or(panel().getByText('Runs', { exact: true })).first().click();
+			const tag = panel().getByText('reused', { exact: true }).first();
+			assert(await tag.waitFor({ timeout: 20000 }).then(() => true).catch(() => false), 'the Runs list marks it reused');
+			await page.screenshot({ path: path.join(OUT, '3-reused.png') });
+		}
+	}
+});
+
 // ── 4. analyse an unexpected result ───────────────────────────────────────
 await step('4 analyse: A/B through the UI', async () => {
 	await openApp();
