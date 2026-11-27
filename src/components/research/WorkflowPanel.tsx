@@ -3,16 +3,19 @@
 // happens here, so the app needs no other tabs (user, 2026-11-25: "some
 // functions can be embedded into the graph UIUX, including the pop up panel"):
 //
-//   Overview  how is it doing — status, feedback metrics vs target, insights,
-//             what it's made of (steps, data, compute) — and the verbs:
-//             Run · Try setups · Make a variant · Compare with… · Ask about it
+//   header    name · one status line · Run · Ask · ⋯ (Try setups, Make a
+//             variant, Open its page, Pause, Delete)
+//   Summary   five lines — asks · found · measured on · cost · built from —
+//             then its last runs as dots and what's under it
 //   Runs      its runs, live first; a row opens its answer in place
-//   Compare   A (this) against B (picked on the graph), per metric, in words
-//   Feedback  its feedback steps and metrics, editable
+//   Setup     what it's made of, and its feedback (editable)
+//   (Compare  A against B, only while a B is picked on the graph)
 //
+// Round 9 (2026-11-27, "the pop up panel needs scrubbing and simplification"):
+// empty rows are hidden, never "—"; the five-button footer became the header.
 // Every run starts from a button press here (manual dispatch, for this stage).
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, GitBranch, MessagesSquare, Play, Plus, Scale, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
@@ -103,8 +106,10 @@ function useLatestMetrics(app: string, loop: string, cycles: MeCycleListItem[] |
 
 // ── shell ─────────────────────────────────────────────────────────────────
 
-function PanelShell({ kicker, title, sub, onClose, children, foot, label, style, page = false }: {
+function PanelShell({ kicker, title, sub, onClose, children, foot, actions, label, style, page = false }: {
 	kicker: string; title: string; sub?: React.ReactNode; onClose: () => void; children: React.ReactNode; foot?: React.ReactNode; label: string; style?: React.CSSProperties;
+	/** The panel's verbs, beside its title (Run · Ask · ⋯). */
+	actions?: React.ReactNode;
 	/** The workflow's own page: the same panel, full width, in the flow. */
 	page?: boolean;
 }) {
@@ -129,7 +134,10 @@ function PanelShell({ kicker, title, sub, onClose, children, foot, label, style,
 						</button>
 					)}
 				</div>
-				<div className="text-title font-semibold leading-snug text-ink-900">{title}</div>
+				<div className="flex items-start gap-2">
+					<div className="min-w-0 flex-1 text-title font-semibold leading-snug text-ink-900">{title}</div>
+					{actions && <div className="flex flex-shrink-0 items-center gap-1">{actions}</div>}
+				</div>
 				{sub}
 			</div>
 			{children}
@@ -185,44 +193,35 @@ export default function WorkflowPanel({ app, wf, spec, row, exps, view, onView, 
 	const ownExps = exps.filter((e) => (e.dispatch?.loop || e.loops?.[0]) === wf.id);
 	const toneCls = status.tone === "ok" ? "text-gold-700" : status.tone === "failing" ? "text-brick-700" : "text-ink-600";
 	const sub = (
-		<div className="space-y-0.5">
-			{wf.about && <div className="line-clamp-2 text-caption text-ink-700" title={wf.about}>{wf.about}</div>}
-			<div className={cn("flex items-center gap-1.5 text-caption font-medium", running ? "text-lagoon-700" : toneCls)}>
-				<span className={cn("h-1.5 w-1.5 rounded-full", running ? "bg-lagoon-500 animate-lumen-breathe" : status.tone === "ok" ? "bg-gold-500" : status.tone === "failing" ? "bg-brick-500" : "bg-ink-400")} />
-				{running ? "Running now" : status.text}
-			</div>
-			{wf.parent && (
-				<button type="button" onClick={() => onSelect(`wf:${wf.parent}`)} className="text-micro text-ink-600 hover:text-ink-900 hover:underline">
-					Variant of {wfLabel(spec.workflows.find((w) => w.id === wf.parent) ?? ({ id: wf.parent } as SpecWorkflow))}
-				</button>
-			)}
+		<div className={cn("flex items-center gap-1.5 text-caption font-medium", running ? "text-lagoon-700" : toneCls)}>
+			<span className={cn("h-1.5 w-1.5 rounded-full", running ? "bg-lagoon-500 animate-lumen-breathe" : status.tone === "ok" ? "bg-gold-500" : status.tone === "failing" ? "bg-brick-500" : "bg-ink-400")} />
+			{running ? "Running now" : status.text}
 		</div>
 	);
+	const askAbout = () => ask(`How is ${wfLabel(wf)} in ${appTitle(app)} doing, and what should it try next? Look at its recent runs and their metrics first; cite run ids. Suggest the next runs, but start nothing.`, { app, workflow: wf.id });
+	// Compare is a tab only while a B is picked (⇧-click on the graph).
+	const tabs = [{ value: "overview", label: "Summary" }, { value: "runs", label: "Runs" }, { value: "feedback", label: "Setup" }];
+	if (view === "compare" || compareWith) tabs.push({ value: "compare", label: "Compare" });
 	return (
 		<PanelShell kicker={wf.parent ? "Variant" : "Workflow"} title={wfLabel(wf)} sub={sub} onClose={onClose} label={`Workflow: ${wfLabel(wf)}`} style={style} page={page}
-			foot={<>
-				<Button size="sm" variant="accent" onClick={runNow} disabled={busy || running} aria-label={`Run ${wfLabel(wf)}`}>
+			actions={<>
+				<Button size="sm" variant="accent" onClick={runNow} disabled={busy || running} aria-label={`Run ${wfLabel(wf)}`} title="Starts one run now">
 					<Play className="h-3.5 w-3.5" />{running ? "Running…" : "Run"}
 				</Button>
-				<Button size="sm" variant="secondary" onClick={onTrySetups}>Try setups</Button>
-				<Button size="sm" variant="secondary" onClick={onMakeVariant} disabled={!editable} title={editable ? "A workflow made from this one" : "Install your own copy to change it"}>
-					<GitBranch className="h-3.5 w-3.5" />Make a variant
-				</Button>
-				<MoreMenu app={app} wf={wf} row={row} editable={editable} />
-				<button type="button" onClick={() => ask(`How is ${wfLabel(wf)} in ${appTitle(app)} doing, and what should it try next? Look at its recent runs and their metrics first; cite run ids. Suggest the next runs, but start nothing.`, { app, workflow: wf.id })}
-					className="ml-auto inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-caption text-ink-700 hover:bg-ink-100 hover:text-ink-900">
-					<MessagesSquare className="h-3.5 w-3.5" />Ask about it
+				<button type="button" onClick={askAbout} aria-label="Ask about it" title="Ask the chat how it's doing and what to try next"
+					className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-700 hover:bg-ink-100 hover:text-ink-900">
+					<MessagesSquare className="h-4 w-4" />
 				</button>
+				<MoreMenu app={app} wf={wf} row={row} editable={editable} onTrySetups={onTrySetups} onMakeVariant={onMakeVariant} />
 			</>}>
 			<div className="border-b border-ink-100 px-3 py-1.5">
-				<Segmented size="sm" aria-label="Panel view" value={view} onChange={(v) => onView(v as PanelView)}
-					options={[{ value: "overview", label: "Overview" }, { value: "runs", label: "Runs" }, { value: "compare", label: "Compare" }, { value: "feedback", label: "Feedback" }]} />
+				<Segmented size="sm" aria-label="Panel view" value={view === "compare" && !tabs.some((t) => t.value === "compare") ? "overview" : view} onChange={(v) => onView(v as PanelView)} options={tabs} />
 			</div>
 			<div className={cn("min-h-0 flex-1 overflow-y-auto overscroll-contain px-3.5 py-3", page && "md:px-5 md:py-4")}>
-				{view === "overview" && <OverviewView app={app} wf={wf} spec={spec} row={row} cycles={cycles} variants={variants} helpers={helpers} exps={ownExps} onSelect={onSelect} />}
+				{view === "overview" && <OverviewView app={app} wf={wf} spec={spec} row={row} cycles={cycles} variants={variants} exps={ownExps} onSelect={onSelect} onView={onView} />}
 				{view === "runs" && <RunsView app={app} wf={wf} cycles={cycles} />}
 				{view === "compare" && <CompareView app={app} a={{ kind: "workflow", id: wf.id, label: wfLabel(wf) }} b={compareWith} wf={wf} spec={spec} onPick={onPickCompare} />}
-				{view === "feedback" && <FeedbackView app={app} wf={wf} cycles={cycles} save={save} editable={editable} />}
+				{view === "feedback" && <SetupView app={app} wf={wf} spec={spec} row={row} cycles={cycles} helpers={helpers} save={save} editable={editable} />}
 			</div>
 		</PanelShell>
 	);
@@ -230,10 +229,16 @@ export default function WorkflowPanel({ app, wf, spec, row, exps, view, onView, 
 
 // ── ⋯ : Pause / Resume (only where a schedule exists) and Delete ──────────
 
-function MoreMenu({ app, wf, row, editable }: { app: string; wf: SpecWorkflow; row?: MeWorkflowRow; editable: boolean }) {
+function MoreMenu({ app, wf, row, editable, onTrySetups, onMakeVariant }: { app: string; wf: SpecWorkflow; row?: MeWorkflowRow; editable: boolean; onTrySetups: () => void; onMakeVariant: () => void }) {
 	const [open, setOpen] = useState(false);
 	const scheduled = wf.run !== "manual";
 	const paused = row?.enabled === false;
+	useEffect(() => {
+		if (!open) return;
+		const close = (ev: MouseEvent) => { if (!(ev.target as HTMLElement)?.closest?.("[data-more-menu]")) setOpen(false); };
+		window.addEventListener("mousedown", close);
+		return () => window.removeEventListener("mousedown", close);
+	}, [open]);
 	const toggle = async () => {
 		setOpen(false);
 		try {
@@ -247,75 +252,105 @@ function MoreMenu({ app, wf, row, editable }: { app: string; wf: SpecWorkflow; r
 		const { deleteWorkflow } = await import("@/lib/delete-workflow");
 		await deleteWorkflow(app, appTitle(app), wf.id, wfLabel(wf));
 	};
-	if (!editable) return null;
+	const item = "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-caption text-ink-800 hover:bg-ink-100 disabled:opacity-50 disabled:hover:bg-transparent";
 	return (
-		<div className="relative">
-			<button type="button" aria-label="More" aria-expanded={open} onClick={() => setOpen((v) => !v)}
-				className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-600 hover:bg-ink-100 hover:text-ink-900">⋯</button>
+		<div className="relative" data-more-menu>
+			<button type="button" aria-label="More actions" aria-expanded={open} onClick={() => setOpen((v) => !v)}
+				className="inline-flex h-8 w-8 items-center justify-center rounded-md text-ink-700 hover:bg-ink-100 hover:text-ink-900">⋯</button>
 			{open && (
-				<div role="menu" className="absolute bottom-full left-0 z-10 mb-1 w-48 rounded-lg border border-ink-200 bg-popover p-1 shadow-e2">
-					{scheduled && <button type="button" role="menuitem" onClick={toggle} className="block w-full rounded-md px-2 py-1.5 text-left text-caption text-ink-800 hover:bg-ink-100">{paused ? "Resume its schedule" : "Pause its schedule"}</button>}
-					<button type="button" role="menuitem" onClick={del} className="block w-full rounded-md px-2 py-1.5 text-left text-caption text-brick-700 hover:bg-brick-50">Delete workflow…</button>
+				<div role="menu" className="absolute right-0 top-full z-10 mt-1 w-56 rounded-lg border border-ink-200 bg-popover p-1 shadow-e2">
+					<button type="button" role="menuitem" className={item} onClick={() => { setOpen(false); onTrySetups(); }}>
+						<Scale className="h-3.5 w-3.5 text-ink-600" />Try setups<span className="ml-auto text-micro text-ink-600">one run per value</span>
+					</button>
+					<button type="button" role="menuitem" className={item} disabled={!editable} title={editable ? undefined : "Install your own copy to change it"} onClick={() => { setOpen(false); onMakeVariant(); }}>
+						<GitBranch className="h-3.5 w-3.5 text-ink-600" />Make a variant
+					</button>
+					<Link role="menuitem" to={workflowPath(app, wf.id)} className={item} onClick={() => setOpen(false)}>
+						<ArrowRight className="h-3.5 w-3.5 text-ink-600" />Open its page
+					</Link>
+					{editable && <div className="my-1 border-t border-ink-100" />}
+					{editable && scheduled && <button type="button" role="menuitem" onClick={toggle} className={item}>{paused ? "Resume its schedule" : "Pause its schedule"}</button>}
+					{editable && <button type="button" role="menuitem" onClick={del} className={cn(item, "text-brick-700 hover:bg-brick-50")}><Trash2 className="h-3.5 w-3.5" />Delete workflow…</button>}
 				</div>
 			)}
 		</div>
 	);
 }
 
-// ── Overview ──────────────────────────────────────────────────────────────
+// ── Summary ───────────────────────────────────────────────────────────────
 
 function metricLine(name: string, v: unknown, target?: number, better?: "higher" | "lower") {
 	const val = typeof v === "number" ? v : Number(v);
 	const has = v != null && Number.isFinite(val);
 	const met = has && target != null ? (better === "lower" ? val <= target : val >= target) : null;
-	return { label: mLabel(name), value: has ? mVal(name, val) : "—", target: target != null ? mVal(name, target) : null, met };
+	return { has, label: mLabel(name), value: has ? mVal(name, val) : "", target: target != null ? mVal(name, target) : null, met };
 }
 
-function OverviewView({ app, wf, spec, row, cycles, variants, helpers, exps, onSelect }: {
+/** The declared feedback metrics, or the legacy primary metric. */
+function feedbackSteps(wf: SpecWorkflow): FeedbackStep[] {
+	return wf.feedback.length ? wf.feedback : wf.primary ? [{ step: "result", metrics: [{ name: wf.primary, better: "higher" as const }] }] : [];
+}
+
+/** One dot per run, newest on the right — "a dot is a run". */
+function RunDotsLine({ cycles, onOpen }: { cycles: MeCycleListItem[]; onOpen: () => void }) {
+	const last = cycles.slice(0, 20).reverse();
+	if (!last.length) return null;
+	const failed = last.filter((c) => !c.running && c.ok === false).length;
+	return (
+		<button type="button" onClick={onOpen} className="group block w-full space-y-1 rounded-md text-left" title="Open its runs">
+			<span className="flex items-baseline gap-2 text-caption">
+				<span className="text-ink-600">Last {last.length} run{last.length === 1 ? "" : "s"}{failed ? ` · ${failed} failed` : ""}</span>
+				<span className="ml-auto whitespace-nowrap text-micro text-ink-600 group-hover:text-ink-900">all runs ›</span>
+			</span>
+			<span className="flex items-center gap-[3px]">
+				{last.map((c) => (
+					<span key={c.ts} aria-label={`${fmtAgo(dirIdToSec(c.ts) ?? 0)} — ${c.running ? "running" : c.ok ? "done" : "failed"}`}
+						className={cn("h-2 w-2 flex-shrink-0 rounded-sm", c.running ? "bg-lagoon-500 animate-lumen-breathe" : c.ok ? "bg-gold-500" : "bg-brick-500")} />
+				))}
+			</span>
+		</button>
+	);
+}
+
+function OverviewView({ app, wf, spec, row, cycles, variants, exps, onSelect, onView }: {
 	app: string; wf: SpecWorkflow; spec: AppSpec; row?: MeWorkflowRow; cycles: MeCycleListItem[] | null;
-	variants: SpecWorkflow[]; helpers: SpecWorkflow[]; exps: MeExperiment[]; onSelect: (id: string) => void;
+	variants: SpecWorkflow[]; exps: MeExperiment[]; onSelect: (id: string) => void; onView: (v: PanelView) => void;
 }) {
 	const latest = useLatestMetrics(app, wf.id, cycles);
 	const measured = measuredLine(latest);
-	const steps = wf.feedback.length ? wf.feedback : wf.primary ? [{ step: "result", metrics: [{ name: wf.primary, better: "higher" as const }] }] : [];
-	const compute = { ...spec.compute, ...wf.compute };
+	const found = feedbackSteps(wf).flatMap((st) => st.metrics.map((m) => ({ m, l: metricLine(m.name, latest?.[m.name], m.target, m.better) }))).filter((x) => x.l.has);
+	const parent = wf.parent ? spec.workflows.find((w) => w.id === wf.parent) : undefined;
+	const cost = row?.cost_cents_mtd ? `$${(row.cost_cents_mtd / 100).toFixed(2)} this month` : null;
+	// Sakana-style five lines; a line with nothing to say is left out.
+	const lines: Array<[string, React.ReactNode]> = [];
+	if (wf.about) lines.push(["Asks", <span className="line-clamp-3" title={wf.about}>{wf.about}</span>]);
+	lines.push(["Found", found.length ? (
+		<span className="space-y-0.5">
+			{found.slice(0, 4).map(({ m, l }) => (
+				<span key={m.name} className="flex flex-wrap items-baseline gap-x-1.5">
+					<span className="text-ink-700">{l.label}</span>
+					<span className="font-mono tabular-nums text-ink-900">{l.value}</span>
+					{l.target && <span className={cn("text-micro", l.met === true ? "text-gold-700" : l.met === false ? "text-brick-700" : "text-ink-600")}>{l.met === true ? "meets" : l.met === false ? "misses" : "aim"} {m.better === "lower" ? "≤" : "≥"} {l.target}</span>}
+				</span>
+			))}
+		</span>
+	) : cycles === null ? <span className="text-ink-600">Reading its runs…</span> : cycles.length === 0 ? <span className="text-ink-600">No results yet — press Run to get the first.</span> : <span className="text-ink-600">Its latest run recorded no results.</span>]);
+	if (measured) lines.push(["Measured", <span className={measured.measured ? "text-ink-800" : "text-ember-700"}>{measured.text.replace(/^Measured on:?\s*/i, "")}</span>]);
+	if (cost) lines.push(["Cost", cost]);
+	if (parent) lines.push(["Built from", <button type="button" onClick={() => onSelect(`wf:${parent.id}`)} className="text-left text-ink-900 hover:underline">Variant of {wfLabel(parent)}</button>]);
 	return (
 		<div className="space-y-3.5">
-			<section aria-label="Feedback" className="space-y-1.5">
-				<h3 className="eyebrow">Feedback, latest run</h3>
-				{steps.length === 0 ? (
-					<p className="text-caption text-ink-600">It declares no feedback steps yet — add them under Feedback.</p>
-				) : steps.map((st) => (
-					<div key={st.step} className="rounded-lg border border-ink-100 px-2.5 py-1.5">
-						<div className="flex items-baseline gap-1.5">
-							<span className="text-micro font-medium uppercase tracking-wide text-ink-600">{humanId(st.step)}</span>
-							{"service" in st && st.service && <span className="truncate text-micro text-plum-700" title={measuredBy(st.service) ?? undefined}>by {instrumentName(st.service)}</span>}
-						</div>
-						{st.metrics.map((m) => {
-							const l = metricLine(m.name, latest?.[m.name], m.target, m.better);
-							return (
-								<div key={m.name} className="flex items-baseline gap-2 text-caption">
-									<span className="text-ink-700">{l.label}</span>
-									<span className="ml-auto font-mono tabular-nums text-ink-900">{l.value}</span>
-									{l.target && <span className={cn("text-micro", l.met === true ? "text-gold-700" : l.met === false ? "text-brick-700" : "text-ink-600")}>
-										{l.met === true ? "meets" : l.met === false ? "misses" : "aim"} {m.better === "lower" ? "≤" : "≥"} {l.target}
-									</span>}
-								</div>
-							);
-						})}
-					</div>
-				))}
-				{measured && (
-					<p className={cn("text-caption", measured.measured ? "text-ink-700" : "text-ember-700")}>{measured.text}</p>
-				)}
-			</section>
+			<dl className="grid grid-cols-[5.5rem_1fr] gap-x-2 gap-y-1.5 text-caption">
+				{lines.map(([k, v]) => (<Fragment key={k}><dt className="text-ink-600">{k}</dt><dd className="min-w-0 text-ink-900">{v}</dd></Fragment>))}
+			</dl>
+			{cycles && cycles.length > 0 && <RunDotsLine cycles={cycles} onOpen={() => onView("runs")} />}
 			{(exps.length > 0 || variants.length > 0) && (
 				<section aria-label="Under it" className="space-y-1">
 					<h3 className="eyebrow">Under it</h3>
 					{exps.map((e) => (
 						<button key={e.id} type="button" onClick={() => onSelect(`exp:${e.id}`)} className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-caption hover:bg-ink-50">
-							<span className="h-1.5 w-1.5 rounded-full bg-plum-500" /><span className="text-ink-900">{humanId(e.id)}</span>
-							<span className="ml-auto text-micro text-ink-600">{versionsOf(e).length} setups</span>
+							<span className="h-2 w-2 rounded-full bg-plum-500" /><span className="text-ink-900">{humanId(e.id)}</span>
+							<span className="ml-auto text-micro text-ink-600">{versionsOf(e).length} versions</span>
 						</button>
 					))}
 					{variants.map((v) => (
@@ -327,21 +362,34 @@ function OverviewView({ app, wf, spec, row, cycles, variants, helpers, exps, onS
 				</section>
 			)}
 			{row && <WorkflowInsights slug={row.slug} knownRuns={cycles?.length ?? 0} />}
+		</div>
+	);
+}
+
+// ── Setup: what it's made of + its feedback ───────────────────────────────
+
+function SetupView({ app, wf, spec, row, cycles, helpers, save, editable }: {
+	app: string; wf: SpecWorkflow; spec: AppSpec; row?: MeWorkflowRow; cycles: MeCycleListItem[] | null; helpers: SpecWorkflow[];
+	save: (edit: (t: string) => string, files?: Array<{ path: string; content: string }>) => Promise<unknown>; editable: boolean;
+}) {
+	const compute = { ...spec.compute, ...wf.compute };
+	const rows: Array<[string, React.ReactNode]> = [];
+	const steps = wf.steps.python ? <>Python <code className="font-mono text-micro">commands/{wf.steps.python}.py</code></> : wf.steps.dag ? <>A step graph <code className="font-mono text-micro">{wf.steps.dag}</code></> : wf.steps.skills?.length ? wf.steps.skills.join(" → ") : null;
+	if (steps) rows.push(["Steps", steps]);
+	if (Object.keys(wf.inputs).length) rows.push(["Inputs", <span className="font-mono text-micro text-ink-800">{Object.entries(wf.inputs).map(([k, v]) => `${k}=${String(v) || "…"}`).join(" · ")}</span>]);
+	if (wf.data.length) rows.push(["Data", wf.data.join(", ")]);
+	rows.push(["Compute", compute.site ? `${compute.site}${compute.gpu ? ` · GPU ${compute.gpu}` : ""}` : "the app's default"]);
+	rows.push(["Starts", wf.run === "manual" ? "When you press Run" : `On its own (${row?.trigger || wf.run}) — and when you press Run`]);
+	if (helpers.length) rows.push(["Helpers", helpers.map(wfLabel).join(", ")]);
+	return (
+		<div className="space-y-4">
 			<section aria-label="What it's made of" className="space-y-1">
 				<h3 className="eyebrow">What it&apos;s made of</h3>
-				<dl className="grid grid-cols-[6rem_1fr] gap-x-2 gap-y-1 text-caption">
-					<dt className="text-ink-600">Steps</dt>
-					<dd className="text-ink-900">{wf.steps.python ? <>Python <code className="font-mono text-micro">commands/{wf.steps.python}.py</code></> : wf.steps.dag ? <>A DAG <code className="font-mono text-micro">{wf.steps.dag}</code></> : wf.steps.skills?.length ? wf.steps.skills.join(" → ") : "—"}</dd>
-					{Object.keys(wf.inputs).length > 0 && <><dt className="text-ink-600">Inputs</dt><dd className="font-mono text-micro text-ink-800">{Object.entries(wf.inputs).map(([k, v]) => `${k}=${String(v) || "…"}`).join(" · ")}</dd></>}
-					<dt className="text-ink-600">Data</dt><dd className="text-ink-900">{wf.data.length ? wf.data.join(", ") : "—"}</dd>
-					<dt className="text-ink-600">Compute</dt><dd className="text-ink-900">{compute.site ? `${compute.site}${compute.gpu ? ` · GPU ${compute.gpu}` : ""}` : "the app's default"}</dd>
-					<dt className="text-ink-600">Starts</dt><dd className="text-ink-900">{wf.run === "manual" ? "When you press Run" : `On its own (${row?.trigger || wf.run}) — and when you press Run`}</dd>
-					{helpers.length > 0 && <><dt className="text-ink-600">Helpers</dt><dd className="text-ink-800">{helpers.map(wfLabel).join(", ")}</dd></>}
+				<dl className="grid grid-cols-[5.5rem_1fr] gap-x-2 gap-y-1 text-caption">
+					{rows.map(([k, v]) => (<Fragment key={k}><dt className="text-ink-600">{k}</dt><dd className="min-w-0 text-ink-900">{v}</dd></Fragment>))}
 				</dl>
-				<Link to={workflowPath(app, wf.id)} className="inline-flex items-center gap-1 pt-1 text-micro text-ink-700 hover:text-ink-900 hover:underline">
-					Open its page <ArrowRight className="h-3 w-3" />
-				</Link>
 			</section>
+			<FeedbackView app={app} wf={wf} cycles={cycles} save={save} editable={editable} />
 		</div>
 	);
 }

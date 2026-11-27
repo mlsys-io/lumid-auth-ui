@@ -206,7 +206,9 @@ export function depthCue(scaleNow: number, zoom: number): { near: number; alpha:
 	const base = FOCAL / DISTANCE;
 	const rel = scaleNow / (base * (zoom || 1)); // ~0.65 far … ~1.5 near
 	const near = clamp01((rel - 0.7) / (1.4 - 0.7));
-	return { near, alpha: lerp(0.32, 1, near), size: lerp(0.78, 1.06, near) };
+	// Far nodes stay readable (operator 2026-11-27: "contrast is too low"):
+	// depth fades a node to 72% at most, never to a ghost.
+	return { near, alpha: lerp(0.72, 1, near), size: lerp(0.78, 1.06, near) };
 }
 
 /**

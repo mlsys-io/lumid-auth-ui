@@ -1,20 +1,32 @@
-// The app's pages as one tab row, always starting with its home — the page
-// with the research map. An app's declared `ui.nav` lists its own pages and
-// often leaves the home out (quant-research starts at "Strategies"), so once
-// you opened "Data" nothing led back to the map. If the app names its home
-// itself (surface "home", e.g. mbb's "Work"), that tab is the home.
+// The app's pages as one tab row, always starting with **Research** — the
+// research space (dashboard, then the graph or list). It is the same first tab
+// for every app (operator 2026-11-27: "the consulting app still has lots of
+// content under the research graph — normalize with other apps"), so nothing
+// an app declares can replace it or stack under it.
+//
+// An app's own pages follow, in its declared `ui.nav` order. An app's own home
+// page (surface "home", e.g. mbb-ai's "Overview", or the default page of an app
+// that declares a surface but no nav, like MBB Consultant's `ui/page.yaml`) is
+// an ordinary tab, reached at ?surface=home.
 
 export interface PageTab { surface: string; label: string; home: boolean }
 
-export function appPages(nav?: Array<{ surface: string; label?: string }>): PageTab[] {
-	const named = (nav || []).filter((n) => n.surface);
-	const tabs = named.map((n) => ({ surface: n.surface, label: n.label || n.surface, home: n.surface === "home" }));
-	return tabs.some((t) => t.home) ? tabs : [{ surface: "home", label: "Graph", home: true }, ...tabs];
+/** The Research tab's id (never an app surface id). */
+export const RESEARCH_TAB = "research";
+
+export function appPages(nav?: Array<{ surface: string; label?: string }>, hasSurface = false): PageTab[] {
+	const named = (nav || []).filter((n) => n.surface && n.surface !== RESEARCH_TAB);
+	const own = named.map((n) => ({ surface: n.surface, label: n.label || (n.surface === "home" ? "Overview" : n.surface), home: false }));
+	// A page but no nav: that page is its "Overview". An app WITH a nav names
+	// every page it has; adding one it didn't name showed an empty tab.
+	if (hasSurface && own.length === 0) own.push({ surface: "home", label: "Overview", home: false });
+	return [{ surface: RESEARCH_TAB, label: "Research", home: true }, ...own];
 }
 
-/** Where a tab goes: the home is the app's bare address (no ?surface=). */
+/** Where a tab goes: Research is the app's workspace address (no ?surface=),
+ *  from the standalone page too — that page has no research space. */
 export function pageHref(app: string, t: PageTab, embedded: boolean): string {
 	const a = encodeURIComponent(app);
-	if (embedded) return t.home ? `/studio/apps/${a}` : `/studio/apps/${a}?surface=${encodeURIComponent(t.surface)}`;
-	return t.home ? `/studio/a/${a}` : `/studio/a/${a}/${encodeURIComponent(t.surface)}`;
+	if (t.home) return `/studio/apps/${a}`;
+	return embedded ? `/studio/apps/${a}?surface=${encodeURIComponent(t.surface)}` : `/studio/a/${a}/${encodeURIComponent(t.surface)}`;
 }

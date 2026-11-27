@@ -49,7 +49,6 @@ import type { LoopHealth } from "@/components/workflow/WorkflowObservabilityPane
 import NeedsAttentionRail from "@/components/workflow/NeedsAttentionRail";
 import IndexList, { type IndexRow } from "@/components/studio/IndexList";
 import { askApp } from "@/lib/grounded-asks";
-import { APP_OVERVIEW_MD } from "@/content/appOverviews";
 import { useInAppSurface } from "@/components/app-surface/surfaceContext";
 import LoopOrbit, { type LoopMode, type LoopStageKey } from "@/components/workflow/LoopOrbit";
 
@@ -60,9 +59,7 @@ import LoopOrbit, { type LoopMode, type LoopStageKey } from "@/components/workfl
 const ResearchHome = lazy(() => import("@/components/research/ResearchHome"));
 const WorkflowObservabilityPanel = lazy(() => import("@/components/workflow/WorkflowObservabilityPanel"));
 const WorkflowPage = lazy(() => import("@/components/research/WorkflowPage"));
-const WorkflowList = lazy(() => import("@/components/workflow/WorkflowList"));
 // Markdown renderer (named export) for the per-app Overview story copy.
-const LumidMarkdown = lazy(() => import("@/components/app-surface/LumidMarkdown").then((m) => ({ default: m.LumidMarkdown })));
 // An app with no scheduled workflows is a UI-surface app (GPU Rentals, Lumid
 // Market, …). Rather than a dead-end "no workflows" message, show its actual
 // surface inline — AppSurface renders the page, or its own "generate a page"
@@ -999,8 +996,9 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 	// "no page yet" when the surface genuinely is not there, so trusting the
 	// URL costs nothing when the inference was right to be false.
 	const urlSurface = (params.get("surface") || "").trim();
-	// "home" is the app's home page (the map), the same as no surface at all.
-	const atHome = !urlSurface || urlSurface === "home";
+	// No surface = the Research tab (dashboard + graph/list), the same for every
+	// app. ?surface=home is the app's OWN home page, an ordinary tab (2026-11-27).
+	const atHome = !urlSurface;
 	// The research graph is EVERY app's home (round 8, 2026-11-26): a bare app
 	// address opens it; a workflow opens only when the address names one
 	// (/w/:loop, or ?selected=<loop>). Defaulting to the freshest workflow made
@@ -1244,12 +1242,12 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 									<button
 										type="button"
 										onClick={selectOverview}
-										title="The app's research graph — every workflow at a glance"
+										title="The app's research space — every workflow at a glance"
 										className={cn(
 											"px-2.5 py-1 rounded-lg text-caption flex-shrink-0 transition-colors",
 											overviewMode ? "bg-ink-800 text-white" : "text-ink-600 hover:text-ink-800 hover:bg-ink-100",
 										)}
-									>Graph</button>
+									>Research</button>
 								)}
 								{rows.length >= 1 && !(embedded && crumbTarget) && (
 									<WorkflowSelect rows={rows} selected={effSelected} onSelect={select}
@@ -1292,56 +1290,32 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 					})()}
 					<Suspense fallback={<Skeleton lines={3} />}>
 						{overviewMode ? (
-							// ── App-level OVERVIEW — the app's story (re-authored from the
-							// old lum.id/<app> landing page). No workflow list / data here;
-							// pick a workflow from the top-bar dropdown to drill in. Apps
-							// without curated copy fall back to the workflow list so the
-							// overview is never blank. ──
+							// ── App level: the Research tab, or one of the app's own pages. ──
 							<div className="space-y-6 animate-in fade-in duration-200">
-								{/* Needs fixing moved to a button in the top strip
-								    (NeedsFixingMenu, 2026-11-27): the band pushed the map down. */}
-								{/* The app's own pages, then what it is exploring (3D map) with
-								    the compute its runs wait for. A named page (?surface=) shows
-								    just that page. */}
+								{/* Research (no ?surface=) is the research space and nothing else,
+								    for every app (2026-11-27: "the consulting app still has lots of
+								    content under the research graph"). An app's own pages, its home
+								    page included, are tabs of their own (?surface=). The hardcoded
+								    overview copy and the bare workflow list are gone: List shows the
+								    workflows, and an app's copy belongs on its own page. */}
 								{!nestedInSurface && atHome && (
-									<Suspense fallback={null}><ResearchHome app={app} pages={identity?.nav} /></Suspense>
+									<Suspense fallback={null}><ResearchHome app={app} pages={identity?.nav} hasSurface={!!identity?.hasSurface} /></Suspense>
 								)}
-								{(identity?.hasSurface || !!urlSurface) && !nestedInSurface ? (
-									// The app DECLARED a page — that wins. Previously the surface
-									// rendered only for apps with zero workflows, so any app that
-									// scheduled one lost its own overview to APP_OVERVIEW_MD (copy
-									// hardcoded in this bundle, keyed by app name) or to a bare
-									// workflow list. An app's page then could not be changed by
-									// editing the app, which is backwards: the app supplies the
-									// environment, the UI stays generic.
-									// inlineChrome: the app's chrome (tabs + New workflow + share
-									// actions) needs ~600px and the strip slot resolves to ~180 beside
-									// the app name and the workflow selector — portaled, the five tabs
-									// wrapped to one per line and stacked under "New workflow". Inline
-									// they get the panel's full width. The tabs are still the ONLY tab
-									// bar; the strip's duplicate Overview pill is gone either way.
-									// -mx-6: the surface pads itself by 24px, so its content starts on the
-									// same left edge as the map and Compute above it.
+								{!atHome && !nestedInSurface && (
+									// inlineChrome: the app's chrome (tabs + share actions) needs ~600px;
+									// the strip slot beside the app name is ~180. -mx-6: the surface pads
+									// itself by 24px, so its content starts on the research tab's edge.
 									<div className="-mx-6 -my-5">
 										<Suspense fallback={<div className="px-5 py-8"><Skeleton lines={4} /></div>}>
-											<AppSurface app={app} embedded={embedded} inlineChrome hideNav={atHome && (identity?.nav?.length ?? 0) >= 1} pages={identity?.nav} surface={params.get("surface") || undefined} />
+											<AppSurface app={app} embedded={embedded} inlineChrome pages={identity?.nav} surface={urlSurface} />
 										</Suspense>
-									</div>
-								) : APP_OVERVIEW_MD[app] ? (
-									<div className="max-w-3xl studio-prose">
-										<LumidMarkdown source={APP_OVERVIEW_MD[app]} />
-									</div>
-								) : (
-									<div className="space-y-2">
-										<div className="text-micro tracking-[0.08em] font-semibold text-ink-600 uppercase">Workflows</div>
-										<WorkflowList rows={rows} selected={null} onSelect={select} hrefFor={(l) => workflowPath(app, l)} />
 									</div>
 								)}
 							</div>
 						) : (
 							<div id="wf-detail" className="min-w-0">
-								{/* The app's tab row above every workflow too: Graph leads back. */}
-								{embedded && !nestedInSurface && <AppPageTabs app={app} nav={identity?.nav} current={null} embedded className="-ml-2.5 mb-3" />}
+								{/* The app's tab row above every workflow too: Research leads back. */}
+								{embedded && !nestedInSurface && <AppPageTabs app={app} nav={identity?.nav} hasSurface={!!identity?.hasSurface} current={null} embedded className="-ml-2.5 mb-3" />}
 								{missingLoop && (
 									<WorkflowNotFound app={app} loop={missingLoop} runId={routeRunId ?? null} />
 								)}

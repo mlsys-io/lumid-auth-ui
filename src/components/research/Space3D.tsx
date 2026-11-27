@@ -426,7 +426,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 						if (j) g.lineTo(q.x, q.y); else g.moveTo(q.x, q.y);
 						if (j === 2) sc = q.scale;
 					}
-					g.globalAlpha = (0.1 + 0.5 * fog(sc)) * (rim ? 0.45 : 1);
+					g.globalAlpha = (0.22 + 0.5 * fog(sc)) * (rim ? 0.5 : 1);
 					g.stroke();
 				}
 			});
@@ -438,7 +438,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				for (let j = 0; j < 3; j++) {
 					const ra = r0 + (floor.rim - r0) * (j / 3), rb = r0 + (floor.rim - r0) * ((j + 1) / 3);
 					const p = at(ra, a), q = at(rb, a);
-					g.globalAlpha = (0.08 + 0.32 * fog((p.scale + q.scale) / 2)) * (1 - j * 0.28);
+					g.globalAlpha = (0.14 + 0.32 * fog((p.scale + q.scale) / 2)) * (1 - j * 0.28);
 					g.beginPath(); g.moveTo(p.x, p.y); g.lineTo(q.x, q.y); g.stroke();
 				}
 			}
@@ -570,18 +570,20 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				// The selected card comes forward larger (Novix grows the picked label);
 				// everything off its path all but disappears.
 				const pick = n.id === selected ? 1.15 : 1;
-				// A dot and its label stay readable however far the camera pulls back;
-				// open cards keep the full depth range.
-				const floor = el.dataset.full !== undefined ? 0.5 : 0.82;
-				const size = Math.max(floor, Math.min(1, (p.scale / (FOCAL / DISTANCE)) * 0.9)) * (dim ? 0.92 : 1) * pick * ui;
+				// One size per kind (DOT_SIZE): depth moves a dot by ~5% at most, and the
+				// box size never scales it (2026-11-27: "some dots are too big, some too
+				// small"). Open cards keep a little more depth.
+				const floor = el.dataset.full !== undefined ? 0.85 : 0.95;
+				const size = Math.max(floor, Math.min(1, (p.scale / (FOCAL / DISTANCE)) * 0.9)) * pick;
 				setS(el, "transform", `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) translate(-50%, -50%) scale(${(size * (0.9 + 0.1 * born)).toFixed(3)})`);
-				setS(el, "opacity", String(((dim ? 0.07 : lit ? Math.max(0.9, cue.alpha) : cue.alpha) * born).toFixed(3)));
+				setS(el, "opacity", String(((dim ? 0.18 : lit ? Math.max(0.9, cue.alpha) : cue.alpha) * born).toFixed(3)));
 				// The hovered node sits above every other open card: its card must never
 				// have another node's dot on top of it, or that dot takes the pointer.
 				setS(el, "zIndex", String(n.id === selected ? 6000 : n.id === hoveredRef.current ? 5800 : lit?.has(n.id) ? 5000 : el.dataset.full !== undefined ? 5500 : Math.round((n.depth === 1 && n.kind === "experiment" ? 4500 : 3000) - p.depth)));
 				// (First-ring experiments carry an overview panel: it sits above plain
 				// dots, so a version dot never lands on its text.)
-				setS(el, "filter", dim ? "blur(2.5px)" : cue.near < 0.2 ? "blur(0.5px)" : "none");
+				// No blur: it read as low contrast; off-path nodes just recede (18%).
+				setS(el, "filter", "none");
 				setS(el, "visibility", p.visible ? "visible" : "hidden");
 			}
 			declutter(proj, t);
@@ -602,10 +604,10 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				const onPath = !!lit && lit.has(e.source) && lit.has(e.target);
 				const born = grow && !reduced ? Math.max(0, Math.min(1, (t - st.bornAt - (order?.get(e.target) ?? 0) * 70 + 120) / 380)) : 1;
 				const cue = depthCue(Math.min(a.scale, b.scale), cam.zoom);
-				setS(ln, "opacity", String(((lit ? (onPath ? 1 : 0.05) : 0.35 + 0.55 * cue.near) * born).toFixed(3)));
+				setS(ln, "opacity", String(((lit ? (onPath ? 1 : 0.12) : 0.55 + 0.4 * cue.near) * born).toFixed(3)));
 				// Hairlines at the back, a little heavier in front.
 				// Hairlines at the back, heavier in front; all scaled with the box.
-				ln.style.strokeWidth = ((onPath ? 2 : 0.75 + 0.95 * cue.near) * ui).toFixed(2);
+				ln.style.strokeWidth = ((onPath ? 2 : 1.1 + 0.6 * cue.near) * ui).toFixed(2);
 				const halo = haloEls.current.get(e.id);
 				if (halo) { setA(halo, "d", d); setS(halo, "opacity", String((0.55 * born).toFixed(3))); }
 				const lb = labelEls.current.get(e.id);
@@ -913,7 +915,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 			<svg ref={colorProbe} className="absolute w-0 h-0 overflow-hidden" aria-hidden>
 				<stop className="space3d-floor-core" /><stop className="space3d-floor-mid" /><stop className="space3d-floor-edge" />
 				<stop className="space3d-shadow-core" /><stop className="space3d-shadow-edge" />
-				<path className="stroke-ink-300" /><path className="stroke-plum-300" />
+				<path className="stroke-ink-400" /><path className="stroke-plum-300" />
 			</svg>
 			<svg className="absolute inset-0 w-full h-full pointer-events-none" aria-hidden>
 				{edges.map((e) => {

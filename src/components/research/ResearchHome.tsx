@@ -17,11 +17,11 @@ import AppPageTabs from "@/components/AppPageTabs";
 
 const ResearchMap = lazy(() => import("@/components/research/ResearchMap"));
 
-export default function ResearchHome({ app, pages }: { app: string; pages?: Array<{ surface: string; label?: string }> }) {
+export default function ResearchHome({ app, pages, hasSurface }: { app: string; pages?: Array<{ surface: string; label?: string }>; hasSurface?: boolean }) {
 	return (
 		<div className="space-y-3">
 			{/* The app's one tab row (AppPageTabs), the same on every page of the app. */}
-			<AppPageTabs app={app} nav={pages} current="home" className="-ml-2.5" />
+			<AppPageTabs app={app} nav={pages} hasSurface={hasSurface} current="research" className="-ml-2.5" />
 			<Suspense fallback={null}><ResearchMap app={app} /></Suspense>
 		</div>
 	);
