@@ -1,7 +1,8 @@
-// NeedsFixingMenu — an app's broken workflows, behind one button in the top
-// strip ("⚠ 4 need fixing ⌄"). It replaced the band that sat above the app's
-// home and pushed the research map down (2026-11-27: "move needs fixing to a
-// pop up menu"). Renders NOTHING when the app is healthy.
+// NeedsFixingMenu — an app's broken workflows, behind one button at the top
+// right of its research graph ("⚠ 4 need fixing ⌄"; it sat in the top strip
+// until the user moved it to the graph, 2026-11-27). It replaced the band that
+// pushed the research map down ("move needs fixing to a pop up menu").
+// Renders NOTHING when the app is healthy.
 //
 // Same window as the sidebar's per-app count (useShellActivity, 3 days), so the
 // number on the app's row and the number on this button agree.
@@ -32,7 +33,7 @@ export default function NeedsFixingMenu({ app }: { app: string }) {
 					type="button"
 					data-needs-fixing={n}
 					aria-label={`${n} workflow${n === 1 ? "" : "s"} need fixing — show them`}
-					className="inline-flex items-center gap-1.5 h-7 rounded-full border border-brick-200 bg-brick-50 px-2.5 text-caption font-medium text-brick-700 hover:bg-brick-100 transition-colors"
+					className="inline-flex items-center gap-1.5 h-6 rounded-full border border-brick-200 bg-brick-50 px-2.5 text-caption font-medium text-brick-700 hover:bg-brick-100 transition-colors"
 				>
 					<AlertTriangle className="w-3.5 h-3.5" aria-hidden />
 					<span className="tabular-nums">{n}</span>

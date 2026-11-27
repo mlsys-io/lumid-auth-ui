@@ -13,7 +13,7 @@
 // register one row in PAGE_META below.
 
 import { workflowPath } from "@/lib/run-routes";
-import { lazy, Suspense, useEffect, useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import {
 	ChevronRight,
@@ -22,7 +22,6 @@ import {
 } from "lucide-react";
 import { appTitle } from "@/components/workflow/AppCard";
 import AppSwitcher from "@/components/studio/AppSwitcher";
-const NeedsFixingMenu = lazy(() => import("@/components/activity/NeedsFixingMenu"));
 
 // Per-route page identity. Subtitle is short — top-bar height is bounded.
 const PAGE_META: Array<{
@@ -264,6 +263,8 @@ export default function TopStatusStrip() {
 				<div className="flex items-center gap-1 flex-shrink-0 max-w-[34%]">
 					<span id="topstrip-ws-left" className="flex items-center" />
 					<AppSwitcher app={appSlug} />
+					{/* The app's "⋯" menu, right beside its name (portaled by the app page). */}
+					<span id="topstrip-app-menu" className="flex items-center flex-shrink-0" />
 				</div>
 			) : meta?.ownHeader ? (
 			// The page carries its own title; keep only the trail (if any).
@@ -328,8 +329,6 @@ export default function TopStatusStrip() {
 				    heartbeat. The ticker repeated what the rail already shows (the
 				    Inbox count, the Runs "N failed" pill) on every page; the
 				    heartbeat only said the page was polling. */}
-				{/* This app's broken workflows, one button (was a band over the map). */}
-				{isAppWorkspace && <Suspense fallback={null}><NeedsFixingMenu app={appSlug} /></Suspense>}
 				{/* Workspace's chat-panel toggle portals here — kept the TOP-MOST RIGHT. */}
 				<span id="topstrip-ws-right" className="flex items-center" />
 			</div>
