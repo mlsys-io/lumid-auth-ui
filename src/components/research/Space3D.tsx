@@ -590,7 +590,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				const floor = el.dataset.full !== undefined ? 0.85 : 0.95;
 				const size = Math.max(floor, Math.min(1, (p.scale / (FOCAL / DISTANCE)) * 0.9)) * pick;
 				setS(el, "transform", `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) translate(-50%, -50%) scale(${(size * (0.9 + 0.1 * born)).toFixed(3)})`);
-				setS(el, "opacity", String(((dim ? 0.18 : lit ? Math.max(0.9, cue.alpha) : cue.alpha) * born).toFixed(3)));
+				setS(el, "opacity", String(((dim ? 0.42 : lit ? Math.max(0.9, cue.alpha) : cue.alpha) * born).toFixed(3)));
 				// The hovered node sits above every other open card: its card must never
 				// have another node's dot on top of it, or that dot takes the pointer.
 				setS(el, "zIndex", String(n.id === selected ? 6000 : n.id === hoveredRef.current ? 5800 : lit?.has(n.id) ? 5000 : el.dataset.full !== undefined ? 5500 : Math.round((n.depth === 1 && n.kind === "experiment" ? 4500 : 3000) - p.depth)));
@@ -618,7 +618,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				const onPath = !!lit && lit.has(e.source) && lit.has(e.target);
 				const born = grow && !reduced ? Math.max(0, Math.min(1, (t - st.bornAt - (order?.get(e.target) ?? 0) * 70 + 120) / 380)) : 1;
 				const cue = depthCue(Math.min(a.scale, b.scale), cam.zoom);
-				setS(ln, "opacity", String(((lit ? (onPath ? 1 : 0.12) : 0.55 + 0.4 * cue.near) * born).toFixed(3)));
+				setS(ln, "opacity", String(((lit ? (onPath ? 1 : 0.3) : 0.55 + 0.4 * cue.near) * born).toFixed(3)));
 				// Hairlines at the back, a little heavier in front.
 				// Hairlines at the back, heavier in front; all scaled with the box.
 				ln.style.strokeWidth = ((onPath ? 2 : 1.1 + 0.6 * cue.near) * ui).toFixed(2);
@@ -877,12 +877,18 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 	useEffect(() => {
 		const el = boxRef.current;
 		if (!el) return;
-		// ⌘/ctrl + wheel (and trackpad pinch, which arrives as ctrl+wheel) zooms
-		// about the cursor; a plain wheel — a two-finger trackpad drag — moves the
-		// space (2026-11-26: asked for; the page scrolls from outside the map).
+		// A mouse wheel zooms about the cursor (2026-11-27: "mouse middle scroll
+		// should be zoom in and out"), as do ⌘/ctrl + wheel and a trackpad pinch
+		// (which arrives as ctrl+wheel). A two-finger trackpad drag — small,
+		// fractional, often sideways deltas — still moves the space.
 		const onWheel = (e: WheelEvent) => {
 			e.preventDefault();
-			if (e.ctrlKey || e.metaKey) { zoomBy(Math.exp(-e.deltaY * 0.0022), local(e)); return; }
+			const mouseWheel = e.deltaMode === 1 || (e.deltaX === 0 && Math.abs(e.deltaY) >= 40 && Number.isInteger(e.deltaY));
+			if (e.ctrlKey || e.metaKey || mouseWheel) {
+				const dy = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY;
+				zoomBy(Math.exp(-Math.max(-240, Math.min(240, dy)) * 0.0022), local(e));
+				return;
+			}
 			const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? s.current.H : 1;
 			pan(-e.deltaX * unit, -e.deltaY * unit);
 		};
@@ -909,7 +915,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		<div
 			ref={boxRef}
 			role="group"
-			aria-label="Research map in 3D. Drag to turn it; drag with both mouse buttons, the right button or shift, or drag two fingers, to move it; ⌘ or ctrl plus scroll to zoom. Arrow keys turn it, shift plus arrows move it."
+			aria-label="Research map in 3D. Drag to turn it; drag with both mouse buttons, the right button or shift, or drag two fingers, to move it; scroll the mouse wheel or pinch to zoom. Arrow keys turn it, shift plus arrows move it."
 			tabIndex={0}
 			onKeyDown={onKeyDown}
 			onPointerDown={onPointerDown}
@@ -1015,7 +1021,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 			{/* How to use it — until the first time you do. */}
 			{hint && (
 				<div className="absolute left-3 top-2.5 z-[6000] text-nano text-ink-600 pointer-events-none transition-opacity">
-					Drag to turn · two fingers or both buttons to move · pinch or ⌘/ctrl + scroll to zoom · click a dot to open it
+					Drag to turn · two fingers or both buttons to move · scroll or pinch to zoom · click a dot to open it
 				</div>
 			)}
 		</div>
@@ -1051,7 +1057,7 @@ function MouseHelp() {
 	const rows: Array<[ReactNode, string]> = [
 		[<MouseGlyph left className="w-3.5 h-5" />, "Drag to turn"],
 		[<MouseGlyph left right className="w-3.5 h-5" />, "Both buttons (or right, or shift) + drag to move"],
-		[<MouseGlyph wheel className="w-3.5 h-5" />, "⌘/ctrl + scroll to zoom"],
+		[<MouseGlyph wheel className="w-3.5 h-5" />, "Scroll the wheel to zoom"],
 		[<TwoFingerGlyph />, "Two-finger drag to move · pinch to zoom"],
 		[<RotateCcw className="h-3.5 w-3.5" aria-hidden />, "Zoomed in or moved, it holds still; ⟲ shows everything and turns again"],
 	];

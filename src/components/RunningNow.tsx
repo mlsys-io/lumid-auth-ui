@@ -142,8 +142,11 @@ function minsAgo(sec: number, now: number): string {
 	return m < 1 ? "just now" : m < 60 ? `${m} min ago` : `${Math.floor(m / 60)} h ${m % 60} min ago`;
 }
 
-function Tile({ to, label, startedAt, now, live, title, action, cells, late, bar }: {
+function Tile({ to, label, startedAt, now, live, title, action, cells, late, bar, app }: {
 	to: string; label: string; startedAt: number; now: number; live: boolean;
+	/** The app it belongs to, named on the tile's top line (2026-11-27: "running
+	 *  jobs don't show which app"). */
+	app?: string;
 	title: React.ReactNode; action: React.ReactNode; cells: React.ReactNode; late?: boolean;
 	/** The workflow's colour (as on its sidebar row and map branch). */
 	bar?: string;
@@ -155,8 +158,8 @@ function Tile({ to, label, startedAt, now, live, title, action, cells, late, bar
 			{bar && <span aria-hidden className={cn("absolute inset-y-0 left-0 w-[3px]", bar)} />}
 			<div className="flex items-center gap-1.5 font-mono text-nano tabular-nums text-ink-600">
 				<span className={cn("h-1.5 w-1.5 flex-shrink-0 rounded-full", late ? "bg-ember-500" : "bg-lagoon-500", live && "animate-lumen-breathe")} aria-hidden />
-				<span className="text-ink-800">{hhmm(startedAt)}</span>
-				<span className="ml-auto truncate">{minsAgo(startedAt, now)}</span>
+				{app ? <span className="min-w-0 truncate font-sans font-medium text-ink-800" title={app}>{app}</span> : <span className="text-ink-800">{hhmm(startedAt)}</span>}
+				<span className="ml-auto flex-shrink-0 truncate" title={`Started ${hhmm(startedAt)}`}>{minsAgo(startedAt, now)}</span>
 			</div>
 			<div className="mt-0.5 line-clamp-2 text-caption font-medium leading-snug text-ink-900">{title}</div>
 			<div className="mt-0.5 truncate text-micro italic text-ink-600">{action}</div>
@@ -195,7 +198,7 @@ function StepCells({ est }: { est: StepEstimate }) {
 	);
 }
 
-function RunTile({ item, now, showApp }: { item: RunningItem; now: number; showApp: boolean }) {
+function RunTile({ item, now }: { item: RunningItem; now: number; showApp?: boolean }) {
 	const { run, wf } = item;
 	const colorOf = useWorkflowColors();
 	const startedAt = run.started_at || now;
@@ -208,8 +211,8 @@ function RunTile({ item, now, showApp }: { item: RunningItem; now: number; showA
 	const doing = est?.now && !est.beyond ? est.now.name : "Running";
 	return (
 		<Tile to={runRowHref(run.run_id)} startedAt={startedAt} now={now} live late={late} bar={colorOf(wf.app, wf.loop)?.bar}
-			label={`${showApp ? appTitle(wf.app) + ", " : ""}${wfName} — running for ${fmtDuration(elapsed)}`}
-			title={<>{wfName}{showApp && <span className="font-normal text-ink-600"> · {appTitle(wf.app)}</span>}</>}
+			label={`${appTitle(wf.app)}, ${wfName} — running for ${fmtDuration(elapsed)}`}
+			app={appTitle(wf.app)} title={wfName}
 			action={late
 				? <span className="not-italic text-ember-700">Longer than usual{wf.typicalS ? ` (${fmtTypical(wf.typicalS)})` : ""}</span>
 				: <><span className="lumen-shine">{doing}</span><WorkingDots /></>}

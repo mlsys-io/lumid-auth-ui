@@ -15,15 +15,21 @@ const CHIP: Record<ChainLink["state"], string> = {
 	"not run yet": "bg-transparent border-dashed border-ink-300 text-ink-600",
 };
 
-export default function VersionChain({ chain, labelOf, valueOf }: {
+export default function VersionChain({ chain, labelOf, valueOf, onPick, picked }: {
 	chain: ChainLink[];
 	labelOf: (arm: string) => string;
 	valueOf: (v: number) => string;
+	/** Clicking a version card selects it (on the graph, and in the panel). */
+	onPick?: (arm: string) => void;
+	picked?: string | null;
 }) {
 	const main = chain.filter((c) => c.state !== "dropped");
 	const dropped = chain.filter((c) => c.state === "dropped");
 	const chip = (c: ChainLink, i: number) => (
-		<div key={c.arm} className={cn("rounded-md border px-2.5 py-1.5 min-w-[7.5rem] animate-lumen-rise transition-colors duration-500", CHIP[c.state])} style={{ animationDelay: `${i * 70}ms` }}>
+		<button type="button" key={c.arm} onClick={onPick ? () => onPick(c.arm) : undefined} disabled={!onPick} aria-pressed={picked === c.arm}
+			title={onPick ? `Select ${labelOf(c.arm)}` : undefined}
+			className={cn("min-w-0 rounded-md border px-2.5 py-1.5 text-left animate-lumen-rise transition-[colors,box-shadow] duration-300 disabled:cursor-default", CHIP[c.state],
+				onPick && "cursor-pointer hover:shadow-e2", picked === c.arm && "ring-2 ring-plum-500 ring-offset-1")} style={{ animationDelay: `${i * 70}ms` }}>
 			<div className="flex items-baseline gap-1.5">
 				<span className={cn("font-mono text-nano", c.state === "winning" ? "text-white/80" : "text-ink-600")}>v{c.index + 1}</span>
 				<span className="text-caption font-medium truncate">{labelOf(c.arm)}</span>
@@ -32,24 +38,17 @@ export default function VersionChain({ chain, labelOf, valueOf }: {
 				{c.mean == null ? "no results yet" : `${valueOf(c.mean)} · ${c.n} result${c.n === 1 ? "" : "s"}`}
 			</div>
 			<div className={cn("text-nano font-medium uppercase tracking-wide mt-0.5", c.state === "winning" ? "text-white" : c.state === "dropped" ? "text-ember-700" : c.state === "best so far" ? "text-plum-700" : "text-ink-600")}>{c.state}</div>
-		</div>
+		</button>
 	);
 	return (
 		<div className="space-y-2" aria-label="Versions tried, in order">
-			<div className="flex items-center gap-1.5 flex-wrap">
-				{main.map((c, i) => (
-					<div key={c.arm} className="flex items-center gap-1.5">
-						{i > 0 && (
-							<svg width="18" height="8" viewBox="0 0 18 8" className="text-plum-300" aria-hidden>
-								<path d="M1 4h14M12 1l3 3-3 3" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" strokeLinejoin="round" />
-							</svg>
-						)}
-						{chip(c, i)}
-					</div>
-				))}
+			{/* An even grid (the order is in each card's v-number): a wrapping row
+			    with arrows broke v3 onto its own line, under an arrow (2026-11-27). */}
+			<div className="grid grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] gap-1.5">
+				{main.map((c, i) => chip(c, i))}
 			</div>
 			{dropped.length > 0 && (
-				<div className="flex items-center gap-1.5 flex-wrap pl-4">
+				<div className="grid grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] items-start gap-1.5">
 					<span className="text-micro text-ember-700">Dropped:</span>
 					{dropped.map((c, i) => chip(c, main.length + i))}
 				</div>

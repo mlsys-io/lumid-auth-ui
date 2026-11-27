@@ -78,7 +78,9 @@ export default function BestScoreChart({ evo, labelOf, colorOf, metricKey, unit,
 		v0 -= pad; v1 += pad;
 		return { v0, v1, t0: evo.t0, t1: tEnd === evo.t0 ? evo.t0 + 1 : tEnd };
 	}, [evo, tEnd, target]);
-	const ticks = [dom.v0 + (dom.v1 - dom.v0) * 0.1, (dom.v0 + dom.v1) / 2, dom.v1 - (dom.v1 - dom.v0) * 0.1];
+	// Round tick values (1, 2, 2.5 or 5 × 10^k), three or four of them — the
+	// axis read 2,266.7 / 1,179 / 91.21 (2026-11-27).
+	const ticks = niceTicks(dom.v0, dom.v1);
 	const PAD_L = Math.max(40, Math.max(...ticks.map((v) => fmt(v).length)) * 6 + 10);
 	const x = (t: number) => PAD_L + ((t - dom.t0) / (dom.t1 - dom.t0)) * (W - PAD_L - PAD_R);
 	const y = (v: number) => PAD_T + (1 - (Math.max(dom.v0, Math.min(dom.v1, v)) - dom.v0) / (dom.v1 - dom.v0)) * (H - PAD_T - PAD_B);
@@ -153,9 +155,21 @@ export default function BestScoreChart({ evo, labelOf, colorOf, metricKey, unit,
 							<text x={W - PAD_R - 4} y={y(target) - 5} textAnchor="end" className="fill-lagoon-700 text-nano font-medium">target {fmt(target)}</text>
 						</g>
 					)}
-					{takeovers.map((s, i) => (
-						<text key={i} x={x(s.t) + 4} y={y(s.value) - 6} className="fill-ink-800 text-nano font-medium">v{indexOf(s.arm)}</text>
-					))}
+					{/* Where each version first took the lead: a mark on the line and its
+					    number above it, haloed so the line never cuts through it, kept
+					    inside the plot, and nudged up when two would touch. */}
+					{takeovers.map((s, i) => {
+						const lx = Math.min(W - PAD_R - 14, Math.max(PAD_L + 2, x(s.t) + 4));
+						const prev = i > 0 ? takeovers[i - 1] : null;
+						const bump = prev && Math.abs(x(prev.t) - x(s.t)) < 22 && Math.abs(y(prev.value) - y(s.value)) < 14 ? 12 : 0;
+						const ly = Math.max(PAD_T + 8, y(s.value) - 7 - bump);
+						return (
+							<g key={i}>
+								<circle cx={x(s.t)} cy={y(s.value)} r={2.5} className="fill-ink-800" />
+								<text x={lx} y={ly} className="fill-ink-900 text-nano font-semibold" stroke="rgb(var(--card-rgb))" strokeWidth={3} paintOrder="stroke">v{indexOf(s.arm)}</text>
+							</g>
+						);
+					})}
 					{/* now */}
 					<line x1={x(dom.t1)} x2={x(dom.t1)} y1={PAD_T} y2={H - PAD_B} className="stroke-ink-300" strokeWidth={1} strokeDasharray="2 3" />
 					<text x={x(dom.t1)} y={H - 6} textAnchor="end" className="fill-ink-600 text-nano">now</text>
@@ -184,4 +198,15 @@ export default function BestScoreChart({ evo, labelOf, colorOf, metricKey, unit,
 			</ul>
 		</figure>
 	);
+}
+
+/** Three or four round values spanning [lo, hi] (steps of 1, 2, 2.5 or 5 × 10^k). */
+export function niceTicks(lo: number, hi: number): number[] {
+	if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi <= lo) return [lo];
+	const raw = (hi - lo) / 3;
+	const mag = Math.pow(10, Math.floor(Math.log10(raw)));
+	const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s >= raw) ?? 10 * mag;
+	const out: number[] = [];
+	for (let v = Math.ceil(lo / step) * step; v <= hi + step * 1e-9; v += step) out.push(Math.abs(v) < step * 1e-9 ? 0 : +v.toPrecision(12));
+	return out.length >= 2 ? out : [lo, hi];
 }

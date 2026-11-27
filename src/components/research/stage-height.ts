@@ -31,6 +31,8 @@ export interface StageSize {
 	 *  object ref read once at mount never saw the element (2026-11-27). */
 	ref: (el: HTMLElement | null) => void;
 	height: number;
+	/** The stage\'s width (0 until measured). */
+	width: number;
 	/** Room the stage really has: the estimate less what the page still
 	 *  overflows by, NOT clamped to the minimum — what a too-small notice uses. */
 	free: number;
@@ -139,5 +141,5 @@ export function useStageHeight(): StageSize {
 	// again, forever (2026-11-27).
 	const touch = typeof window !== "undefined" && window.matchMedia?.("(pointer: coarse)").matches;
 	const min = touch ? { w: TOUCH_MIN_W, h: TOUCH_MIN_H } : { w: STAGE_MIN_W, h: STAGE_MIN_H };
-	return { ref, height: h, free: Math.max(0, room), fits: free.w >= min.w && free.h >= min.h, min };
+	return { ref, height: h, width: free.w >= 9999 ? 0 : free.w, free: Math.max(0, room), fits: free.w >= min.w && free.h >= min.h, min };
 }

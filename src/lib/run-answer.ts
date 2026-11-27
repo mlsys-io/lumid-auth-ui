@@ -23,7 +23,7 @@ const ACRONYMS: Record<string, string> = {
 const UNITS: Array<[RegExp, string]> = [
 	[/_tok_s$/, "tok/s"], [/_tokens?_s$/, "tok/s"], [/_req_s$/, "req/s"],
 	[/_ms$/, "ms"], [/_sec$|_s$/, "s"], [/_gib$/, "GiB"], [/_gb$/, "GB"], [/_mib$/, "MiB"], [/_mb$/, "MB"],
-	[/_pct$|_percent$/, "%"], [/_usd$/, "$"], [/_cents$/, "¢"], [/_ticks$/, "ticks"], [/_bps$/, "bps"],
+	[/_pct$|_percent$/, "%"], [/_usd$/, "$"], [/_cents$/, "¢"], [/_ticks_per_lot$/, "ticks/lot"], [/_ticks$/, "ticks"], [/_bps$/, "bps"],
 ];
 
 export interface MetricName { label: string; unit: string }
