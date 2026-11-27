@@ -62,6 +62,8 @@ export function fmtMetricValue(v: number, unit: string, key = ""): string {
 
 // Bookkeeping, not findings: ids, hashes, seeds, versions, flags.
 const NOT_A_FINDING = /(^|_)(seed|hash|id|ts|version|index|task|tag|recorded|validated|cycle)$|^(objective|config_hash|cycle_ts|holdouts_run)$/;
+/** A metric key that is a finding, not bookkeeping (ids, hashes, seeds, flags). */
+export const isFindingKey = (k: string): boolean => !NOT_A_FINDING.test(k);
 
 /** Counts of what a run did (not what it found): listed after the findings. */
 const BOOKKEEPING = /(^|_)(open|resolved|submitted|refused|errors?|count|rows|scanned|matched|replayed|evaluated|actions|secs|steps|attempts|retries|skipped)$|^(results|backtests|experiment|rows)_/;

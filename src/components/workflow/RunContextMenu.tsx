@@ -3,7 +3,9 @@
 //
 // Items (8):
 //   • branch out          — RUNTIME (me.launchRun: from_run_ts + branch_label)
-//   • compare with…       — wired: toggles this run into the parent's 2-run compare
+//   • compare with…       — wired: adds this run to the parent's selection (up to 5);
+//                           with two or more picked, "Compare N runs" opens the
+//                           Compare page (lib/run-routes compareHref)
 //   • re-run from here     — RUNTIME (me.launchRun: from_run_ts)
 //   • run variant          — RUNTIME (me.launchRun: from_run_ts + variant)
 //   • view data           — wired: parent opens CaseContentViewer / run data
@@ -22,6 +24,7 @@
 // marked pending after a failed attempt — it never crashes the menu.
 
 import { useLayoutEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import {
 	GitBranch, GitCompare, RefreshCw, FlaskConical, FileJson, MessageSquare,
 	Info, ArrowUpCircle, XCircle, Loader2, Clock,
@@ -29,6 +32,10 @@ import {
 import { toast } from "sonner";
 import { reportDispatchFailure } from "@/components/app-surface/directives";
 import { me, MeApiError } from "@/api/me";
+import { compareHref } from "@/lib/run-routes";
+
+/** How many runs the Compare page takes at once. */
+const COMPARE_MAX = 5;
 
 // What the menu was opened on. A run node has a ts; a case row has caseId/label
 // (case targets hide the run-only runtime ops).
@@ -135,6 +142,9 @@ export default function RunContextMenu({
 	// (its label turns into the confirm prompt), the second fires it.
 	const [armed, setArmed] = useState<null | "promote" | "discard">(null);
 	const isRun = target.kind === "run" && !!target.ts;
+	const navigate = useNavigate();
+	// The runs "Compare N" would open: the picked ones plus this one.
+	const picked = isRun && !selectedForCompare.includes(target.ts!) ? [...selectedForCompare, target.ts!].slice(-COMPARE_MAX) : selectedForCompare;
 
 	// Keep the menu on-screen: measure it and clamp into the viewport (flips up /
 	// left when opened near the bottom / right edge). Runs pre-paint, so no flash.
@@ -219,8 +229,14 @@ export default function RunContextMenu({
 							onClick={() => runtimeOp("branch", () => launchAndReport(actions.app, actions.loop, { from_run_ts: target.ts, branch_label: `branch of ${target.label}` }), "Branch queued — exploring from here.")} />
 					)}
 					<Row icon={GitCompare} tone="sky"
-						label={selectedForCompare.includes(target.ts!) ? "Remove from compare" : selectedForCompare.length >= 2 ? "Compare with… (replaces oldest)" : "Compare with…"}
+						label={selectedForCompare.includes(target.ts!) ? "Remove from compare" : selectedForCompare.length >= COMPARE_MAX ? "Compare with… (replaces the oldest)" : "Compare with…"}
+						sub={selectedForCompare.includes(target.ts!) ? undefined : "pick it, then pick others to compare"}
 						onClick={() => { onToggleCompare(target.ts!); onClose(); }} />
+					{picked.length >= 2 && (
+						<Row icon={GitCompare} tone="sky" label={`Compare ${picked.length} runs`}
+							sub="side by side, differences first"
+							onClick={() => { onClose(); navigate(compareHref(actions.app, { runs: picked.map((ts) => ({ loop: actions.loop, ts })) })); }} />
+					)}
 					<Row icon={RefreshCw} label="Re-run from here" busy={busy === "rerun"} pending={pending["rerun"]}
 						onClick={() => runtimeOp("rerun", () => launchAndReport(actions.app, actions.loop, { from_run_ts: target.ts }), "Re-running from this point…")} />
 				</>

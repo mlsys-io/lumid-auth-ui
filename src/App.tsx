@@ -66,6 +66,7 @@ const StudioSkills       = lazy(() => import("./pages/studio/skills"));
 // Workstream F — cross-app experiments aggregate.
 const StudioExperiments  = lazy(() => import("./pages/studio/experiments"));
 const StudioRunDetail    = lazy(() => import("./pages/studio/run-detail"));
+const StudioCompare      = lazy(() => import("./pages/studio/compare"));
 // Phase S3-D — per-agent knowledge browser (at /studio/knowledge/:agent).
 const StudioKnowledge  = lazy(() => import("./pages/studio/knowledge"));
 // "You, encoded" ledger at /studio/knowledge (distinct from the per-agent browser).
@@ -957,6 +958,9 @@ export default function App() {
                 element, so the docked chat stays mounted across them. */}
             <Route path="apps/:app/w/:loop"            element={<StudioWorkspace />} />
             <Route path="apps/:app/w/:loop/r/:runId"   element={<StudioWorkspace />} />
+            {/* Compare 2–5 runs or versions of one app (round 9): linkable,
+                ?runs=<loop>:<ts>,… | ?versions=<expId>:<versionId>,… (&base=<i>). */}
+            <Route path="apps/:app/compare"            element={<StudioCompare />} />
             {/* Phase 4 (app→agent, docs/architecture/unified-components.md):
                 the canonical surface is "agents". Forward-compat aliases route
                 /studio/agents* → the existing /studio/apps* views so canonical

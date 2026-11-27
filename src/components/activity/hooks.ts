@@ -28,13 +28,15 @@ function readCache(days: number, state = ""): { runs: MeRunRow[]; asOf: number }
  *  a decommissioned n8n; now ~0.15 s). The window is read page by page with
  *  the keyset cursor, up to FEED_MAX rows; `truncated` is true when the
  *  window still held more. */
-export function useRunsFeed(days: number, state = "") {
-	const [runs, setRuns] = useState<MeRunRow[] | null>(() => readCache(days, state)?.runs ?? null);
+export function useRunsFeed(days: number, state = "", workflow = "") {
+	// The cache is keyed by every server-side filter (state, then workflow).
+	const fkey = workflow ? `${state}|wf=${workflow}` : state;
+	const [runs, setRuns] = useState<MeRunRow[] | null>(() => readCache(days, fkey)?.runs ?? null);
 	const [err, setErr] = useState<string | null>(null);
-	const [asOf, setAsOf] = useState<number>(() => readCache(days, state)?.asOf ?? 0);
+	const [asOf, setAsOf] = useState<number>(() => readCache(days, fkey)?.asOf ?? 0);
 	// The window held more runs than the feed read (FEED_MAX). Before
 	// v0.5.477 there was no cursor, so a full first page meant "capped".
-	const [truncated, setTruncated] = useState<boolean>(() => (readCache(days, state)?.runs.length ?? 0) >= RUNS_CAP);
+	const [truncated, setTruncated] = useState<boolean>(() => (readCache(days, fkey)?.runs.length ?? 0) >= RUNS_CAP);
 	// identity's per-source outcome for lum.id/data jobs (`sources.jobs`).
 	const [jobsSource, setJobsSource] = useState<string | null>(null);
 
@@ -47,7 +49,7 @@ export function useRunsFeed(days: number, state = "") {
 			const since = new Date(Date.now() - days * 86_400_000).toISOString();
 			// A state filter goes to the SERVER: filtering the newest 500 runs of
 			// every state in the browser drops older matches past the cap.
-			let r = await me.listRuns({ since, limit: RUNS_CAP, ...(state ? { state } : {}) });
+			let r = await me.listRuns({ since, limit: RUNS_CAP, ...(state ? { state } : {}), ...(workflow ? { workflow } : {}) });
 			if (mine !== reqId.current) return;
 			const rows = [...(r.runs || [])];
 			setJobsSource(r.sources?.jobs ?? null);
@@ -58,14 +60,19 @@ export function useRunsFeed(days: number, state = "") {
 			setAsOf(Date.now());
 			let more = !!r.has_more && !!r.next_cursor;
 			while (more && rows.length < FEED_MAX) {
-				r = await me.listRuns({ since, limit: RUNS_CAP, cursor: r.next_cursor, ...(state ? { state } : {}) });
+				r = await me.listRuns({ since, limit: RUNS_CAP, cursor: r.next_cursor, ...(state ? { state } : {}), ...(workflow ? { workflow } : {}) });
 				if (mine !== reqId.current) return;
 				const page = r.runs || [];
-				if (page.length === 0) break;
+				// An empty page ends the window, whatever has_more said.
+				if (page.length === 0) { more = false; break; }
 				// Keyset pages should not overlap; if a row ever shows up twice
 				// (a run that moved while we paged), keep the first sighting.
 				const seen = new Set(rows.map((x) => x.run_id));
-				rows.push(...page.filter((x) => !seen.has(x.run_id)));
+				const fresh = page.filter((x) => !seen.has(x.run_id));
+				// A page of rows already read (a filtered read can say has_more
+				// when nothing new follows) ends it too, rather than looping.
+				if (!fresh.length) { more = false; break; }
+				rows.push(...fresh);
 				setRuns(rows.slice());
 				more = !!r.has_more && !!r.next_cursor;
 			}
@@ -73,23 +80,23 @@ export function useRunsFeed(days: number, state = "") {
 			setErr(null);
 			const t = Date.now();
 			setAsOf(t);
-			try { sessionStorage.setItem(cacheKey(days, state), JSON.stringify({ runs: rows, asOf: t })); } catch { /* quota / private mode */ }
+			try { sessionStorage.setItem(cacheKey(days, fkey), JSON.stringify({ runs: rows, asOf: t })); } catch { /* quota / private mode */ }
 		} catch (e) {
 			if (mine !== reqId.current) return;
 			setErr(e instanceof MeApiError ? e.message : String(e));
 		}
-	}, [days, state]);
+	}, [days, state, workflow]);
 
 	// A different window or filter: show its cached answer (or the skeleton) at once.
-	const shownKey = useRef(cacheKey(days, state));
+	const shownKey = useRef(cacheKey(days, fkey));
 	useEffect(() => {
-		const k = cacheKey(days, state);
+		const k = cacheKey(days, fkey);
 		if (shownKey.current === k) return;
 		shownKey.current = k;
-		const c = readCache(days, state);
+		const c = readCache(days, fkey);
 		setRuns(c?.runs ?? null);
 		setAsOf(c?.asOf ?? 0);
-	}, [days, state]);
+	}, [days, fkey]);
 
 	useEffect(() => { void load(); }, [load]);
 	// A run fired from chat shows before the next SSE tick.

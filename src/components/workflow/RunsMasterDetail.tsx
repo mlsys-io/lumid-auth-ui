@@ -14,7 +14,7 @@
 // (cycle list, cycle detail, trajectory) and the URL.
 
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { AuthContext } from "@/hooks/useAuth";
 import { ArrowDown, ArrowUp, ChevronDown, ChevronRight, Loader2, MoreHorizontal, RefreshCw, ScrollText, FileJson, Layers } from "lucide-react";
 import type { MeCycleDetail, MeCycleListItem, MeCycleStep } from "@/api/me";
@@ -27,9 +27,8 @@ import { triageFailure } from "@/lib/failure-triage";
 import StepInspectorPanel from "@/components/workflow/StepInspectorPanel";
 import TrajectoryLogView from "@/components/workflow/TrajectoryLogView";
 import RunOutputs from "@/components/workflow/RunOutputs";
-import { RunCompareView } from "@/components/workflow/BranchTreeView";
 import { cycleStatus, runStatus, runStatusTitle, RUN_STATUS_LABEL, RUN_STATUS_TONE, RUN_STATUSES, type RunStatus, type RunStatusInfo } from "@/lib/runStatus";
-import { runPath, type RunPane } from "@/lib/run-routes";
+import { runPath, compareHref, type RunPane } from "@/lib/run-routes";
 import { TONES } from "@/lib/tones";
 import { cn } from "@/lib/utils";
 
@@ -400,10 +399,9 @@ export function RunDetail({
 			</div>
 
 			{/* BODY — compare, the run log, or the step timeline. */}
+			{/* ?compare=<ts> (old links) opens the Compare page for the two runs. */}
 			{compare ? (
-				<div className="p-2 h-[560px] min-w-0">
-					<RunCompareView app={app} loop={loop} tsA={runId} tsB={compare} onBack={() => onQuery({ compare: null })} />
-				</div>
+				<Navigate replace to={compareHref(app, { runs: [{ loop, ts: runId }, { loop, ts: compare }] })} />
 			) : pane === "log" && !openStep ? (
 				<div className="p-2 h-[520px] min-w-0">
 					<TrajectoryLogView app={app} loop={loop} ts={runId} onBack={() => onQuery({ pane: null })} backLabel="Steps" />

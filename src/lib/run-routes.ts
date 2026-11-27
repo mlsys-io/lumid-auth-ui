@@ -137,3 +137,18 @@ export function runNowOutcome(
 		outcome: typeof data.outcome === "string" ? data.outcome : undefined,
 	};
 }
+
+/** The Compare page for 2–5 runs or versions of one app (round 9):
+ *    /studio/apps/:app/compare?runs=<loop>:<ts>,…
+ *    /studio/apps/:app/compare?versions=<expId>:<versionId>,…
+ *  Run ids are normalised to the cycle-dir id; ":" and "," stay readable. */
+export function compareHref(
+	app: string,
+	sel: { runs?: Array<{ loop: string; ts: string }>; versions?: Array<{ exp: string; version: string }> },
+): string {
+	const part = (a: string, b: string) => `${enc(a)}:${enc(b)}`;
+	const q: string[] = [];
+	if (sel.runs?.length) q.push(`runs=${sel.runs.map((r) => part(r.loop, toCycleId(r.ts))).join(",")}`);
+	if (sel.versions?.length) q.push(`versions=${sel.versions.map((v) => part(v.exp, v.version)).join(",")}`);
+	return `/studio/apps/${enc(app)}/compare${q.length ? `?${q.join("&")}` : ""}`;
+}

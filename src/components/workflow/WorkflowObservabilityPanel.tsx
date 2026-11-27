@@ -24,7 +24,7 @@ import apiClient from "@/api/client";
 import { me, MeApiError, patchLoopApplied, type MeLatestOutput, type MeWorkflowRow, type MeCycleDetail, type LoopDefinition, type MeDatasetRef } from "@/api/me";
 import { appTitle, type AppIdentity } from "@/components/workflow/AppCard";
 import { RunsTable, RunDetail, runLocalTime, type RunRow } from "@/components/workflow/RunsMasterDetail";
-import { workflowPath, runPath, canonicalRunId, type RunPane } from "@/lib/run-routes";
+import { workflowPath, runPath, canonicalRunId, compareHref, type RunPane } from "@/lib/run-routes";
 import { cycleStatus, type RunStatus } from "@/lib/runStatus";
 import { type LoopStageKey } from "@/components/workflow/LoopOrbit";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
@@ -39,7 +39,6 @@ import { usePortalTarget } from "@/hooks/usePortalTarget";
 import MetricsView from "@/components/workflow/MetricsView";
 import CaseContentViewer from "@/components/workflow/CaseContentViewer";
 import TrajectoryLogView from "@/components/workflow/TrajectoryLogView";
-import { RunCompareView } from "@/components/workflow/BranchTreeView";
 import RunContextMenu, { type RunMenuActions, type RunMenuTarget } from "@/components/workflow/RunContextMenu";
 import NextRunComposer from "@/components/workflow/NextRunComposer";
 import RunHistoryGrid from "@/components/workflow/RunHistoryGrid";
@@ -347,7 +346,7 @@ export default function WorkflowObservabilityPanel({
 	const pinVersion = useCallback((v: TrajectoryVersion | null) => setPinnedVersion(v), []);
 	// Toggle a run into the 2-slot compare set; 2 → a compare frame renders.
 	const toggleCompare = useCallback((ts: string) => {
-		setCompareSel((cur) => cur.includes(ts) ? cur.filter((t) => t !== ts) : [...cur, ts].slice(-2));
+		setCompareSel((cur) => cur.includes(ts) ? cur.filter((t) => t !== ts) : [...cur, ts].slice(-5));
 	}, []);
 	// State for the WS-5 branch-with-intention dialog (run ts + label).
 	const [branchFor, setBranchFor] = useState<{ ts?: string; label: string } | null>(null);
@@ -748,9 +747,7 @@ export default function WorkflowObservabilityPanel({
 	// metrics, a case, a prompt, a memory bank). `base` is what shows when
 	// nothing is pushed.
 	const canvas = (base: React.ReactNode) => (
-		compareSel.length === 2 ? (
-			<RunCompareView app={app} loop={loop} tsA={compareSel[0]} tsB={compareSel[1]} onBack={() => setCompareSel([])} />
-		) : logFocus ? (
+		logFocus ? (
 			<TrajectoryLogView app={app} loop={loop} ts={version?.runTs || version?.cycleTs || anchorTs || undefined} onBack={backToTree} backLabel="Back" />
 		) : promptFocus ? (
 			<Suspense fallback={<div className="flex items-center gap-2 text-xs text-ink-600 p-4"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading prompt…</div>}>
@@ -923,15 +920,17 @@ export default function WorkflowObservabilityPanel({
 			{qTab === "lineage" && (
 				traj === null ? (
 					<div className="flex items-center gap-2 text-xs text-ink-600 p-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Loading the run tree…</div>
-				) : !branches && compareSel.length !== 2 && !logFocus && !metricsFocus ? (
+				) : !branches && compareSel.length < 2 && !logFocus && !metricsFocus ? (
 					<div className="rounded-xl border border-dashed border-ink-200 bg-ink-50/60 px-4 py-6 text-caption text-ink-600">
 						This workflow&apos;s runs form a straight line — see <Link to={tabHref("runs")} className="text-gold-700 hover:underline">Runs</Link>.
 					</div>
 				) : (
 					<div ref={fillRef} style={{ height: fillH }} className="rounded-xl border border-ink-200 bg-card overflow-hidden relative min-w-0">
-						{compareSel.length === 1 && (
+						{compareSel.length >= 1 && (
 							<div className="absolute bottom-2 left-2 z-20 inline-flex items-center gap-2 text-micro rounded-full px-2.5 py-1 border bg-lagoon-50 border-lagoon-200 text-lagoon-700 shadow-sm">
-								1 run selected — pick another run’s ⋯ → “Compare with…”
+								{compareSel.length === 1
+									? "1 run picked — pick another run’s ⋯ → “Compare with…”"
+									: <Link to={compareHref(app, { runs: compareSel.map((ts) => ({ loop, ts })) })} className="font-medium underline">Compare {compareSel.length} runs</Link>}
 								<button onClick={() => setCompareSel([])} className="text-lagoon-600 hover:text-lagoon-800 underline">clear</button>
 							</div>
 						)}
@@ -1034,8 +1033,7 @@ export default function WorkflowObservabilityPanel({
 					x={runMenu.x} y={runMenu.y}
 					target={{ kind: "run", ts: overlayTs, label: `Run ${runLocalTime(overlayTs)}` }}
 					actions={runPageActions}
-					selectedForCompare={qCompare ? [qCompare] : []}
-					onToggleCompare={(ts) => patchQuery({ compare: ts === qCompare ? null : ts })}
+					selectedForCompare={compareSel} onToggleCompare={toggleCompare}
 					onClose={() => setRunMenu(null)}
 					onAfterRuntimeOp={() => loadLatestCycle(true)}
 				/>,

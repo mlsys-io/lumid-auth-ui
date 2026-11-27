@@ -1,5 +1,5 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
-import { sideStats, compareVerdict, runMetricValues } from "./compare";
+import { sideStats, compareVerdict, runMetricValues, compareSides, metricBetter, rowIsSame, type SideInput } from "./compare";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -47,6 +47,71 @@ check("run metrics: every number per metric, true/false as 1/0, one version by a
 	const c8 = runMetricValues(runs, "c8");
 	eq([...c8.keys()].sort(), ["goodput_tok_s", "meets_constraints", "ttft_ms_p99"]);
 	eq(c8.get("ttft_ms_p99"), [1374]);
+});
+
+check("many sides: baseline column, deltas, the best side, verdicts vs the baseline", () => {
+	const sides: SideInput[] = [
+		{ label: "A", values: { sharpe: [1.0, 1.1, 0.9, 1.0], ttft_ms_p99: [200, 210, 190] } },
+		{ label: "B", values: { sharpe: [1.3, 1.35, 1.25, 1.3], ttft_ms_p99: [150, 160, 155] } },
+		{ label: "C", values: { sharpe: [1.0, 1.2, 0.8, 1.0] } },
+	];
+	const c = compareSides(sides, [{ name: "sharpe", label: "Sharpe" }, { name: "ttft_ms_p99", label: "TTFT p99" }]);
+	eq(c.baseline, 0);
+	const sh = c.rows[0];
+	eq([sh.best, sh.cells.map((x) => x.best)], [1, [false, true, false]]);
+	eq(sh.cells[0].verdict, null, "no verdict on the baseline");
+	eq(Number(sh.cells[1].delta!.toFixed(2)), 0.3);
+	eq(Number(sh.cells[1].deltaPct!.toFixed(0)), 30);
+	eq(sh.cells[1].verdict!.ahead, "b");
+	eq(sh.cells[2].verdict!.tone, "attention");
+	eq(c.rows[1].better, "lower");
+	eq(c.rows[1].best, 1, "lower latency is best");
+	eq(c.rows[1].cells[2].stats, null, "C never measured it");
+	eq(c.headline.text, "B is ahead of A on Sharpe by 0.3 (4 runs each)");
+});
+check("pinning another baseline turns the sentence around", () => {
+	const sides = [{ label: "A", values: { x: [1, 1.1, 0.9] } }, { label: "B", values: { x: [2, 2.1, 1.9] } }];
+	const c = compareSides(sides, ["x"], 1);
+	eq(c.baseline, 1);
+	eq(c.rows[0].cells[0].delta, -1);
+	eq(c.headline.text, "B is ahead of A on x by 1 (3 runs each)");
+});
+check("too few runs names the best so far and says it can't be called", () => {
+	const c = compareSides([{ label: "A", values: { goodput: [120] } }, { label: "B", values: { goodput: [130] } }], [{ name: "goodput", label: "Goodput" }]);
+	eq(c.headline.text, "B has the best Goodput (130 vs 120 for A) — too few runs to tell yet: 1 run each, 3 each needed");
+	eq(c.headline.tone, "idle");
+	const same = compareSides([{ label: "A", values: { m: [1] } }, { label: "B", values: { m: [1] } }], ["m"]);
+	eq(same.headline.text, "m is the same on every side so far — too few runs to tell yet: 1 run each, 3 each needed");
+});
+check("inside the noise says how many more runs each", () => {
+	const c = compareSides([{ label: "A", values: { s: [10, 12, 9, 11] } }, { label: "B", values: { s: [11, 9, 12, 10.5] } }], [{ name: "s", label: "Score" }]);
+	if (!/^Can't tell apart yet on Score/.test(c.headline.text)) throw new Error(c.headline.text);
+	const d = compareSides([{ label: "A", values: { s: [1.0, 1.4, 0.6] } }, { label: "B", values: { s: [1.2, 1.6, 0.8] } }], [{ name: "s", label: "Score" }]);
+	eq(d.headline.text, "Can't tell apart yet on Score: need about 29 more runs each");
+});
+check("served aggregates stand in when per-run values are missing", () => {
+	const agg = (n: number, mean: number, sd: number) => ({ n, mean, sd, min: mean, max: mean, latest: mean });
+	const c = compareSides([{ label: "A", values: {}, stats: { m: agg(10, 1, 0.1) } }, { label: "B", values: {}, stats: { m: agg(10, 2, 0.1) } }], ["m"]);
+	eq(c.rows[0].best, 1);
+	eq(c.headline.ahead, "b");
+	eq(compareSides([{ label: "A", values: {} }, { label: "B", values: {} }], ["m"]).headline.text, "No m results to compare yet");
+	eq(compareSides([{ label: "A", values: {} }, { label: "B", values: { m: [1, 2, 3] } }], ["m"]).headline.text, "A has no m result yet — pin another side as the baseline");
+	eq(compareSides([], []).headline.text, "No numbers to compare yet");
+});
+check("which way is good", () => {
+	eq(metricBetter("goodput_tok_s"), "higher");
+	eq(metricBetter("ttft_ms_p99"), "lower");
+	eq(metricBetter("cost_usd"), "lower");
+	eq(metricBetter("max_drawdown"), "lower");
+	eq(metricBetter("cost_usd", true), "higher", "the app's word wins");
+});
+check("a tie for the best is said as a tie, against the best of the rest", () => {
+	const c = compareSides(["A", "B", "C", "D"].map((label, i) => ({ label, values: { m: [[1, 1, 0, 0.5][i]] } })), [{ name: "m", label: "Meets constraints" }]);
+	eq(c.headline.text, "A and B share the best Meets constraints (1 vs 0.5 for D and lower) — too few runs to tell yet: 1 run each, 3 each needed");
+});
+check("rows that read the same everywhere fold", () => {
+	const c = compareSides([{ label: "A", values: { x: [1], y: [1] } }, { label: "B", values: { x: [1], y: [2] } }, { label: "C", values: { x: [1] } }], ["x", "y"]);
+	eq([rowIsSame(c.rows[0]), rowIsSame(c.rows[1])], [true, false]);
 });
 
 export function run(): number {
