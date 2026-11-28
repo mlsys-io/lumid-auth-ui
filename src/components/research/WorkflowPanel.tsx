@@ -35,7 +35,8 @@ import { useInstruments } from "@/hooks/useInstruments";
 
 const mLabel = (name: string) => humanMetric(name).label;
 /** A metric value with its unit, the way the run page writes it. */
-const mVal = (name: string, v: number) => { const h = humanMetric(name); const t = fmtMetricValue(v, h.unit, name); return h.unit && !t.endsWith("%") ? `${t} ${h.unit}` : t; };
+// fmtMetricValue writes the unit itself; adding it again doubled it.
+const mVal = (name: string, v: number) => fmtMetricValue(v, humanMetric(name).unit, name);
 import { compareHref, runPath, workflowPath } from "@/lib/run-routes";
 import { RunSteps, StepProgress } from "@/components/research/ProgressDots";
 import { stepsFromCycle } from "@/lib/progress-dots";
