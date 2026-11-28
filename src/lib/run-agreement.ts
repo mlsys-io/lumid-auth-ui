@@ -54,7 +54,10 @@ export function comparisonOf(d: MeCycleDetail | null): RunAgreement | null {
 			if (!fk || !sk) continue;
 			firstKey ||= fk; secondKey ||= sk;
 			const a = o[fk], b = o[sk];
-			rows.push({ metric: /[_.]/.test(metric) ? humanMetric(metric).label : metric, first: text(a, metric), second: text(b, metric), gap: typeof o.gap === "string" ? o.gap : gapOf(a, b) });
+			// A row that names its metric key gets the short label ("TTFT p99"),
+			// not the app's long words ("Time to the first word, slowest 1%…").
+			const key = typeof o.key === "string" && o.key ? o.key : /[_.]/.test(metric) ? metric : "";
+			rows.push({ metric: key ? humanMetric(key).label : metric, first: text(a, key || metric), second: text(b, key || metric), gap: typeof o.gap === "string" ? o.gap : gapOf(a, b) });
 		}
 		if (!rows.length) continue;
 		const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);

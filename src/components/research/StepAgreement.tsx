@@ -82,8 +82,14 @@ export default function StepAgreement({ steps, rows, sameAs, label }: {
 			{all.map((a) => {
 				const head = agreementHeadline(a);
 				const tone = TONES[head.tone === "ok" ? "ok" : head.tone === "attention" ? "attention" : "idle"];
-				const ranked = a.metrics.find((m) => !m.binary && m.pairs.length >= 2);
-				const lines = a.metrics.flatMap((m) => [rankWords(m, a.expensive.label) && `${m.label}: ${rankWords(m, a.expensive.label).replace(/^Ranks/, "ranks")}`, biasWords(m, a.cheap.label), flipWords(m, a.cheap.label, a.expensive.label, label)]).filter(Boolean).slice(0, 5);
+				// The scatter and the numbers only from 3 shared versions; below that the
+				// headline already says how many more to measure, so each metric keeps
+				// only its high/low reading (2 pairs say that much) and its flips.
+				const ranked = a.metrics.find((m) => !m.binary && m.pairs.length >= 3);
+				const lines = a.metrics.flatMap((m) => [
+					m.rho != null ? `${m.label}: ${rankWords(m, a.expensive.label).replace(/^Ranks/, "ranks")}` : "",
+					biasWords(m, a.cheap.label), flipWords(m, a.cheap.label, a.expensive.label, label),
+				]).filter(Boolean).slice(0, 5);
 				return (
 					<div key={`${a.cheap.step}>${a.expensive.step}`} className="space-y-2">
 						<div className="eyebrow">Does {a.cheap.label} predict {a.expensive.label}?</div>

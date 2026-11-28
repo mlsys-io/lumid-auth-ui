@@ -167,9 +167,10 @@ export default function RunAnswerCard({ app, loop, runId, detail, listRow, cycle
 					})}
 				</dl>
 			)}
-			{a.tone !== "running" && (() => { const tgt = runDiscardTarget(detail); return tgt ? <DiscardRun app={app} target={tgt} /> : null; })()}
 			{/* The key number against the last runs: draws in, then the delta pops. */}
 			{reveal && <MetricReveal {...reveal} />}
+			{/* Last, on its own row: a quiet control, not part of the result. */}
+			{a.tone !== "running" && (() => { const tgt = runDiscardTarget(detail); return tgt ? <div className="border-t border-ink-100 pt-2"><DiscardRun app={app} target={tgt} /></div> : null; })()}
 
 			{a.raw && (
 				<div>

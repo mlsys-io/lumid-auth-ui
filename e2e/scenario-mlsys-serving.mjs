@@ -15,6 +15,10 @@
 //   3 tune with the simulator    4 analyse an unexpected result (A/B + chat)
 //   5 decide and dispatch next   6 fine-tune in the sandbox   7 manage the node
 // Output: e2e/out/scenario/<step>.png, report.json (timings, verdicts, chat replies).
+// Teardown: the workflows this run created (sla_tuned_<RUN>, sandbox_<RUN>) are
+// deleted at the end, by exact name, with ?force=1 so the experiments set up on
+// them go too (the nodes it made are re-parented, not deleted). KEEP=1 keeps
+// them for a look afterwards.
 // A chat answer that invents a number, or a run that dispatches without a
 // press, fails the scenario.
 
@@ -35,6 +39,10 @@ const OUT = path.resolve(process.env.OUT || 'e2e/out/scenario');
 // A suffix per run, so the scenario can run again on the same app.
 const RUN = process.env.RUN_ID || Date.now().toString(36).slice(-4);
 const TUNED = `sla_tuned_${RUN}`, SANDBOX = `sandbox_${RUN}`;
+const KEEP = process.env.KEEP === '1';
+// The workflows THIS run created, by exact name: the teardown deletes these
+// and nothing else (never by prefix — other runs' and people's work shares the app).
+const created = [];
 const label = (id) => id.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
 fs.mkdirSync(OUT, { recursive: true });
 if (!PAT) { console.error('LUMID_PAT is required'); process.exit(2); }
@@ -50,6 +58,20 @@ const api = async (method, p, body) => {
 	const j = await r.json().catch(() => ({}));
 	return { status: r.status, data: j?.data ?? j };
 };
+
+/** Is `id` a workflow in the app's spec right now (applied edits included)? */
+const inSpec = async (id) => {
+	const yaml = (await api('GET', `/apps/${APP}/config`)).data?.yaml || '';
+	const esc = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	return new RegExp(`^\\s*(-\\s+)?(id|name):\\s*["']?${esc}["']?\\s*(#.*)?$`, 'm').test(yaml);
+};
+/** Click Create on the variant sheet; remember the workflow if this run makes it. */
+async function createVariant(sheet, id) {
+	if (!(await inSpec(id).catch(() => true))) created.push(id);
+	else note(`${id} already exists (RUN_ID reused?) — the teardown leaves it alone`);
+	await sheet.getByRole('button', { name: /^Create/ }).click();
+}
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const b = await chromium.launch({ headless: true, executablePath: process.env.CHROME || undefined, args: ['--no-sandbox'] });
 const ctx = await b.newContext({ viewport: { width: 1600, height: 1000 }, extraHTTPHeaders: { Authorization: `Bearer ${PAT}` } });
@@ -142,6 +164,7 @@ async function chat(prompt, { timeout = 240000 } = {}) {
 /** Run ids look like 2026…T…Z (cycle dir ids) or run_ts digits. */
 const RUN_ID = /\b20\d{6}T\d{6}Z\b|\brun[ _]?(?:id|ts)?[:# ]+\S+/i;
 
+try {
 // ── setup: a forked copy, so the real app's graph stays clean ─────────────
 await step('setup: a copy of MLSys Research', async () => {
 	// A fresh install of the PUBLISHED app under its own name (a fork would
@@ -178,7 +201,7 @@ await step('2 design: a variant through the UI', async () => {
 	if (await idField.count()) await idField.fill(TUNED);
 	const nodeName = sheet.locator('input[aria-label="New node name"]');
 	if (await nodeName.count()) await nodeName.fill(`SLA tuning ${RUN}`);
-	await sheet.getByRole('button', { name: /^Create/ }).click();
+	await createVariant(sheet, TUNED);
 	await sheet.waitFor({ state: 'detached', timeout: 120000 });
 	await page.waitForTimeout(3000);
 	assert(await node('workflow', label(TUNED)).count() > 0, 'the variant appears under Simulate');
@@ -320,7 +343,7 @@ await step('6 sandbox: a real-GPU variant', async () => {
 	if (await idField.count()) await idField.fill(SANDBOX);
 	const nodeName = sheet.locator('input[aria-label="New node name"]');
 	if (await nodeName.count()) await nodeName.fill(`On a real GPU ${RUN}`);
-	await sheet.getByRole('button', { name: /^Create/ }).click();
+	await createVariant(sheet, SANDBOX);
 	await sheet.waitFor({ state: 'detached', timeout: 120000 });
 	await page.waitForTimeout(3000);
 	await openWorkflow(label(SANDBOX));
@@ -368,7 +391,44 @@ await step('7 manage the node', async () => {
 report.ms = Date.now() - t0;
 report.unpressedRuns = runRequests.filter((r) => !r.pressed && !/chat/.test(r.url)).length;
 assert(report.unpressedRuns === 0, 'no run dispatched without a press (UI)');
+} finally {
+	report.teardown = await teardown();
+}
 fs.writeFileSync(`${OUT}/report.json`, JSON.stringify(report, null, 2));
-console.log(`\n${report.fails.length ? `${report.fails.length} FAILED` : 'ALL PASS'} · ${Math.round(report.ms / 1000)} s · ${OUT}/report.json`);
-await b.close();
+console.log(`\n${report.fails.length ? `${report.fails.length} FAILED` : 'ALL PASS'} · ${Math.round((report.ms ?? Date.now() - t0) / 1000)} s · ${OUT}/report.json`);
+await b.close().catch(() => {});
 process.exit(report.fails.length ? 1 : 0);
+
+// ── teardown: delete what this run created ────────────────────────────────
+// Logs each outcome and never fails the scenario. Children first (sandbox is a
+// variant of sla_tuned), and one at a time: a queued delete is a spec write
+// checked against the spec it was planned on, so the next one waits for it.
+async function teardown() {
+	console.log('\n── teardown');
+	const out = [];
+	if (KEEP) { note(`KEEP=1 — leaving ${created.join(', ') || 'nothing'} in ${APP}`); return out; }
+	if (!created.length) { note('this run created no workflows'); return out; }
+	for (const name of [...created].reverse()) {
+		let outcome;
+		try {
+			const r = await api('DELETE', `/apps/${encodeURIComponent(APP)}/loops/${encodeURIComponent(name)}?force=1`);
+			if (r.status === 200) outcome = `deleted (${r.data?.remaining ?? '?'} workflows left)`;
+			else if (r.status === 202 && r.data?.intent_id) {
+				outcome = `queued (intent ${r.data.intent_id}), not confirmed in 3 min`;
+				for (const until = Date.now() + 3 * 60000; Date.now() < until;) {
+					await sleep(5000);
+					const i = (await api('GET', `/intents/${encodeURIComponent(r.data.intent_id)}`)).data;
+					if (i?.status !== 'completed') continue;
+					const res = i.result || {};
+					outcome = res.ok === false || res.error ? `failed: ${res.error || JSON.stringify(res).slice(0, 200)}` : 'deleted (applied by the scheduler)';
+					break;
+				}
+			} else outcome = `not deleted: HTTP ${r.status} ${r.data?.message || ''}`.trim();
+		} catch (e) {
+			outcome = `not deleted: ${String(e).split('\n')[0].slice(0, 200)}`;
+		}
+		console.log(`  - ${name}: ${outcome}`);
+		out.push({ name, outcome });
+	}
+	return out;
+}

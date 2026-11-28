@@ -21,6 +21,11 @@ check("a run's own comparison rows (MLSys sandbox shape)", () => {
 	eq(a.rows[1], { metric: "Goodput", first: "22.4 tokens/s", second: "24 tokens/s", gap: "+7%" });
 });
 
+check("a row that names its key gets the short label", () => {
+	const a = runAgreement(detail({}, { comparison: [{ metric: "Time to the first word, slowest 1% of requests", key: "ttft_ms_p99", simulated: 1158, measured: 669 }] }))!;
+	eq(a.rows[0].metric, "TTFT p99");
+});
+
 check("numeric comparison computes the gap and the headline", () => {
 	const a = runAgreement(detail({}, { comparison: [{ metric: "ttft_ms_p99", predicted: 1400, measured: 820 }, { metric: "goodput_tok_s", predicted: 22, measured: 24 }] }))!;
 	eq(a.rows[0].gap, "−41%");
