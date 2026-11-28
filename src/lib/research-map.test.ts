@@ -38,7 +38,10 @@ check("status: not comparable, in words", () => eq(experimentStatus(kol), { tone
 check("status: confirmed winner", () => eq(experimentStatus(won), { tone: "ok", text: "Winning: Plain style" }));
 check("status: never ran / starved / unfed", () => {
 	eq(experimentStatus(fresh).text, "Not started yet");
-	eq(experimentStatus({ ...fresh, starved: true, starved_reason: "backtest failed its last 5 run(s): HTTP 500" } as MeExperiment), { tone: "failing", text: "Stuck — the workflow that runs it is failing" });
+	eq(experimentStatus({ ...fresh, starved: true, starved_reason: "backtest failed its last 5 run(s): HTTP 500" } as MeExperiment).tone, "failing");
+	eq(experimentStatus({ ...fresh, starved: true, starved_reason: "backtest failed its last 5 run(s): HTTP 500" } as MeExperiment).text.startsWith("Stuck — Backtest failed its last 5 runs: "), true);
+	eq(experimentStatus({ ...fresh, starved: true, starved_reason: "screen failed its last 1 run(s)" } as MeExperiment).text, "Stuck — Screen failed its last run");
+	eq(experimentStatus({ ...fresh, starved: true, starved_reason: "something failed oddly" } as MeExperiment).text, "Stuck — the workflow that runs it is failing");
 	// Never ran, or waits to be dispatched: not started, not failing.
 	eq(experimentStatus({ ...fresh, starved: true, starved_reason: "no run of screen has been recorded yet" } as MeExperiment), { tone: "idle", text: "Not started yet — none of its versions has run" });
 	// Rows from earlier steps, none carrying the metric yet: under way, not "not started".

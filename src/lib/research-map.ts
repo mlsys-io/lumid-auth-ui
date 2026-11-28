@@ -9,7 +9,7 @@
 // → versions, with suggestions as dashed branches off the app.
 
 import type { MeExperiment, MeWorkflowRow } from "@/api/me";
-import { fmtAgo } from "@/lib/activity";
+import { fmtAgo, plainCause } from "@/lib/activity";
 import { humanMetric, fmtMetricValue } from "@/lib/run-answer";
 
 export type Tone = "ok" | "running" | "failing" | "attention" | "idle";
@@ -73,6 +73,19 @@ const baselineArm = (e: MeExperiment): string | undefined => {
 	return typeof b === "string" ? b : b?.arm;
 };
 
+/** "screen failed its last 5 run(s): HTTP 401…" (identity markStarved) →
+ *  "Stuck — Screen failed its last 5 runs: Not signed in (HTTP 401)". Was the
+ *  same sentence for every cause ("the workflow that runs it is failing"),
+ *  which hid WHICH workflow and WHY (2026-11-28, MBB student round). */
+export function stuckWords(reason: string): string {
+	const m = /^\s*(\S+) failed its last (\d+) run\(s\)(?::\s*([\s\S]*))?$/.exec(reason);
+	if (!m) return "Stuck — the workflow that runs it is failing";
+	const n = Number(m[2]);
+	const runs = n === 1 ? "its last run" : `its last ${n} runs`;
+	const why = m[3] && m[3].trim() ? `: ${plainCause(m[3])}` : "";
+	return `Stuck — ${humanId(m[1])} failed ${runs}${why}`;
+}
+
 export function experimentStatus(e: MeExperiment): { tone: Tone; text: string } {
 	if (e.status && /concluded|done|archived|closed/i.test(e.status)) {
 		return e.best_variant && e.criteria_met
@@ -97,7 +110,7 @@ export function experimentStatus(e: MeExperiment): { tone: Tone; text: string } 
 		// experiment read "Stuck" in red (2026-11-27, Quant Research 0.8.0).
 		if (e.starved) {
 			return /\bfailed\b/i.test(e.starved_reason || "")
-				? { tone: "failing", text: "Stuck — the workflow that runs it is failing" }
+				? { tone: "failing", text: stuckWords(e.starved_reason || "") }
 				: { tone: "idle", text: "Not started yet — none of its versions has run" };
 		}
 		// The workflow ran, but never AS one of these versions (runs started by
