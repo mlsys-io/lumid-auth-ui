@@ -35,6 +35,8 @@ import Space3D from "@/components/research/Space3D";
 import RunVersions from "@/components/research/RunVersions";
 import EvidenceGrid from "@/components/research/EvidenceGrid";
 import AddVersions from "@/components/research/AddVersions";
+import ExperimentSpend, { useExperimentRows } from "@/components/research/ExperimentSpend";
+import HoldoutLine from "@/components/research/HoldoutLine";
 import { experimentSteps } from "@/lib/evidence";
 import YourCall from "@/components/research/YourCall";
 import WorkflowPanel, { NodePanel, CompareView, wfLabel, type CompareSide, type PanelView } from "@/components/research/WorkflowPanel";
@@ -46,7 +48,7 @@ import { fmtAgo } from "@/lib/activity";
 import {
 	buildResearchTree, comparabilityNote, criteriaInWords, experimentStatus, humanId, mapSummary, pathTo, versionsOf, OTHER_NODE, DOT_SIZE,
 	type MapEdge, type MapNode, type Proposal, type Tone, type VersionInfo,
-	shortStatus, rowStatus, triedVersions,
+	shortStatus, rowStatus, triedVersions, experimentLoop,
 } from "@/lib/research-map";
 import { humanMetric, fmtMetricValue } from "@/lib/run-answer";
 import { workflowPath } from "@/lib/run-routes";
@@ -548,7 +550,17 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 	const note = comparabilityNote(e);
 	// Each version at each feedback step of its workflow (renders once a result lands).
 	const steps = useMemo(() => experimentSteps(spec, e, specText), [spec, e, specText]);
-	const grid = <EvidenceGrid app={app} e={e} steps={steps} onPickVersion={onPickVersion} pickedVersion={pickedVersion} />;
+	// One read of the ledger rows for the spend and holdout lines.
+	const expRows = useExperimentRows(app, e.id);
+	const grid = (
+		<>
+			<EvidenceGrid app={app} e={e} steps={steps} onPickVersion={onPickVersion} pickedVersion={pickedVersion} />
+			{/* What it cost, was it worth it, does the cheap step predict the next (MLSys session, PR 324). */}
+			<ExperimentSpend app={app} e={e} steps={steps} rows={expRows ?? undefined} />
+			{/* Which step may read held-out data, who has, and how many trials (MLSys session, PR 329). */}
+			<HoldoutLine specText={specText ?? ""} workflow={experimentLoop(e)} steps={steps.map((x) => x.step)} rows={expRows} label={(v) => humanId(v)} />
+		</>
+	);
 
 	const head = (
 		<>

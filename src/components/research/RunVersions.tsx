@@ -19,6 +19,12 @@ import { batchProgress, experimentLoop, humanId, versionsToRun, type BatchProgre
 import type { QueueRow } from "@/lib/compute";
 import { cn } from "@/lib/utils";
 import { loopLabel } from "@/lib/workflow-names";
+import { useAppGraph } from "@/hooks/useAppGraph";
+import { experimentSteps } from "@/lib/evidence";
+import { estimateThrough, throughChoices } from "@/lib/run-through";
+import { pressWords } from "@/lib/spend";
+import { useAppUsage } from "@/components/research/SpendLine";
+import { useExperimentRows } from "@/components/research/ExperimentSpend";
 
 type Sent = { n: number; loop: string; intents: string[]; labels: string[]; exp: string; ids: string[]; sentAt: number } | { chat: true };
 
@@ -82,6 +88,18 @@ export default function RunVersions({ app, e, onQueued, only, tried }: { app: st
 	const untried = only ? !(e.variants?.[only]?.n) && !(tried || []).includes(only) : all.untried;
 	const [over, setOver] = useState(false);
 	const prog = useBatch(app, sent, () => { setOver(true); sentByExperiment.delete(key); });
+	// How far the press runs a chain: through each step but the last, or all
+	// the way (lib/run-through). The default holds only the last step — the
+	// expensive or final one — for a later press; priced from this
+	// experiment's own metered history, checked against the app's budget.
+	const { graph } = useAppGraph(app);
+	const steps = graph ? experimentSteps(graph.spec, e, graph.text) : [];
+	const { choices, preferred } = throughChoices(steps);
+	const [pick, setPick] = useState<number | null>(null);
+	const choice = choices.length ? choices[Math.min(pick ?? preferred, choices.length - 1)] : null;
+	const rows = useExperimentRows(app, e.id);
+	const usage = useAppUsage(app);
+	const press = choice ? pressWords({ runs: ids.length, estimate: estimateThrough(rows, steps, choice.until), usage, through: choice.through }) : null;
 	// Shared experiments are measured centrally (sharedLine): nothing to run here.
 	if (!loop || !ids.length || e.shared || e.status && /concluded|done|archived|closed/i.test(e.status)) return null;
 	const label = only ? `Run ${humanId(only)} once` : untried
@@ -111,6 +129,7 @@ export default function RunVersions({ app, e, onQueued, only, tried }: { app: st
 					branch_label: id,
 					priority: 50,
 					experiment_id: e.id,
+					...(choice?.until ? { args: { until_step: choice.until } } : {}),
 				});
 				intents.push(r.intent_id);
 			}
@@ -133,7 +152,7 @@ export default function RunVersions({ app, e, onQueued, only, tried }: { app: st
 	return (
 		<div className="min-w-0 space-y-1">
 			<div className="flex items-center gap-2">
-				<Button size="sm" variant="accent" onClick={go} disabled={busy || running || (!!sent && "chat" in sent)}>
+				<Button size="sm" variant="accent" onClick={go} disabled={busy || running || (!!sent && "chat" in sent) || !!press?.blocked}>
 					<Play className="w-3.5 h-3.5" /> {busy ? "Queuing…" : running ? "Running…" : over ? "Run again" : label}
 				</Button>
 				{/* One dot per queued run: hollow waiting, breathing running, gold done, brick failed. */}
@@ -143,6 +162,22 @@ export default function RunVersions({ app, e, onQueued, only, tried }: { app: st
 					</span>
 				)}
 			</div>
+			{choice && !running && (
+				<label className="flex min-w-0 flex-wrap items-center gap-1.5 text-micro text-ink-700">
+					<span>Through</span>
+					<select
+						aria-label="How far to run"
+						value={choices.indexOf(choice)}
+						onChange={(ev) => setPick(Number(ev.target.value))}
+						className="min-w-0 max-w-full rounded-md border border-ink-200 bg-card px-1 py-0.5 text-micro text-ink-800"
+					>
+						{choices.map((c, i) => <option key={i} value={i}>{c.until ? `${c.through} (${c.holds})` : `all the way (${c.through})`}</option>)}
+					</select>
+				</label>
+			)}
+			{press && !running && /about|left/.test(press.text) && (
+				<p className={cn("text-micro", press.blocked ? "text-brick-700" : "text-ink-700")}>{press.text}</p>
+			)}
 			{prog && (
 				<p className={cn("text-micro", prog.finished && prog.failed ? "text-brick-700" : prog.finished ? "text-gold-700" : "text-ink-700")} role="status">{prog.text}</p>
 			)}

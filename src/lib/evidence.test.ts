@@ -94,6 +94,23 @@ check("simulate → sandbox (gate on the first only): measured, then ready", () 
 	eq(ev.best, { version: "x", step: "sandbox", metric: "ttft_ms_p99", value: 812 });
 	eq(ev.next.map((n) => [n.label, n.versions]), [["Sandbox", ["z"]]]);
 });
+check("ties: the next declared metric decides, or the words say it can't", () => {
+	const rows: MeExperimentRow[] = [
+		{ ts: "2026-11-28T00:00:00Z", variant_id: "a", metrics: { goodput: 22.4, ttft_p99_ms: 250 } },
+		{ ts: "2026-11-28T00:00:00Z", variant_id: "b", metrics: { goodput: 22.4, ttft_p99_ms: 180 } },
+		{ ts: "2026-11-28T00:00:00Z", variant_id: "c", metrics: { goodput: 22.4, ttft_p99_ms: 300 } },
+		{ ts: "2026-11-28T00:00:00Z", variant_id: "d", metrics: { goodput: 18.0, ttft_p99_ms: 90 } },
+	];
+	const steps = [{ step: "simulate", metrics: [{ name: "goodput", better: "higher" as const }, { name: "ttft_p99_ms", better: "lower" as const }] }];
+	const ev = evidenceOf({ steps, versions: [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }], rows, metric: "goodput" });
+	eq([ev.best?.version, ev.best?.tied, ev.best?.decidedBy?.name], ["b", ["a", "b", "c"], "ttft_p99_ms"]);
+	eq(/tied with 2 others; .+ decides/.test(bestWords(ev)), true);
+	// No declared direction for the other metric: it can't decide, so say so.
+	const plain = evidenceOf({ steps: [{ step: "simulate", metrics: [{ name: "goodput", better: "higher" as const }, { name: "ttft_p99_ms" }] }], versions: [{ id: "a" }, { id: "b" }, { id: "c" }, { id: "d" }], rows, metric: "goodput" });
+	eq(plain.best?.decidedBy, undefined);
+	eq(bestWords(plain).startsWith("3 versions tie at "), true);
+	eq(bestWords(plain).includes("can't tell them apart"), true);
+});
 check("no gates, one step, results naming no step: a scoreboard", () => {
 	const rows: MeExperimentRow[] = [
 		{ ts: "2026-11-20T00:00:00Z", variant_id: "small", metrics: { score: 0.6 } },
