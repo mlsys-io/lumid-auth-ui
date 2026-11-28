@@ -189,9 +189,9 @@ you need into your own `/home/<you>` first.
 **Per site, not replicated.** `/datasets` on office is a different directory
 from `/datasets` on home; publishing to one does not publish to the other.
 
-**Not a model cache.** Weights stay node-local in `/huggingface` on each GPU box
-on purpose — loading them over NFS is markedly slower than from local NVMe, so
-centralising them would trade real speed for disk that is not scarce.
+**Not a model store.** Shared model weights have their own place: `/models` in a NUS
+sandbox, and `/mnt/models` on the machines you log into directly (§6, and
+[Where your files live](/studio/docs/storage)).
 
 ### Datasets vs attached sources — which do you want?
 
@@ -214,15 +214,26 @@ credential at **Account → FinData SQL**.
 
 ---
 
-## 6. What survives a delete
+## 6. Where your files are — every path, per site
 
-**Your home directory does.** The container does not.
+**Your home directory survives a delete.** The container does not.
 
-```
-/home/<you>     ← network storage, survives delete/recreate, per site
-/scratch        ← this machine's local disk, 50 GiB, GONE on delete
-$HOME = /root   ← container overlay, GONE on delete
-```
+| Path inside a sandbox | home | office | NUS |
+|---|---|---|---|
+| `/home/<you>` — keep your work here | network storage (n5-max), survives delete | network storage (luyao4's SSD), survives delete | 100 GiB on the storage array, survives delete — or your real h0 home if your account is linked to an h0 login (§11) |
+| `/scratch` — fast, temporary | **none at home** | the machine's local disk, 50 GiB per person | the machine's local NVMe, no cap |
+| `/datasets` — published files, read-only | yes | yes | — |
+| `/models` — shared model weights, read-only | — | — | yes |
+| `$HOME` = `/root` | **gone on delete** | **gone on delete** | **gone on delete** |
+
+`/scratch` belongs to **one machine and one username**: your next sandbox may land on another
+machine and start with an empty `/scratch`, and after a username change it starts empty under
+the new name (the old folder stays on that machine — ask Yao to move it across).
+
+**Machines vs sandboxes.** When you SSH straight into a machine (not a sandbox) you also get the
+cluster's shared stores, at the same paths on every cluster: `/mnt/datasets`, `/mnt/models`,
+`/mnt/images`, each read-only at the top with a writable `shared/` folder. A sandbox does not
+mount those (yet) — use `/datasets` and `/models` above, or copy into `/home/<you>`.
 
 **SSH drops you in `/` with `HOME=/root`.** Work where you land and you lose it.
 `cd /home/<you>` first — this is the single most common way to lose work here.
@@ -232,9 +243,9 @@ home on home. They are not replicated, deliberately — live multi-writer sync o
 ordinary dev files is a much larger problem than it looks.
 
 **`/scratch` is the machine's local disk** — fast, for build output, temporary data and
-caches. It is a separate volume capped at **50 GiB per person per machine** (writes stop at the
-limit; delete files to continue), never backed up, and gone with the sandbox. Copy what you
-want to keep to `/home/<you>`. Where every kind of file belongs, across sandboxes, bare-metal
+caches. At the office it is capped at **50 GiB per person per machine** (writes stop at the
+limit; delete files to continue); at NUS it is uncapped; home has none. Never backed up — copy
+what you want to keep to `/home/<you>`. Where every kind of file belongs, across sandboxes, bare-metal
 logins and FlowMesh sessions: [Where your files live](/studio/docs/storage).
 
 ### Docker inside a sandbox
@@ -376,7 +387,7 @@ and the GPU quota for other users is zero.
 | **Account** | **Automatic, and you can pick the name.** Before your first sandbox, choose your NUS user name in the create dialog (or `POST /sbx/nus/api/username {"name": "ada"}`). It is fixed once set. If you don't choose, you get one derived from your email (e.g. `alice@x.com` → `alice`, with a short suffix if taken). No name can be one of the campus logins on s0/h0. `GET /sbx/nus/api/username` shows your name and what you can still change. **Already have a login on s0/h0?** Use it instead: in the dialog, **Already have a login…? Use it instead** (or `POST /sbx/nus/api/username/claim {"name": "<login>"}`) gives you a one-line command. Run it on s0 or h0 while logged in as that login, then press **Verify** (`POST …/claim/verify`). |
 | **Home** | `/home/<you>` — 100 GiB on the NUS storage array, survives delete like everywhere else. **If your account is linked to an s0/h0 login** (claimed, or mapped by an operator), your box uses your **real host `/home`** instead: the one you see when you SSH to that host. s0 and h0 have *different* homes; boxes now run on h0, so this means your **h0** login's home (`"host": "h0"`, dialog: **Home**; SSH: `ctl new NAME --host h0`). An s0-home box (`--host s0`) is no longer schedulable. Such a box runs on that host **as your own login**, not root: no `apt install`, same as your normal login there. `"home": "volume"` (or `--home volume`) gives you the 100 GiB volume instead. |
 | **Models** | `/models` — the shared model store, **read-only**, mounted in every box. Load weights from here instead of downloading them again. |
-| **Scratch** | `/scratch` — fast local NVMe, per user, *not* backed up. |
+| **Scratch** | `/scratch` — fast local NVMe on the machine the box runs on, per user, no cap, *not* backed up. It stays on that machine after a delete; a box on another machine starts with an empty one. |
 | **Images** | `harbor.lum.id/…` references work unchanged; the site pulls them from its own replica. NUS also has its own registry, **`registry.lum.id`** — see below. |
 | **Limits** | 2 GPUs (all the site has) and 8 sandboxes per admin; 48h for a CPU box, 24h with a GPU. |
 
@@ -594,7 +605,7 @@ with your token.
 Per user, per site: **2 sandboxes**, up to **48h** for a CPU sandbox and **24h** with a GPU,
 **1 GPU** per sandbox (office admins: 2), CPU sandboxes of **1 / 2 / 4 / 8** cores,
 **2 public ports** per sandbox, **20 GB** per saved image, **50 GiB** of local disk
-(`/scratch`) per person per machine.
+(`/scratch`) per person per machine at the office (none at home, uncapped at NUS).
 
 The port pool is **shared across the whole site**, not per user — 16 ports, so
 8 sandboxes can publish 2 each at any one time. Every published port costs a

@@ -33,7 +33,7 @@ with `quota -s`. In force on every cluster since 2026-11-28 (office, home and NU
 |---|---|---|
 | Office machines | luyao4's 4 TB SSD — local on luyao4, over the network on luyao1 and luyao2 | If you had a home on two office machines, they are now one home: the second sits in a folder inside it (for example `~/luyao2-home/`). Nothing was overwritten — delete what you no longer need. |
 | NUS s0 / h0 | storage-head disk array (`/data/homes/<machine>/<you>`) | Each machine still has its own home for now. |
-| A sandbox | a network volume: **20 GiB** on office and home, **100 GiB** on NUS | Survives the sandbox. On NUS, an account linked to an s0/h0 login uses that host home instead. Details: [Sandboxes §6](/studio/docs/sandboxes#6-what-survives-a-delete). |
+| A sandbox | a network volume: **20 GiB** on office and home, **100 GiB** on NUS | Survives the sandbox. On NUS, an account linked to an s0/h0 login uses that host home instead. Details: [Sandboxes §6](/studio/docs/sandboxes#6-where-your-files-are--every-path-per-site). |
 | A FlowMesh SSH session | **nothing persistent** — `/home/flowmesh` is scratch | Copy results out before the session ends. [FlowMesh SSH](/studio/docs/flowmesh-ssh#data-in-a-session) |
 
 Homes are **not a backup**. Keep anything you cannot lose in git as well.
