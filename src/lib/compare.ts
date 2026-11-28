@@ -20,6 +20,29 @@ const trim = (s: string) => (s.includes(".") ? s.replace(/\.?0+$/, "") : s);
 const fmt = (x: number) => (Math.abs(x) >= 1000 ? Math.round(x).toLocaleString() : trim(x.toFixed(Math.abs(x) >= 10 ? 1 : 3)));
 
 /**
+ * Can two sides be told apart on one metric? The same rule `compareVerdict`
+ * uses, without its minimum-runs gate, so a tie can be called on a few runs:
+ *   "equal" — the same number (to 1e-9 of its size);
+ *   "noise" — both sides have a spread and the gap is within twice its
+ *             standard error (≈95%);
+ *   "near"  — a side has a single result, so its spread is unknown, and the
+ *             gap is under `nearRel` of the value (default 2%): one GPU
+ *             measurement each can't separate 0.8% (MLSys 9.2, 2026-11-28);
+ *   null    — they differ.
+ * A deterministic side (several results, sd 0 — a simulator) is never "near":
+ * its number is exact, so any gap is real.
+ */
+export function noiseTie(a: SideStats | null, b: SideStats | null, nearRel = 0.02): "equal" | "noise" | "near" | null {
+	if (!a || !b) return null;
+	const gap = b.mean - a.mean;
+	const size = Math.max(Math.abs(a.mean), Math.abs(b.mean));
+	if (Math.abs(gap) <= 1e-9 * Math.max(1, size)) return "equal";
+	const se = Math.sqrt((a.sd ** 2) / a.n + (b.sd ** 2) / b.n);
+	if (a.n >= 2 && b.n >= 2) return se > 0 && Math.abs(gap) <= 2 * se ? "noise" : null;
+	return size > 0 && Math.abs(gap) / size < nearRel ? "near" : null;
+}
+
+/**
  * Who is ahead on one metric. `better` says which way is good. Needs `minN`
  * runs a side; a deterministic side (sd 0, e.g. a simulator) still needs the
  * other side's spread to call it. Ahead = the gap is more than twice its

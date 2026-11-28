@@ -8,6 +8,9 @@
 //
 // A row click selects it — the same selection, and the same side panel, as a
 // click on the graph. Versions carry a checkbox; two or more give "Compare N".
+//
+// Phone (below 640 px, 2026-11-28): one column. The name wraps instead of
+// being cut to "C…", and the status and best result sit under it.
 
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
@@ -15,7 +18,7 @@ import { ChevronDown, ChevronRight, Lightbulb, Search, Scale } from "lucide-reac
 import type { MeExperiment, MeWorkflowRow } from "@/api/me";
 import type { SpecNode, SpecWorkflow } from "@/lib/app-spec";
 import {
-	buildResearchTree, DOT_SIZE, experimentStatus, humanId, rowStatus, versionsOf, OTHER_NODE,
+	buildResearchTree, DOT_SIZE, experimentStatus, humanId, rowStatus, versionLabel, versionsOf, OTHER_NODE,
 	type MapNode, type Proposal, type Tone, experimentLabel} from "@/lib/research-map";
 import { bestResult } from "@/lib/research-dashboard";
 import { useRunsFeed } from "@/components/activity/hooks";
@@ -114,7 +117,7 @@ export default function ResearchTable({ app, exps, pending, workflows, groups, r
 				const e = expById.get(expId);
 				const v = e ? versionsOf(e).find((x) => x.id === vid) : undefined;
 				const match: Filter[] = [v?.tag === "winning" ? "winning" : v?.tag === "not run yet" ? "idle" : "all"];
-				row = { node: n, depth, name: v?.label ?? humanId(vid ?? n.ref), status: { text: v?.tag ?? "", tone: v?.tone ?? "idle" }, best: v && v.n ? v.line : undefined, pick: `${expId}:${vid}`, match, kids: children };
+				row = { node: n, depth, name: e && vid ? versionLabel(e, vid) : humanId(vid ?? n.ref), status: { text: v?.tag ?? "", tone: v?.tone ?? "idle" }, best: v && v.n ? v.line : undefined, pick: `${expId}:${vid}`, match, kids: children };
 			} else if (n.kind === "suggested") {
 				const p = pending.find((x) => x.id === n.ref);
 				ideas.push({ node: n, depth: 1, name: humanId(n.ref), status: { text: "Waiting for you", tone: "attention" }, best: p?.est_runs ? `about ${p.est_runs} runs` : undefined, match: ["all"], kids: [] });
@@ -223,15 +226,17 @@ function TableRow({ r, selected, open, onToggle, onSelect, picked, onPick, cell 
 							className="h-3.5 w-3.5 flex-shrink-0 accent-plum-700" />
 					) : <span className="w-4 flex-shrink-0" />}
 					<span className={cn("flex-shrink-0 rounded-full", dot)} style={{ width: size, height: size }} aria-hidden />
-					<span className={cn("min-w-0 truncate", r.node.kind === "version" ? "text-ink-800" : "font-medium text-ink-900")}>{r.name}</span>
+					<span className={cn("min-w-0 break-words sm:truncate", r.node.kind === "version" ? "text-ink-800" : "font-medium text-ink-900")}>{r.name}</span>
 					{r.sub && r.node.kind !== "experiment" && <span className="flex-shrink-0 text-micro text-ink-600">{r.sub}</span>}
 				</div>
 				{/* Phones: one stacked row — the status and best result under the name,
 				    so the name gets the width (it was cut to "Bac…" at 390 px). */}
-				<div className="mt-0.5 space-y-0.5 sm:hidden" style={{ paddingLeft: r.depth * 16 + 30 }}>
-					<div className={cn("text-micro leading-snug", TONE_TEXT[r.status.tone] ?? "text-ink-700")}>{r.status.text}</div>
-					{r.best && <div className="truncate font-mono text-micro tabular-nums text-ink-700">{r.best}</div>}
-				</div>
+				{(r.status.text || r.best) && (
+					<div className="mt-0.5 space-y-0.5 sm:hidden" style={{ paddingLeft: r.depth * 16 + 30 }}>
+						{r.status.text && <div className={cn("text-micro leading-snug", TONE_TEXT[r.status.tone] ?? "text-ink-700")}>{r.status.text}</div>}
+						{r.best && <div className="break-words font-mono text-micro tabular-nums text-ink-700">{r.best}</div>}
+					</div>
+				)}
 			</td>
 			<td className={cn(cell, "hidden truncate sm:table-cell", TONE_TEXT[r.status.tone] ?? "text-ink-700")} title={r.status.text}>{r.status.text}</td>
 			<td className={cn(cell, "hidden md:table-cell")}>

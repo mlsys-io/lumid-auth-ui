@@ -674,8 +674,12 @@ export const me = {
   // Discard / restore an experiment's results (tombstones; nothing is deleted).
   discardResults: (app: string, experiment: string, body: { action: "discard" | "restore"; reason?: string; matches: import("@/lib/discard").DiscardMatch[] }) =>
     call<{ intent_id: string; status: string; matches: number }>("POST", `/apps/${encodeURIComponent(app)}/experiments/${encodeURIComponent(experiment)}/discard`, body),
-  usage: (app?: string) =>
-    call<import("@/lib/spend").MeUsage>("GET", `/usage${app ? `?app=${encodeURIComponent(app)}` : ""}`),
+  // `since` (RFC3339): count from then instead of the budget's window — e.g.
+  // the last 24 h of GPU measurements across every app (the daily cap is per account).
+  usage: (app?: string, opts?: { since?: string }) => {
+    const q = [app ? `app=${encodeURIComponent(app)}` : "", opts?.since ? `since=${encodeURIComponent(opts.since)}` : ""].filter(Boolean).join("&");
+    return call<import("@/lib/spend").MeUsage>("GET", `/usage${q ? `?${q}` : ""}`);
+  },
   // Offer lifecycle rides the run-feedback verb: POST /me/runs/:run_id/feedback
   // {verdict: good|bad|neutral} (was /cycles/feedback, which took a -1/0/+1
   // `rating`). The extra fields (kind, label, output_id) pass through.

@@ -1,6 +1,6 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 import type { MeExperiment, MeRunRow, MeWorkflowRow } from "@/api/me";
-import { bestResult, bestResults, bestSoFar, dollars, failingWorkflows, researchHeadline, weekSummary } from "./research-dashboard";
+import { bestResult, bestResults, bestSoFar, dollars, failingWorkflows, phoneSummary, researchHeadline, weekSummary } from "./research-dashboard";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -77,6 +77,16 @@ check("a top number a gate stopped is not a lead", () => {
 check("best so far never goes back", () => {
 	eq(bestSoFar([1, 3, 2, 5, NaN, 4], true), [1, 3, 3, 5, 5]);
 	eq(bestSoFar([9, 7, 8, 3], false), [9, 7, 7, 3]);
+});
+
+check("phone: the three tiles in one line", () => {
+	eq(phoneSummary({ left: "112 GPU-min left", needs: 2, failing: 1 }), "112 GPU-min left · 2 need you · 1 failing");
+	eq(phoneSummary({ left: null, needs: 1, failing: 0 }), "1 needs you");
+	eq(phoneSummary({ left: "$39.08 left", needs: 0, failing: 0 }), "$39.08 left · Nothing needs you");
+});
+check("the leader is named by its spec title when it has one", () => {
+	const b = bestResult(exp({ best_variant: "llm_0_6b_c12", arms: [{ id: "llm_0_6b_c12", title: "0.6B · concurrency 12" }] as never, variants: { llm_0_6b_c12: { n: 1, mean: 0.37 } } }))!;
+	eq(b.leader, "0.6B · concurrency 12");
 });
 
 export function run(): number {

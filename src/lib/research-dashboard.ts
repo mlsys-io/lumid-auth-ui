@@ -4,7 +4,7 @@
 // control and inspiring" — show progress, not inventory).
 
 import type { MeExperiment, MeRunRow, MeWorkflowRow } from "@/api/me";
-import { experimentStatus, humanId, type Tone, experimentLabel} from "@/lib/research-map";
+import { experimentStatus, humanId, versionLabel, type Tone, experimentLabel} from "@/lib/research-map";
 import { fmtMetricValue, humanMetric } from "@/lib/run-answer";
 
 const WEEK_S = 7 * 86400;
@@ -20,6 +20,8 @@ export interface BestResult {
 	/** Graph id to select ("exp:<id>"). */
 	select: string;
 	experiment: string;
+	/** The leading version's id (the experiment detail read doesn't carry it). */
+	version: string;
 	leader: string;
 	metric: string;
 	value: number;
@@ -46,7 +48,8 @@ export function bestResult(e: MeExperiment): BestResult | null {
 	const failed = !!e.best_failed_gate;
 	const standing = failed ? "didn't pass a step" : e.criteria_met ? "winning" : e.not_separable_from?.length ? "can't tell apart yet" : "leads";
 	return {
-		select: `exp:${e.id}`, experiment: experimentLabel(e), leader: humanId(e.best_variant), metric: humanMetric(metric).label,
+		// The version's own title, as the panel names it (versionLabel, one label everywhere).
+		select: `exp:${e.id}`, experiment: experimentLabel(e), version: e.best_variant, leader: versionLabel(e, e.best_variant), metric: humanMetric(metric).label,
 		value: v.mean, valueText: metricText(metric, v.mean), standing, n: e.n_results,
 		higherIsBetter: e.higher_is_better ?? e.metric?.higher_is_better ?? true, updatedAt: e.updated_at,
 		...(failed && e.best_stopped_at ? { stoppedAt: humanId(e.best_stopped_at) } : {}),
@@ -156,4 +159,18 @@ export function bestSoFar(values: number[], higherIsBetter: boolean): number[] {
 		out.push(higherIsBetter ? Math.max(prev, v) : Math.min(prev, v));
 	}
 	return out;
+}
+
+/**
+ * The phone's one line in place of the three tiles (below 640 px):
+ * "112 GPU-min left · 2 need you · 1 failing". The budget part only when the
+ * app has a budget; "Nothing needs you" when nothing does.
+ */
+export function phoneSummary(input: { left?: string | null; needs: number; failing: number }): string {
+	const parts: string[] = [];
+	if (input.left) parts.push(input.left);
+	if (input.needs > 0) parts.push(`${input.needs} ${input.needs === 1 ? "needs" : "need"} you`);
+	if (input.failing > 0) parts.push(`${input.failing} failing`);
+	if (!input.needs && !input.failing) parts.push("Nothing needs you");
+	return parts.join(" · ");
 }

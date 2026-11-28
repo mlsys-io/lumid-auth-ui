@@ -7,9 +7,14 @@
 // Averages, not every result: real results spread far wider than the averages
 // differ (kol_alpha: stdev ≈ 430k around means of 17k–122k), so raw dots would
 // flatten every line into the baseline. The caption says what is drawn.
+//
+// One number per version per step (2026-11-28): when points name their step,
+// each line is drawn at ONE step (the last it reached, `lastStepPoints`) and
+// says which — a simulator result and a GPU measurement are never averaged.
 
 import { useId, useMemo, useRef, useState } from "react";
 import { fmtMetricValue } from "@/lib/run-answer";
+import { lastStepPoints } from "@/lib/evolution";
 import { cn } from "@/lib/utils";
 import { useMeasuredWidth } from "@/hooks/useMeasuredWidth";
 
@@ -36,7 +41,7 @@ export function smoothPath(pts: Array<[number, number]>): string {
 }
 const FILL = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5", "bg-chart-6", "bg-chart-7", "bg-chart-8"];
 
-export interface EvoSeries { id: string; label: string; points: Array<{ ts: string; v: number; n?: number }>; inferred?: boolean }
+export interface EvoSeries { id: string; label: string; points: Array<{ ts: string; v: number; n?: number; step?: string }>; inferred?: boolean }
 
 interface Line { id: string; label: string; ci: number; pts: Array<{ t: number; avg: number; n: number }> }
 
@@ -72,6 +77,9 @@ type ChartProps = {
 	comparable?: boolean;
 	/** Results whose run named no version — left off the chart, and said so. */
 	unlabelledRuns?: number;
+	/** The steps in order and each in words (`seriesFromRows`), when points name a step. */
+	steps?: string[];
+	stepLabels?: Record<string, string>;
 	/** Each version's state, shown beside its name in the small charts ("trying"). */
 	tagOf?: (id: string) => { text: string; className: string } | null;
 };
@@ -79,7 +87,13 @@ type ChartProps = {
 /** Versions measured differently get ONE SMALL CHART EACH, on its own scale:
  *  two lines on one axis invite the comparison the caption then forbids
  *  (first-glance test, 2026-11-25). Comparable versions share one chart. */
-export default function EvolutionChart(props: ChartProps) {
+export default function EvolutionChart(raw: ChartProps) {
+	// Each line at one step, named in its label.
+	const props: ChartProps = { ...raw, series: raw.series.map((s) => {
+		const one = lastStepPoints(s.points, raw.steps);
+		const phrase = one.step != null ? raw.stepLabels?.[one.step] : undefined;
+		return { ...s, points: one.points, label: phrase ? `${s.label} (${phrase})` : s.label };
+	}) };
 	const drawn = props.series.filter((s) => s.points.length > 0);
 	if (props.comparable === false && drawn.length > 1) {
 		// One time axis for all of them, so the small charts line up vertically.

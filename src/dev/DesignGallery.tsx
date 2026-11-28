@@ -33,6 +33,9 @@ import SpendLine from "@/components/research/SpendLine";
 import StepAgreement from "@/components/research/StepAgreement";
 import { SPEND_ROWS, SPEND_STEPS, SPEND_USAGE, spendLabel } from "./spend-fixtures";
 import PairedDelta from "@/components/research/PairedDelta";
+import VersionChain from "@/components/research/VersionChain";
+import { ManageNameRow, ManageWorkflowRows } from "@/components/app-surface/AppManagePanel";
+import { GPU_PRESS, MANAGE_LOOPS, TIE_DECIDED, TIE_EQUAL, TIE_WINNER_NEAR, USD_PRESS, USD_ROWS, USD_STEPS, USD_USAGE, tieLabel, usdLabel } from "./expspend-fixtures";
 import { PAIRED_ROWS, PAIRED_STEPS, pairedLabel, pairedStepLabel } from "./paired-fixtures";
 import { ModulesView } from "@/components/modules/ModulesPanel";
 import RunAnswerCard from "@/components/workflow/RunAnswerCard";
@@ -271,6 +274,49 @@ export default function DesignGallery() {
 								<div className="text-micro text-ink-600">{title}</div>
 								<RunAnswerCard app="mlsys-research" loop={d.loop} runId={d.ts} detail={d} cycles={RUN_PAGE_LIST} context={RUN_PAGE_CONTEXT} />
 								{d.events && <RunTimeline events={d.events} app={d.loop} />}
+							</div>
+						))}
+					</div>
+				</Section>
+				<Section id="spend-usd" title="What it cost, in dollars — an LLM app on a $ budget, and the presses that spend">
+					<div className="grid gap-6 lg:grid-cols-2">
+						<div className="rounded-xl border border-border bg-card p-4">
+							<ProgressPerSpend steps={USD_STEPS} rows={USD_ROWS} metric="paired_delta" label={usdLabel} usage={USD_USAGE} />
+						</div>
+						<div className="rounded-xl border border-border bg-card p-4 space-y-3">
+							<SpendLine usage={USD_USAGE} rows={USD_ROWS} />
+							<div className="space-y-1">
+								<div className="text-micro text-ink-600">Before a paid step (Run versions, Run now, Re-run)</div>
+								<p className="text-caption text-ink-800" data-gallery="press-usd">{USD_PRESS}</p>
+								<p className="text-caption text-ink-800" data-gallery="press-gpu">{GPU_PRESS}</p>
+							</div>
+						</div>
+					</div>
+				</Section>
+				<Section id="ties" title="Ties — tied for best, a secondary metric decides, can't tell apart yet before dropped">
+					<div className="grid gap-6 lg:grid-cols-3">
+						{[
+							{ title: "Nine designs at the same goodput", evo: TIE_EQUAL, unit: "tok/s" },
+							{ title: "Tied, and TTFT p99 decides", evo: TIE_DECIDED, unit: "tok/s" },
+							{ title: "Winning on a 0.8% gap, one result each", evo: TIE_WINNER_NEAR, unit: "J per token" },
+						].map((x) => (
+							<div key={x.title} className="rounded-xl border border-border bg-card p-4 space-y-2" data-gallery-ties={x.title}>
+								<div className="text-micro text-ink-600">{x.title}</div>
+								<VersionChain chain={x.evo.chain} labelOf={tieLabel} valueOf={(v) => `${+v.toPrecision(3)} ${x.unit}`} />
+							</div>
+						))}
+					</div>
+				</Section>
+				<Section id="manage" title="Manage app — name and workflows (simple scheme), at any width">
+					<div className="grid gap-6 lg:grid-cols-[1fr_390px]">
+						{[false, true].map((narrow) => (
+							<div key={String(narrow)} className={narrow ? "w-[358px] max-w-full space-y-3" : "space-y-3"} data-gallery-manage={narrow ? "390" : "wide"}>
+								<div className="rounded-xl border border-ink-200 bg-card p-4 space-y-2">
+									<ManageNameRow value="MLSys Research" onChange={() => {}} onSave={() => {}} dirty={false} readOnly={false} saving={false} />
+								</div>
+								<div className="rounded-xl border border-ink-200 bg-card p-4">
+									<ManageWorkflowRows loops={MANAGE_LOOPS} readOnly={false} saving={false} runningLoop={null} onModel={() => {}} onRun={() => {}} onRemove={() => {}} />
+								</div>
 							</div>
 						))}
 					</div>

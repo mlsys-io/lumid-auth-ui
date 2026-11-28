@@ -123,12 +123,16 @@ export default function BestScoreChart({ evo, labelOf, colorOf, metricKey, unit,
 					<div className="text-micro text-ink-600">A version counts once it has {minSamples} result{minSamples === 1 ? "" : "s"} · {higherIsBetter ? "higher" : "lower"} is better</div>
 				</figcaption>
 				<div className="text-right">
-					<div className="eyebrow">{failedAt ? "Top result" : "Best so far"}</div>
+					{/* A tie nobody decided has no single "best": say how many share it. */}
+					<div className="eyebrow">{failedAt ? "Top result" : evo.tie && !evo.tie.decidedBy ? "Tied for best" : "Best so far"}</div>
 					<div className="font-mono text-h2 leading-none text-ink-900">
 						<RollingNumber value={evo.hero?.value ?? null} format={fmt} />
 					</div>
 					<div className="text-micro text-ink-600 mt-0.5">
-						{evo.hero ? `${labelOf(evo.hero.arm)} · ${plural(evo.chain.find((c) => c.arm === evo.hero!.arm)?.n ?? 0, "result")}` : `no version has ${plural(minSamples, "result")} yet`}
+						{!evo.hero ? `no version has ${plural(minSamples, "result")} yet`
+							: evo.tie && !evo.tie.decidedBy ? `${evo.tie.arms.length} versions`
+							: `${labelOf(evo.hero.arm)} · ${plural(evo.chain.find((c) => c.arm === evo.hero!.arm)?.n ?? 0, "result")}`}
+						{evo.hero && evo.stepLabel ? ` · ${evo.stepLabel}` : ""}
 					</div>
 					{failedAt && <div className="text-micro text-ember-700 mt-0.5">didn&apos;t pass {failedAt}</div>}
 				</div>

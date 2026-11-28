@@ -220,14 +220,14 @@ export default function AppSecretsSection({
 					<Sparkles className="w-3.5 h-3.5" /> Connect Claude…
 				</button>
 			)}
-			<div className="flex items-center gap-2">
+			<div className="flex flex-wrap items-center gap-2">
 				<input
 					type="password"
 					autoComplete="off"
 					value={draft[f.key] ?? ""}
 					onChange={(e) => setDraft((d) => ({ ...d, [f.key]: e.target.value }))}
 					placeholder={isSet(f.key) ? "•••••••• (enter a new value to replace)" : "paste value"}
-					className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-ink-200 bg-card focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400"
+					className="min-w-0 flex-1 basis-40 px-3 py-1.5 text-sm rounded-lg border border-ink-200 bg-card focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400"
 				/>
 				<button
 					onClick={() => save(f.key, draft[f.key] ?? "")}
@@ -270,12 +270,13 @@ export default function AppSecretsSection({
 
 			{/* Free-form add (for keys the schema didn't declare) */}
 			<div className="rounded-lg border border-dashed border-ink-300 p-3">
-				<div className="flex items-center gap-2">
+				{/* Wraps at phone width (390 px overflowed by the fixed key box). */}
+				<div className="flex flex-wrap items-center gap-2">
 					<input
 						value={customKey}
 						onChange={(e) => setCustomKey(e.target.value)}
 						placeholder="KEY (env var name)"
-						className="w-48 px-3 py-1.5 text-sm rounded-lg border border-ink-200 font-mono"
+						className="w-48 min-w-0 max-w-full px-3 py-1.5 text-sm rounded-lg border border-ink-200 font-mono"
 					/>
 					<input
 						type="password"
@@ -283,7 +284,7 @@ export default function AppSecretsSection({
 						value={customVal}
 						onChange={(e) => setCustomVal(e.target.value)}
 						placeholder="value"
-						className="flex-1 px-3 py-1.5 text-sm rounded-lg border border-ink-200"
+						className="min-w-0 flex-1 basis-40 px-3 py-1.5 text-sm rounded-lg border border-ink-200"
 					/>
 					<button
 						onClick={() => {

@@ -41,6 +41,7 @@ import CaseContentViewer from "@/components/workflow/CaseContentViewer";
 import TrajectoryLogView from "@/components/workflow/TrajectoryLogView";
 import RunContextMenu, { type RunMenuActions, type RunMenuTarget } from "@/components/workflow/RunContextMenu";
 import NextRunComposer from "@/components/workflow/NextRunComposer";
+import { useWorkflowPress } from "@/components/research/PressCost";
 import RunHistoryGrid from "@/components/workflow/RunHistoryGrid";
 import ScheduleChip, { type WfActionDetail } from "@/components/workflow/ScheduleChip";
 import { reportDispatchFailure } from "@/components/app-surface/directives";
@@ -211,6 +212,10 @@ export default function WorkflowObservabilityPanel({
 			toast.error(`Couldn't start it: ${e instanceof MeApiError ? e.message : String(e)}`);
 		} finally { setBusy(null); }
 	};
+	// A Run now that spends GPU time or real money says what it will spend and
+	// waits for a second press; one that doesn't stays one click (review #5).
+	const press = useWorkflowPress(app, loop, 1, `Run ${loopLabel(wf.name, loop)} once`);
+	const [confirmRun, setConfirmRun] = useState(false);
 	const stopRun = async () => {
 		setBusy("run");
 		try {
@@ -802,12 +807,28 @@ export default function WorkflowObservabilityPanel({
 							<RunningNow startedSec={runningSince} typicalS={typicalS} busy={busy === "run"} onStop={stopRun}
 								onOpen={() => window.dispatchEvent(new CustomEvent("studio:open-session", { detail: { app, loop, ts: "latest" } }))} />
 						) : (
-							<button onClick={runNow} disabled={!!busy}
-								title="Run this workflow now, as it is configured" aria-label="Run now"
-								className="inline-flex items-center gap-1.5 h-8 px-2 sm:px-3 text-caption font-medium rounded-lg bg-gold-700 text-white hover:bg-gold-800 lumen-press disabled:opacity-50 transition-colors shadow-e1 flex-shrink-0">
-								{busy === "run" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
-								<span className="hidden sm:inline">Run now</span>
-							</button>
+							<Popover open={confirmRun} onOpenChange={setConfirmRun}>
+								<PopoverTrigger asChild>
+									<button onClick={(e) => { if (press?.spends) return; e.preventDefault(); void runNow(); }} disabled={!!busy}
+										title={press?.text ?? "Run this workflow now, as it is configured"} aria-label="Run now"
+										className="inline-flex items-center gap-1.5 h-8 px-2.5 sm:px-3 text-caption font-medium rounded-lg bg-gold-700 text-white hover:bg-gold-800 lumen-press disabled:opacity-50 transition-colors shadow-e1 flex-shrink-0">
+										{busy === "run" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+										<span>Run now</span>
+									</button>
+								</PopoverTrigger>
+								{press?.spends && (
+									<PopoverContent align="end" className="w-80 max-w-[calc(100vw-2rem)] space-y-2 p-3" data-testid="run-now-cost">
+										<p className={cn("text-caption", press.blocked ? "text-brick-700" : "text-ink-800")}>{press.text}</p>
+										<div className="flex items-center gap-2">
+											<button type="button" disabled={press.blocked || !!busy} onClick={() => { setConfirmRun(false); void runNow(); }}
+												className="inline-flex items-center gap-1.5 h-7 px-2.5 text-caption font-medium rounded-lg bg-gold-700 text-white hover:bg-gold-800 disabled:opacity-50">
+												<Play className="w-3.5 h-3.5" /> Run it
+											</button>
+											<button type="button" onClick={() => setConfirmRun(false)} className="h-7 px-2.5 text-caption rounded-lg border border-ink-200 bg-card hover:bg-ink-50">Cancel</button>
+										</div>
+									</PopoverContent>
+								)}
+							</Popover>
 						)}
 					</div>
 				);

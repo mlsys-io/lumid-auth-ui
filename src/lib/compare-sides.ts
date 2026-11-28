@@ -7,6 +7,7 @@
 //   /studio/apps/:app/compare?runs=<loop>:<ts>,<loop>:<ts>
 //   /studio/apps/:app/compare?versions=<expId>:<versionId>,…
 
+import { rowStep, stepOrder, stepPhrase } from "@/lib/evolution";
 import type { MeCycleDetail, MeExperimentDetail, MeExperimentVariantAgg } from "@/api/me";
 import { runMetricValues, metricBetter, type SideInput, type SideStats, type MetricSpec, type SideCell } from "@/lib/compare";
 import { humanMetric, fmtMetricValue, primaryMetricKey, measuredOn, isFindingKey } from "@/lib/run-answer";
@@ -174,9 +175,15 @@ function dedupeSettings(s: Array<[string, string]>): Array<[string, string]> {
 }
 
 /** One version of an experiment as a side: its per-run values from the
- *  ledger (`results[]`), else the served averages for the experiment's metric. */
-export function versionSide(e: MeExperimentDetail, versionId: string, index: number, opts: { workflowTitle?: (loop: string) => string; showExperiment?: boolean } = {}): CompareSide {
-	const rows = (e.results || []).filter((r) => r.variant_id === versionId);
+ *  ledger (`results[]`), else the served averages for the experiment's metric.
+ *  ONE step's rows (2026-11-28): a version measured by the simulator and on a
+ *  GPU is compared at the last step it reached (or `opts.step`), never on the
+ *  average of both — the side says which step. */
+export function versionSide(e: MeExperimentDetail, versionId: string, index: number, opts: { workflowTitle?: (loop: string) => string; showExperiment?: boolean; step?: string; steps?: Array<{ step: string; metrics?: Array<{ name: string }> }> } = {}): CompareSide {
+	const all = (e.results || []).filter((r) => r.variant_id === versionId);
+	const order = stepOrder(all, opts.steps);
+	const step = order.length > 1 ? (opts.step !== undefined && order.includes(opts.step) ? opts.step : order[order.length - 1]) : null;
+	const rows = step === null ? all : all.filter((r) => rowStep(r, opts.steps) === step);
 	const values: Record<string, number[]> = {};
 	for (const [k, v] of runMetricValues(rows.map((r) => r.metrics as Record<string, unknown>))) if (isFindingKey(k) && !NOT_COMPARED.test(k)) values[k] = v;
 	const state = obj(e.state);
@@ -197,6 +204,7 @@ export function versionSide(e: MeExperimentDetail, versionId: string, index: num
 	for (const [k, v] of Object.entries(obj(arm?.overrides))) { const t = short(v); if (t) settings.push([`Changes: ${mLabel(k)}`, t]); }
 	if (e.dataset_id) settings.push(["Data", `${humanId(e.dataset_id)}${typeof state.dataset_version === "string" && state.dataset_version ? ` (version ${state.dataset_version})` : ""}`]);
 	if (metric) settings.push(["Judged on", mLabel(metric)]);
+	if (step !== null) settings.push(["Step", stepPhrase(step, rows).replace(/^at /, "") || "unnamed step"]);
 	const n = rows.length || stats[metric]?.n || 0;
 	const comparable = (state.comparable ?? e.comparable) as boolean | undefined;
 	const instruments = (state.instruments ?? e.instruments) as number | null | undefined;

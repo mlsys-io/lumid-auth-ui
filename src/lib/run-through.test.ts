@@ -61,6 +61,26 @@ check("through: priced from the experiment's own metered steps, per run", () => 
 	eq(estimateThrough([], STEPS, null), null);
 });
 
+check("through: dollars are the step's MEDIAN cost; an unmetered step is priced from its instrument", () => {
+	const S = [{ step: "quick", metrics: [] }, { step: "dev_eval", metrics: [], service: "pooled-llm" }];
+	const rows = [
+		row("quick", { cpu_s: 2, cost_usd: 0.00001 }, { metered: "measured" }),
+		row("dev_eval", { cost_usd: 2.5 }, { metered: "measured" }),
+		row("dev_eval", { cost_usd: 3 }, { metered: "measured" }),
+		row("dev_eval", { cost_usd: 30 }, { metered: "measured" }),   // one long answer doesn't price every version
+	];
+	const e = estimateThrough(rows, S, null)!;
+	eq([e.cpu_s, Math.round(e.cost_usd * 100) / 100, e.notional_usd < 0.001], [2, 3, true]);
+	// no dev_eval rows yet: this app's pooled-llm history prices it
+	const usage = { used: { gpu_s: 0, cpu_s: 0, cost_usd: 0.92, runs: 46, by_instrument: { "pooled-llm": { cost_usd: 0.92, runs: 46 } } } };
+	eq(Math.round(estimateThrough(rows.slice(0, 1), S, null, { usage })!.cost_usd * 100) / 100, 0.02);
+	// …else the platform estimate's cost_usd
+	const est = { used: { gpu_s: 0, cpu_s: 0, cost_usd: 0, runs: 0 }, estimates: { "pooled-llm": { cost_usd: 0.4, from_runs: 9 } } };
+	eq(Math.round(estimateThrough(rows.slice(0, 1), S, null, { usage: est })!.cost_usd * 100) / 100, 0.4);
+	eq(estimateThrough([], S, null, { usage: est })!.cost_usd, 0.4);
+	eq(estimateThrough([], S, null), null);
+});
+
 export function run(): number {
 	let failed = 0;
 	for (const c of checks) {
