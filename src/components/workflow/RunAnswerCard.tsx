@@ -18,6 +18,7 @@ import type { MeCycleDetail, MeCycleListItem } from "@/api/me";
 import { runAnswer, runMetrics, primaryMetricKey, vsUsual, fmtMetricValue, runLimits, measuredOn } from "@/lib/run-answer";
 import MetricReveal from "@/components/workflow/MetricReveal";
 import { triageFailure } from "@/lib/failure-triage";
+import { runAgreement, runUsage } from "@/lib/run-agreement";
 import { cn } from "@/lib/utils";
 import { WorkingDots } from "@/components/activity/ActivityView";
 
@@ -39,6 +40,8 @@ export default function RunAnswerCard({ app, loop, runId, detail, listRow, cycle
 	const a = runAnswer(detail, { ok: listRow?.ok, running: listRow?.running, durationS });
 	const limits = a.tone === "running" ? [] : runLimits(detail);
 	const where = measuredOn(detail);
+	const cost = a.tone === "running" ? null : runUsage(detail);
+	const agree = a.tone === "ok" ? runAgreement(detail) : null;
 	const metrics = a.tone === "ok" ? runMetrics(detail, 6) : a.tone === "failed" ? runMetrics(detail, 6).filter((m) => m.value !== 0) : [];
 	const primary = primaryMetricKey(detail);
 	const hib = ((detail?.summary as Record<string, unknown> | undefined)?.assets_used as { metric?: { higher_is_better?: boolean } } | undefined)?.metric?.higher_is_better !== false;
@@ -117,6 +120,33 @@ export default function RunAnswerCard({ app, loop, runId, detail, listRow, cycle
 				</div>
 			)}
 			{where && <div className="text-caption text-ink-700"><span className="text-ink-600">Measured on: </span>{where}</div>}
+			{cost && <div className="text-caption text-ink-700" data-testid="run-cost"><span className="text-ink-600">What it cost: </span>{cost.words}</div>}
+			{agree && (
+				<div data-testid="run-agreement">
+					<div className="eyebrow text-ink-600 mb-1">{agree.firstLabel} vs {agree.secondLabel.toLowerCase()}</div>
+					<div className="text-caption text-ink-700 mb-1">{agree.headline}</div>
+					<div className="overflow-x-auto">
+						<table className="w-full text-caption tabular-nums">
+							<thead>
+								<tr className="text-left text-micro text-ink-600">
+									<th className="py-0.5 pr-2 font-medium">Number</th>
+									<th className="py-0.5 pr-2 font-medium">{agree.firstLabel}</th>
+									<th className="py-0.5 pr-2 font-medium">{agree.secondLabel}</th>
+									<th className="py-0.5 font-medium text-right">Gap</th>
+								</tr>
+							</thead>
+							<tbody>
+								{agree.rows.slice(0, 8).map((r) => (
+									<tr key={r.metric} className="border-t border-ink-100 text-ink-800">
+										<td className="py-0.5 pr-2">{r.metric}</td><td className="py-0.5 pr-2">{r.first}</td>
+										<td className="py-0.5 pr-2 font-medium text-ink-900">{r.second}</td><td className="py-0.5 text-right">{r.gap}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				</div>
+			)}
 
 			{metrics.length > 0 && (
 				<dl className="grid grid-cols-[repeat(auto-fill,minmax(8.5rem,1fr))] gap-1.5">
