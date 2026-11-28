@@ -257,6 +257,13 @@ check("gated chains: the next move is said in words", () => {
 	eq(nextStepWords(untried, []), "");
 });
 
+check("gated chains: when another version passed where the top one failed, say so", () => {
+	const e = { id: "fs", metric: { name: "oos_sharpe" }, n_results: 2, best_variant: "q", best_failed_gate: true, best_stopped_at: "robustness",
+		variants: { q: { n: 1, mean: 0.9 }, p: { n: 1, mean: 0.3 } },
+		gate_progress: { q: { reached: "robustness", index: 3, passed: false }, p: { reached: "robustness", index: 3, passed: true } } } as unknown as MeExperiment;
+	eq(experimentStatus(e), { tone: "running", text: "The top result didn't pass Robustness — 1 other version did" });
+});
+
 check("ties: equal top means read 'Tied', not 'leads'", () => {
 	const e = { id: "t", metric: { name: "goodput_tok_s" }, n_results: 3, best_variant: "c16",
 		variants: { c32: { n: 1, mean: 22.4 }, c16: { n: 1, mean: 22.4 }, c8: { n: 1, mean: 22.4 } } } as unknown as MeExperiment;

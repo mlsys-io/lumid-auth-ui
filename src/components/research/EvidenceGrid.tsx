@@ -20,7 +20,10 @@ import { Check, Play, X } from "lucide-react";
 import { me, waitForIntent, type MeExperiment, type MeExperimentRow } from "@/api/me";
 import { askOrStash } from "@/components/chat/askBus";
 import { Button } from "@/components/ui/button";
-import { bestWords, cellValue, cellWords, evidenceOf, nextWords, runningVersions, stepFootWords, stepPassWords, type CellState, type Evidence, type EvidenceNext, type EvidenceStepSpec } from "@/lib/evidence";
+import { estimateThrough } from "@/lib/run-through";
+import { pressWords } from "@/lib/spend";
+import { useAppUsage } from "@/components/research/SpendLine";
+import { bestWords, cellValue, cellWords, evidenceOf, middleEllipsis, nextWords, stopReasons, runningVersions, stepFootWords, stepPassWords, type CellState, type Evidence, type EvidenceNext, type EvidenceStepSpec } from "@/lib/evidence";
 import { batchProgress, experimentLoop, humanId, versionsOf, type BatchProgress, experimentLabel} from "@/lib/research-map";
 import type { QueueRow } from "@/lib/compute";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
@@ -49,6 +52,7 @@ export function EvidenceTable({ ev, onPick, picked, action }: {
 	const rows = all ? ev.versions : ev.versions.slice(0, SHOWN);
 	const best = bestWords(ev);
 	const one = ev.steps.length === 1;
+	const stops = stopReasons(ev);
 	return (
 		<section aria-label="Each version, step by step" className="space-y-1.5" data-evidence="">
 			<h3 className="eyebrow">Each version, step by step</h3>
@@ -74,7 +78,7 @@ export function EvidenceTable({ ev, onPick, picked, action }: {
 								<tr key={v.id} className={cn("group", on && "[&>*]:bg-plum-50")}>
 									<th scope="row" className="sticky left-0 z-[1] max-w-[7.5rem] border-t border-ink-100 bg-card px-1 py-1 text-left font-normal group-hover:bg-ink-50">
 										<button type="button" onClick={() => onPick?.(v.id)} disabled={!onPick} aria-pressed={on}
-											className={cn("block w-full truncate text-left font-medium text-ink-900", onPick && "hover:underline")} title={v.label}>{v.label}</button>
+											className={cn("block w-full truncate text-left font-medium text-ink-900", onPick && "hover:underline")} title={v.label}>{middleEllipsis(v.label)}</button>
 									</th>
 									{ev.steps.map((s) => {
 										const c = cells.get(s.step)!;
@@ -109,7 +113,17 @@ export function EvidenceTable({ ev, onPick, picked, action }: {
 				</button>
 			)}
 			{best && <p className="text-micro text-ink-700">{best}</p>}
-			{ev.unplaced > 0 && <p className="text-micro text-ink-600">{ev.unplaced} result{ev.unplaced === 1 ? " names a step" : "s name steps"} this workflow doesn&apos;t have — not shown.</p>}
+			{stops.length > 0 && (
+				<div className="text-micro text-ink-700" data-stop-reasons>
+					<div className="font-medium text-ink-800">Why they stopped</div>
+					<ul className="mt-0.5 space-y-0.5">{stops.map((t) => <li key={t}>{t}</li>)}</ul>
+				</div>
+			)}
+			{ev.unplaced > 0 && (
+				<p className="text-micro text-ink-600">
+					{ev.unplaced} result{ev.unplaced === 1 ? " isn't" : "s aren't"} shown — they name no step this workflow has: {ev.unplacedNames.slice(0, 4).join("; ")}{ev.unplacedNames.length > 4 ? ` and ${ev.unplacedNames.length - 4} more` : ""}.
+				</p>
+			)}
 			{action}
 		</section>
 	);
@@ -148,7 +162,15 @@ function useBatch(app: string, sent: { intents: string[]; labels: string[] } | n
 
 /** "Run the N ready versions through <step>": one queued run per version,
  *  attributed to the experiment — the same request RunVersions sends. */
-function RunReady({ app, e, next }: { app: string; e: MeExperiment; next?: EvidenceNext }) {
+function RunReady({ app, e, next, rows, steps }: { app: string; e: MeExperiment; next?: EvidenceNext; rows?: MeExperimentRow[] | null; steps?: EvidenceStepSpec[] }) {
+	const usage = useAppUsage(app);
+	// Priced like RunVersions' press: what THIS step usually costs per version
+	// (earlier steps are reused — from_step), against the app's budget.
+	const press = next ? pressWords({
+		runs: next.versions.length,
+		estimate: estimateThrough(rows, (steps || []).filter((s) => s.step === next.step), next.step),
+		usage, through: humanId(next.step),
+	}) : null;
 	const [busy, setBusy] = useState(false);
 	const [sent, setSent] = useState<{ intents: string[]; labels: string[] } | null>(null);
 	const [chat, setChat] = useState(false);
@@ -198,9 +220,12 @@ function RunReady({ app, e, next }: { app: string; e: MeExperiment; next?: Evide
 	const running = !!sent && !over;
 	return (
 		<div className="min-w-0 space-y-1 pt-0.5">
-			<Button size="sm" variant="secondary" onClick={go} disabled={busy || running || chat || !next} className="h-auto min-h-8 whitespace-normal py-1 text-left text-caption">
+			<Button size="sm" variant="secondary" onClick={go} disabled={busy || running || chat || !next || !!press?.blocked} className="h-auto min-h-8 whitespace-normal py-1 text-left text-caption">
 				<Play className="h-3.5 w-3.5 flex-shrink-0" /> {busy ? "Queuing…" : running ? "Running…" : next ? nextWords(next) : "Nothing else is ready"}
 			</Button>
+			{press && press.text.includes("about") && !running && (
+				<p className={cn("text-micro", press.blocked ? "text-brick-700" : "text-ink-700")}>{press.text}</p>
+			)}
 			{prog && <p className={cn("text-micro", prog.finished && prog.failed ? "text-brick-700" : prog.finished ? "text-gold-700" : "text-ink-700")} role="status">{prog.text}</p>}
 			{chat && <p className="text-caption text-ink-700" role="status">Handed to the chat — it needs a detail only you can give.</p>}
 			{err && <p className="text-caption text-brick-700" role="alert">Couldn&apos;t queue every run: {err}</p>}
@@ -238,6 +263,6 @@ export default function EvidenceGrid({ app, e, steps, onPickVersion, pickedVersi
 	const done = !!e.status && /concluded|done|archived|closed/i.test(e.status);
 	return (
 		<EvidenceTable ev={ev} onPick={onPickVersion} picked={pickedVersion}
-			action={done ? null : <RunReady app={app} e={e} next={ev.next[0]} />} />
+			action={done ? null : <RunReady app={app} e={e} next={ev.next[0]} rows={rows} steps={steps} />} />
 	);
 }
