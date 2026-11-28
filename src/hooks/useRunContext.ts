@@ -9,12 +9,15 @@
 import { useEffect, useState } from "react";
 import { me } from "@/api/me";
 import { readAppSpec } from "@/lib/app-spec";
+import { humanId, versionLabel } from "@/lib/research-map";
 import type { RunExperimentRef } from "@/lib/run-answer";
 
 export interface RunContext {
 	experiments: RunExperimentRef[];
 	/** workflow id → the first gate its feedback steps declare. */
 	gates: Record<string, string>;
+	/** version (arm) id → its label, across the app's experiments ("0.6B · concurrency 12"). */
+	versions: Record<string, string>;
 }
 
 const TTL_MS = 60_000;
@@ -24,7 +27,12 @@ function load(app: string): Promise<RunContext> {
 	const hit = cache.get(app);
 	if (hit && Date.now() - hit.at < TTL_MS) return hit.p;
 	const p = Promise.allSettled([me.experiments(app), me.appConfig(app)]).then(([ex, cfg]) => {
-		const experiments = ex.status === "fulfilled" ? (ex.value.experiments || []).map((e) => ({ id: e.id, title: e.title, metric: e.metric, higher_is_better: e.higher_is_better })) : [];
+		const all = ex.status === "fulfilled" ? (ex.value.experiments || []) : [];
+		const experiments = all.map((e) => ({ id: e.id, title: e.title, metric: e.metric, higher_is_better: e.higher_is_better }));
+		// The run page named a run's version by its raw id ("version
+		// r4_e_06b_c12_b", sweep 2): the label every other surface uses instead.
+		const versions: Record<string, string> = {};
+		for (const e of all) for (const a of e.arms || []) if (a?.id && !(a.id in versions)) versions[a.id] = versionLabel(e, a.id);
 		const gates: Record<string, string> = {};
 		if (cfg.status === "fulfilled") {
 			for (const w of readAppSpec(cfg.value.yaml || "").workflows) {
@@ -32,7 +40,7 @@ function load(app: string): Promise<RunContext> {
 				if (g) gates[w.id] = g;
 			}
 		}
-		return { experiments, gates };
+		return { experiments, gates, versions };
 	});
 	cache.set(app, { at: Date.now(), p });
 	return p;
@@ -47,4 +55,9 @@ export function useRunContext(app: string, skip = false): RunContext | null {
 		return () => { live = false; };
 	}, [app, skip]);
 	return ctx;
+}
+
+/** A version id in words: its label from the app's experiments, else the humanised id. */
+export function versionWords(ctx: RunContext | null, id: string): string {
+	return ctx?.versions[id] || humanId(id);
 }

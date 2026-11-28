@@ -31,9 +31,17 @@ function outputs(d: MeCycleDetail | null): Array<Record<string, unknown>> {
 const pick = (r: Record<string, unknown>, keys: string[]): unknown => { for (const k of keys) if (k in r) return r[k]; return undefined; };
 const text = (v: unknown, key: string): string => {
 	if (typeof v === "number" && Number.isFinite(v)) return fmtMetricValue(v, humanMetric(key).unit, key);
-	if (typeof v === "string" && v.trim()) return v.trim();
+	if (typeof v === "string" && v.trim()) return shareText(v.trim());
 	return "—";
 };
+
+/** An app's own text for a share: "1 fraction" / "0.97 ratio" reads 100% / 97%. */
+export function shareText(t: string): string {
+	const m = /^(-?\d+(?:\.\d+)?)\s*(?:fraction|ratio|share)$/i.exec(t);
+	if (!m) return t;
+	const n = Number(m[1]);
+	return Number.isFinite(n) && n >= 0 && n <= 1 ? `${Math.round(n * 1000) / 10}%` : t;
+}
 const gapOf = (a: unknown, b: unknown): string =>
 	typeof a === "number" && typeof b === "number" && a !== 0 ? `${b >= a ? "+" : "−"}${Math.round(Math.abs(b / a - 1) * 100)}%` : "—";
 

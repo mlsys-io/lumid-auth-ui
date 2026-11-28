@@ -20,6 +20,10 @@ window.addEventListener("vite:preloadError", (event) => {
   }
 });
 
+// The entry bundle loaded: index.html's release retry stands down (see there).
+(window as Window & { __lumidMounted?: boolean }).__lumidMounted = true;
+try { sessionStorage.removeItem("lumid:entry-retry"); } catch { /* storage off */ }
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter basename={ROUTER_BASE || undefined}>

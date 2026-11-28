@@ -479,14 +479,23 @@ export default function WorkflowObservabilityPanel({
 	// Which run `canvasCycle` belongs to — so switching runs never shows the
 	// previous run's steps under the new run's header while the fetch is out.
 	const [canvasFor, setCanvasFor] = useState<string | null>(null);
+	// The run id in the address that lum.id says doesn't exist (404). A made-up
+	// or mistyped id rendered as a run — a "Skipped" chip, a live Re-run… and a
+	// skeleton that never resolved (sweep 2, 2026-11-28).
+	const [missingRun, setMissingRun] = useState<string | null>(null);
 	useEffect(() => {
 		if (!overlayTs) { setCanvasCycle(null); setCanvasFor(null); return; }
 		let live = true;
 		setDetailLoading(true);
+		setMissingRun(null);
 		// me.cycleDetail normalises the id (unix seconds → cycle-dir id).
 		me.cycleDetail(app, loop, overlayTs)
 			.then((d) => { if (live) { setCanvasCycle(d); setCanvasFor(overlayTs); setDetailLoading(false); } })
-			.catch(() => { if (live) { setCanvasCycle(null); setCanvasFor(overlayTs); setDetailLoading(false); } });
+			.catch((e) => {
+				if (!live) return;
+				setCanvasCycle(null); setCanvasFor(overlayTs); setDetailLoading(false);
+				if ((e as { status?: number })?.status === 404) setMissingRun(overlayTs);
+			});
 		return () => { live = false; };
 	}, [app, loop, overlayTs]);
 
@@ -769,8 +778,18 @@ export default function WorkflowObservabilityPanel({
 		) : base
 	);
 
+	const runIsMissing = !!runIdParam && missingRun === overlayTs && !selectedRow;
 	// The selected run — shared by the grid layout and the list layout.
-	const runDetailEl = (
+	const runDetailEl = runIsMissing ? (
+		<div role="status" className="rounded-xl border border-ink-200 bg-card px-5 py-6 text-center" data-run-missing>
+			<p className="text-body font-medium text-ink-900">There&apos;s no run with the id <code className="font-mono text-meta">{runIdParam}</code> in {loopLabel("", loop)}.</p>
+			<p className="mt-1 text-caption text-ink-600">It may have been mistyped, or it belongs to another workflow.</p>
+			<div className="mt-3 flex justify-center gap-2 text-caption">
+				<Link to={workflowPath(app, loop)} className="rounded-md border border-ink-200 px-3 py-1.5 text-ink-800 hover:bg-ink-50">See its runs</Link>
+				{defaultRunTs && <Link to={runPath(app, loop, defaultRunTs)} className="rounded-md border border-ink-200 px-3 py-1.5 text-ink-800 hover:bg-ink-50">Open the latest run</Link>}
+			</div>
+		</div>
+	) : (
 		<RunDetail app={app} loop={loop} runId={overlayTs} detail={canvasFor === overlayTs ? canvasCycle : null}
 			loading={detailLoading} listRow={selectedRow} cycles={cycleList ?? []}
 			step={qStep} pane={qPane} compare={qCompare}

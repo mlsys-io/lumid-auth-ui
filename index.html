@@ -20,6 +20,38 @@
         if (/^\/(studio|code|claude-sessions|explore|auth)(\/|$)/.test(p)) document.documentElement.setAttribute("data-surface", "studio");
       })();
     </script>
+    <!-- A release rolls the pods a few at a time, so this page (new version) can
+         ask an OLD pod for its entry bundle: a 404 before React mounts left a
+         plain white page, sidebar included, for ~40 s of every release
+         (2026-11-28). Nothing in the bundle can catch a bundle that never
+         loaded, so this does: reload, up to 4 times with backoff (each reload
+         can reach a new pod), then say what is happening instead of white. -->
+    <script>
+      (function () {
+        var KEY = "lumid:entry-retry";
+        window.addEventListener("error", function (e) {
+          var t = e && e.target;
+          if (!t || (t.tagName !== "SCRIPT" && t.tagName !== "LINK") || window.__lumidMounted) return;
+          var url = t.src || t.href || "";
+          if (!/\/assets\/[^/?#]+\.(js|css)([?#]|$)/.test(url)) return;
+          var n = 0;
+          try { n = +sessionStorage.getItem(KEY) || 0; } catch (_) {}
+          if (n >= 4) {
+            try { sessionStorage.removeItem(KEY); } catch (_) {}
+            var root = document.getElementById("root");
+            if (root && !root.childNodes.length) {
+              root.innerHTML = '<div style="max-width:28rem;margin:20vh auto;padding:0 16px;font:15px/1.5 system-ui,sans-serif;color:#2b2620">' +
+                '<p style="font-weight:600;margin:0 0 6px">lum.id is updating.</p>' +
+                '<p style="margin:0 0 14px;color:#5b5348">A new version is rolling out and this page loaded halfway. It usually takes under a minute.</p>' +
+                '<button onclick="location.reload()" style="font:inherit;padding:6px 14px;border-radius:8px;border:1px solid #cbc3b6;background:#fff;cursor:pointer">Reload</button></div>';
+            }
+            return;
+          }
+          try { sessionStorage.setItem(KEY, String(n + 1)); } catch (_) {}
+          setTimeout(function () { location.reload(); }, 700 * (n + 1));
+        }, true);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

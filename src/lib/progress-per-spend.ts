@@ -55,6 +55,31 @@ export interface ProgressPerSpend {
 	points: SpendPoint[];
 	total: number;
 	best: { value: number; version: string; at: number } | null;
+	/** GPU results that carried no metered time, counted at the instrument's
+	 *  typical GPU time from your own runs (/me/usage estimates). */
+	estimatedGpuRows: number;
+	/** GPU results with no metered time and nothing to estimate it from: not on the axis. */
+	unmeteredGpuRows: number;
+}
+
+const GPU_WORDS = /\b(gpu|rtx|h100|h200|a100|l40|l4|a10|v100|t4|mi300)\b/i;
+
+/** A result measured on a GPU, by what the row says about itself. */
+function measuredOnGpu(r: MeExperimentRow): boolean {
+	const d = r.dims ?? {};
+	return !!(d.gpu || d.gpu_type) || GPU_WORDS.test(String(d.measured_on ?? ""));
+}
+
+/** The GPU seconds a run of this kind typically takes, from /me/usage: the
+ *  estimate whose card the row names, else the GPU instrument with the most
+ *  history. null when nothing measured on a GPU has been metered yet. */
+function gpuEstimate(r: MeExperimentRow, usage?: MeUsage | null): number | null {
+	const est = Object.values(usage?.estimates ?? {}).filter((e) => (e.gpu_s ?? 0) > 0);
+	if (!est.length) return null;
+	const on = `${r.dims?.gpu ?? ""} ${r.dims?.gpu_type ?? ""} ${r.dims?.measured_on ?? ""}`.toLowerCase();
+	const named = est.find((e) => e.gpu_type && on.includes(e.gpu_type.toLowerCase()));
+	const pick = named ?? est.sort((a, b) => (b.from_runs ?? 0) - (a.from_runs ?? 0))[0];
+	return pick.gpu_s ?? null;
 }
 
 const tsNum = (ts?: string): number => {
@@ -95,7 +120,20 @@ export function progressPerSpend(input: {
 	if (ck < 0) return null;
 	const counting = stepIds[ck];
 
-	const usages = rows.map(usageOfRow);
+	// A GPU result with no metered time (a direct sandbox run before metering,
+	// or a copied row) would leave the GPU off the axis entirely, and the chart
+	// then plotted a GPU result against CPU-seconds (sweep 2, 2026-11-28).
+	// Count it at the instrument's typical GPU time instead, and say so.
+	let estimatedGpuRows = 0;
+	let unmeteredGpuRows = 0;
+	const usages = rows.map((r) => {
+		const u = usageOfRow(r);
+		if ((u?.gpu_s ?? 0) > 0 || u?.metered === "reused" || !measuredOnGpu(r)) return u;
+		const g = gpuEstimate(r, input.usage);
+		if (g == null) { unmeteredGpuRows++; return u; }
+		estimatedGpuRows++;
+		return { ...(u ?? {}), gpu_s: g, metered: "estimated" } as NonNullable<typeof u>;
+	});
 	const usd = usages.reduce((a, u) => a + (u?.cost_usd ?? 0), 0);
 	const usdNotionalSum = usages.reduce((a, u) => a + (u ? notionalPart(u) : 0), 0);
 	const billed = usd - usdNotionalSum >= 0.005
@@ -140,6 +178,8 @@ export function progressPerSpend(input: {
 	return {
 		unit, usdNotional, unitLabel, metric, metricLabel: h.label, metricUnit: h.unit, higherIsBetter: higher,
 		countingStep: counting, countingLabel: counting ? humanId(counting) : "the result", points, total: x, best,
+		estimatedGpuRows: unit === "gpu" ? estimatedGpuRows : 0,
+		unmeteredGpuRows,
 	};
 }
 
@@ -161,9 +201,15 @@ export function progressWords(p: ProgressPerSpend, label: (v: string) => string 
 			: `Nothing measured at ${p.countingLabel} yet`;
 	}
 	const fmt = (v: number) => fmtMetricValue(v, p.metricUnit, p.metric);
+	const n = (k: number) => `${k} GPU result${k === 1 ? "" : "s"}`;
+	const est = p.estimatedGpuRows
+		? ` (${n(p.estimatedGpuRows)} carried no metered time; counted at the usual time for that run)`
+		: p.unmeteredGpuRows
+			? ` (${n(p.unmeteredGpuRows)} carried no metered time and ${p.unmeteredGpuRows === 1 ? "isn't" : "aren't"} on this axis)`
+			: "";
 	const head = `Best ${p.metricLabel}: ${fmt(p.best.value)} (${label(p.best.version)}), reached after ${spendAt(p, p.best.at)}`;
 	// Spending since the best was reached: still paying off, or flat?
 	const since = p.total - p.best.at;
-	if (p.total <= 0 || since <= p.total * 0.05) return `${head} — the latest spending is still paying off`;
-	return `${head}. The ${spendAt(p, since)} since then bought no improvement`;
+	if (p.total <= 0 || since <= p.total * 0.05) return `${head} — the latest spending is still paying off${est}`;
+	return `${head}. The ${spendAt(p, since)} since then bought no improvement${est}`;
 }

@@ -13,6 +13,7 @@
 // Pure presentation: the host (WorkflowObservabilityPanel) owns the data calls
 // (cycle list, cycle detail, trajectory) and the URL.
 
+import { useRunContext, versionWords } from "@/hooks/useRunContext";
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { AuthContext } from "@/hooks/useAuth";
@@ -298,6 +299,7 @@ export function RunDetail({
 	/** The five-stage view of this run (StageDetail, owned by the host). */
 	renderStages?: (runId: string) => React.ReactNode;
 }) {
+	const runCtx = useRunContext(app);
 	const authRole = useContext(AuthContext)?.user?.role;
 	const isAdminRole = authRole === 'admin' || authRole === 'super_admin';
 	const [showStages, setShowStages] = useState(false);
@@ -362,7 +364,7 @@ export function RunDetail({
 					<span className="text-micro text-ink-600">{runAgo(runId)}</span>
 					<span className="text-micro text-ink-600 tabular-nums" title="duration">· {fmtDur(duration)}</span>
 					{listRow?.branch_label && (
-						<span className="text-micro font-mono text-ink-600 bg-ink-50 border border-ink-200 rounded px-1.5" title="the version this run tried">version {listRow.branch_label}</span>
+						<span className="text-micro text-ink-700 bg-ink-50 border border-ink-200 rounded px-1.5" title={`the version this run tried (${listRow.branch_label})`}>Version: {versionWords(runCtx, listRow.branch_label)}</span>
 					)}
 					{/* The raw id is in UTC and read as a second, different time beside the
 					    local one (first-glance test) — an operator detail. */}

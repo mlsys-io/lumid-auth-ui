@@ -129,6 +129,7 @@ export const RUN_PAGE_CONTEXT: RunContext = {
 		{ id: "serve_9_2_energy", metric: { name: "estimated_energy_j_per_tok", higher_is_better: false } },
 	],
 	gates: {},
+	versions: {},
 };
 
 export const RUN_PAGE_LIST: MeCycleListItem[] = [];

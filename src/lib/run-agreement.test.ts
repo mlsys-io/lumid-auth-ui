@@ -1,6 +1,6 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 import type { MeCycleDetail } from "@/api/me";
-import { runAgreement, runUsage, nothingMeasured } from "./run-agreement";
+import { shareText, runAgreement, runUsage, nothingMeasured } from "./run-agreement";
 import { RUN_GPU_ENERGY, RUN_NOT_MEASURED } from "@/dev/run-page-fixtures";
 
 type Check = { name: string; run: () => void };
@@ -59,6 +59,14 @@ check("a comparison where nothing was measured is one line, not a table of dashe
 	eq(nothingMeasured(runAgreement(RUN_NOT_MEASURED)), true);
 	eq(nothingMeasured(runAgreement(RUN_GPU_ENERGY)), false);
 	eq(nothingMeasured(null), false);
+});
+
+check("an app's share text reads as a percent", () => {
+	eq(shareText("1 fraction"), "100%");
+	eq(shareText("0.975 fraction"), "97.5%");
+	eq(shareText("0.5 ratio"), "50%");
+	eq(shareText("3 fraction"), "3 fraction");
+	eq(shareText("50.79 ms"), "50.79 ms");
 });
 
 export function run(): number {

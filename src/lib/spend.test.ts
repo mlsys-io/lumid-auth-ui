@@ -157,6 +157,25 @@ check("best result vs GPU-minutes; cheap rows add spend but don't move the best"
 	eq(progressWords(p), "Best Goodput: 24 tok/s (C4), reached after 14 GPU-min. The 7 GPU-min since then bought no improvement");
 });
 
+check("a GPU result with no metered time is counted at the card's usual time, and said so", () => {
+	// Sweep 2: the sandbox rows carried no usage, so the axis fell back to CPU
+	// and read "reached after 17 CPU-s" for a result measured on an RTX 5080.
+	const rows = [
+		row("c4", "simulator", { energy_j_per_tok: 0.40, cpu_s: 3 }, {}, "1"),
+		row("c4", "sandbox", { energy_j_per_tok: 0.383 }, { gpu: "NVIDIA GeForce RTX 5080", measured_on: "NVIDIA GeForce RTX 5080 at office" }, "2"),
+		row("c12", "sandbox", { energy_j_per_tok: 0.366 }, { measured_on: "NVIDIA GeForce RTX 5080 at office" }, "3"),
+	];
+	const usage = { estimates: { "mlsys-sandbox": { gpu_s: 240, gpu_type: "RTX 5080", from_runs: 14 }, "mlsys-simulator": { cpu_s: 2, gpu_s: 0, from_runs: 20 } } } as unknown as Parameters<typeof progressPerSpend>[0]["usage"];
+	const p = progressPerSpend({ steps, rows, metric: "energy_j_per_tok", higherIsBetter: false, usage })!;
+	eq([p.unit, p.total, p.estimatedGpuRows], ["gpu", 8, 2]);
+	eq(p.best, { value: 0.366, version: "c12", at: 8 });
+	ok(progressWords(p).endsWith("(2 GPU results carried no metered time; counted at the usual time for that run)"), progressWords(p));
+	// No estimate to go on: the rows stay unmetered and nothing is claimed.
+	const bare = progressPerSpend({ steps, rows, metric: "energy_j_per_tok", higherIsBetter: false })!;
+	eq([bare.unit, bare.estimatedGpuRows, bare.unmeteredGpuRows], ["cpu", 0, 2]);
+	ok(progressWords(bare).endsWith("(2 GPU results carried no metered time and aren't on this axis)"), progressWords(bare));
+});
+
 check("no GPU: falls back to CPU, then run time", () => {
 	const p = progressPerSpend({ steps: [], rows: [row("a", "", { score: 1, duration_s: 120 }, {}, "1")].map((r) => ({ ...r, dims: {} })), metric: "score" })!;
 	eq([p.unit, p.unitLabel], ["time", "run minutes"]);
