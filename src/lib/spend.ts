@@ -261,3 +261,16 @@ export function pressWords(input: {
 	}
 	return { text: `${head}: about ${cost}${left}`, blocked };
 }
+
+/** The app's spend in one line for a summary tile: the budget meter's words
+ *  when the app declares a budget, else what was used ("24 GPU-min on
+ *  RTX 5080 · 31 CPU-s used · $0.10 notional"), else null (nothing metered). */
+export function usageLine(u: MeUsage | null | undefined, instrumentWords?: (name: string) => string): string | null {
+	if (!u) return null;
+	const m = budgetMeter(u, instrumentWords);
+	if (m) return `Budget: ${m.words}`;
+	const s: Spend = { ...empty(), gpu_s: u.used.gpu_s || 0, cpu_s: u.used.cpu_s || 0, cost_usd: u.used.cost_usd || 0, gpu_by_type: Object.fromEntries(Object.entries(u.used.by_device ?? {}).filter(([k]) => k !== "CPU")) };
+	const dev = deviceWords(s);
+	if (!dev) return null;
+	return `${dev} used${s.cost_usd > 0 ? ` · ${dollars(s.cost_usd)} notional` : ""}`;
+}
