@@ -155,6 +155,21 @@ check("once results name steps, an unnamed one goes only where its metrics say",
 	const ambiguous = [...threeRows(), { ts: "2026-11-22T00:00:00Z", variant_id: "a", metrics: { nothing_declared: 1 } }];
 	eq(evidenceOf({ steps: THREE, versions: [{ id: "a" }], rows: ambiguous }).unplaced, 1);
 });
+check("a stage-less row goes to the step only it reports metrics for", () => {
+	// MLSys: Simulate and Sandbox share goodput/TTFT; only Sandbox declares the
+	// measured energy, so a direct sandbox run's row belongs under Sandbox.
+	const steps = [
+		{ step: "simulate", metrics: [{ name: "goodput_tok_s" }, { name: "estimated_energy_j_per_req" }] },
+		{ step: "sandbox", metrics: [{ name: "goodput_tok_s" }, { name: "energy_j_per_req" }] },
+	];
+	const staged = { ts: "2026-11-28T10:00:00Z", variant_id: "a", metrics: { goodput_tok_s: 20, estimated_energy_j_per_req: 80 }, dims: { stage: "simulate", stage_index: "1", passed: "1" } };
+	const gpu = { ts: "2026-11-28T11:00:00Z", variant_id: "a", metrics: { goodput_tok_s: 22, energy_j_per_req: 75.31 }, dims: { gpu: "RTX 5080" } };
+	const ev = evidenceOf({ steps, versions: [{ id: "a" }], rows: [staged, gpu] as never });
+	eq([ev.unplaced, ev.cells.get("a")!.get("sandbox")!.n], [0, 1]);
+	// Only shared metrics: still not guessed.
+	const shared = { ts: "2026-11-28T12:00:00Z", variant_id: "a", metrics: { goodput_tok_s: 21 }, dims: {} };
+	eq(evidenceOf({ steps, versions: [{ id: "a" }], rows: [staged, shared] as never }).unplaced, 1);
+});
 check("gates from the spec (read defensively) and from its text", () => {
 	const text = `workflows:
 - id: screen
