@@ -16,6 +16,7 @@ export const PAIRED_ROWS: MeExperimentRow[] = [
 	r("self_review_one_pass", "quick", { paired_delta: -2.6, paired_ci_low: -5.0, paired_ci_high: -0.3, paired_wins: 3, paired_losses: 12, paired_ties: 22, trials: 4 }, "5"),
 	r("fix_communication_top_line", "dev_eval", { paired_delta: 3.1, paired_ci_low: 0.4, paired_ci_high: 5.9, paired_wins: 21, paired_losses: 6, paired_ties: 72, trials: 2 }, "6"),
 	r("fix_issue_tree_objective", "dev_eval", { paired_delta: 0.8, paired_ci_low: -2.0, paired_ci_high: 3.7, paired_wins: 15, paired_losses: 11, paired_ties: 73, trials: 2 }, "7"),
+	r("quant_compute_first", "dev_eval", { paired_delta: 4.2, paired_wins: 3, paired_losses: 0, paired_ties: 9, paired_ci_withheld: 1, trials: 3 }, "8"),
 ];
 
 const LABELS: Record<string, string> = {
