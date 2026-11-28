@@ -655,6 +655,20 @@ export const me = {
   experimentsAll: () => call<{ experiments: Array<MeExperiment & { app: string }>; count: number }>("GET", "/experiments"),
   // Central measurement: the instruments identity can measure with (/me/measure).
   measureInstruments: () => call<{ instruments: import("@/lib/measure").MeasureInstrument[] }>("GET", "/measure/instruments"),
+  // App compute modules (round 10): the app's own modules (kind "module",
+  // clamped limits, refused ones with identity's reason) and, with `public`,
+  // every public module of other owners' published apps plus the index's
+  // freshness (`public_modules`). Words: lib/modules.
+  moduleInstruments: (app: string, opts?: { public?: boolean }) =>
+    call<import("@/lib/modules").ModuleListing>("GET", `/measure/instruments?app=${encodeURIComponent(app)}${opts?.public ? "&public=1" : ""}`),
+  // Run an instrument or module once, as the caller. 202 = queued/running
+  // (poll measureResult with `key`) or "waiting" (nothing claimed — ask again
+  // after retry_after); 200 = a result (maybe reused) or not_measured.
+  // Refusals throw MeApiError carrying identity's words.
+  measure: (body: import("@/lib/modules").MeasureRequest) =>
+    call<import("@/lib/modules").MeasureReply>("POST", "/measure", body),
+  measureResult: (key: string) =>
+    call<import("@/lib/modules").MeasureReply>("GET", `/measure/${encodeURIComponent(key)}`),
   // Usage metering (round 10): what this user's measurements used, against the
   // app's spec compute.budget (identity /me/usage). Device-seconds; $ notional.
   // Discard / restore an experiment's results (tombstones; nothing is deleted).

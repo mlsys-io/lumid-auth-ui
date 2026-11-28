@@ -5,7 +5,7 @@
 //   npx vite --port 5199  ->  http://localhost:5199/auth/design-dev.html
 //   (?section=<id> scrolls to one section; screenshots: e2e/design-gallery.mjs)
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Bell, Boxes, Database, Inbox, Play, Plus, Search, Sparkles } from "lucide-react";
 import * as palette from "@/styles/palette";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,9 @@ import ProgressPerSpend from "@/components/research/ProgressPerSpend";
 import SpendLine from "@/components/research/SpendLine";
 import StepAgreement from "@/components/research/StepAgreement";
 import { SPEND_ROWS, SPEND_STEPS, SPEND_USAGE, spendLabel } from "./spend-fixtures";
+import { ModulesView } from "@/components/modules/ModulesPanel";
+import type { ModuleListing } from "@/lib/modules";
+import { MODULES_EMPTY_LISTING, MODULES_EMPTY_SPEC, MODULES_LISTING, MODULES_SPEC, MODULES_STALE_LISTING, galleryMeasureClient } from "./modules-fixtures";
 
 // Progress-dots demo data (fixed times, so the gallery is stable).
 const DEMO_T = Math.floor(Date.now() / 1000) - 600;
@@ -47,6 +50,25 @@ const DEMO_STEPS: StepDot[] = [
 	{ id: "6", label: "Forward test", state: "waiting" },
 	{ id: "7", label: "Report", state: "waiting" },
 ];
+
+/** The Compute modules panel on fixtures: saves edit the fixture text in
+ *  memory, Try it answers from galleryMeasureClient. No request is made. */
+function GalleryModules({ app, spec, listing, title }: { app: string; spec: string; listing: ModuleListing; title: string }) {
+	const [text, setText] = useState(spec);
+	const cur = useRef(spec);
+	const [client] = useState(galleryMeasureClient);
+	// Like useAppGraph's save: the edit runs before anything is written, so a refusal reaches the sheet.
+	const save = async (edit: (t: string) => string) => { cur.current = edit(cur.current); setText(cur.current); };
+	return (
+		<div className="space-y-2" data-gallery-modules={title}>
+			<div className="text-micro text-ink-600">{title}</div>
+			<div className="rounded-xl border border-ink-200 bg-card p-4 space-y-3">
+				<ModulesView app={app} specText={text} listing={listing} editable workflowIds={["scan", "trace_check"]} client={client}
+					save={save} />
+			</div>
+		</div>
+	);
+}
 
 function Section({ id, title, children }: { id: string; title: string; children: React.ReactNode }) {
 	return (
@@ -230,6 +252,13 @@ export default function DesignGallery() {
 							<StepAgreement steps={SPEND_STEPS} rows={SPEND_ROWS} label={spendLabel} />
 							<SpendLine usage={SPEND_USAGE} rows={SPEND_ROWS} />
 						</div>
+					</div>
+				</Section>
+				<Section id="modules" title="Compute modules — what an app registers, can it run, use it">
+					<div className="grid gap-6 lg:grid-cols-2">
+						<GalleryModules title="No modules yet" app="kalshi-scan" spec={MODULES_EMPTY_SPEC} listing={MODULES_EMPTY_LISTING} />
+						<GalleryModules title="Three modules — one clamped, one refused" app="mlsys-research" spec={MODULES_SPEC} listing={MODULES_LISTING} />
+						<GalleryModules title="The public list couldn't be refreshed" app="kalshi-scan" spec={MODULES_EMPTY_SPEC} listing={MODULES_STALE_LISTING} />
 					</div>
 				</Section>
 				<Section id="dots" title="Progress dots — a dot is a run, or a step">

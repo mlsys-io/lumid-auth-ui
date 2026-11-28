@@ -14,7 +14,7 @@ import { recordInteraction } from "@/api/interactions";
 import { useAuth } from "@/hooks/useAuth";
 import { createPortal } from "react-dom";
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { MoreHorizontal, Pencil, Settings, SlidersHorizontal, Sparkles, Trash2, DownloadCloud, UploadCloud, Loader2, BarChart3 } from "lucide-react";
+import { MoreHorizontal, Pencil, Settings, SlidersHorizontal, Sparkles, Trash2, DownloadCloud, UploadCloud, Loader2, BarChart3, Cpu } from "lucide-react";
 import { toast } from "sonner";
 import apiClient from "@/api/client";
 import {
@@ -317,6 +317,15 @@ function AppSurfaceImpl({
               <span className="flex flex-col">
                 <span>Manage agent</span>
                 <span className="text-micro text-ink-600">new workflow, name, skills</span>
+              </span>
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild>
+            <Link to={`/studio/a/${encodeURIComponent(app)}/manage#modules`}>
+              <Cpu className="w-3.5 h-3.5" />
+              <span className="flex flex-col">
+                <span>Compute modules</span>
+                <span className="text-micro text-ink-600">small compute lum.id runs for it</span>
               </span>
             </Link>
           </DropdownMenuItem>

@@ -61,6 +61,7 @@ import { run as runDiscardChecks, caseCount as discardCaseCount } from "@/lib/di
 import { run as runHoldoutChecks, caseCount as holdoutCaseCount } from "@/lib/holdout.test";
 import { run as runRunAgreementChecks, caseCount as runAgreementCaseCount } from "@/lib/run-agreement.test";
 import { run as runAppUpdateChecks, caseCount as appUpdateCaseCount } from "@/lib/app-update.test";
+import { runAsync as runModulesChecks, caseCount as modulesCaseCount } from "@/lib/modules.test";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -410,14 +411,15 @@ if (typeof describe === "function" && typeof it === "function") {
 		for (const c of checks) it!(c.name, c.run);
 	});
 } else {
-	const failed = run();
+	// The modules suite follows a poll loop (lib/modules runModuleOnce), so it is awaited.
+	const failed = run() + (await runModulesChecks());
 	const proc = (globalThis as { process?: { exitCode?: number } }).process;
 	if (failed > 0) {
 		// eslint-disable-next-line no-console
-		console.error(`${failed} of ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount + runStatusCaseCount + routeCaseCount + fleetProvCaseCount + chunkCaseCount + sandboxCaseCount + dataLakeCaseCount + dataActivityCaseCount + runSiteCaseCount + runImagesCaseCount + fleetResultCaseCount + askDataCaseCount + runFilesCaseCount + tableColumnsCaseCount + dataJobsCaseCount + returnToCaseCount + activityCaseCount + runAnswerCaseCount + researchMapCaseCount + timelineCaseCount + evolutionCaseCount + modelLabelCaseCount + spaceCaseCount + appSpecCaseCount + variantFormCaseCount + compareCaseCount + dashboardCaseCount + measureCaseCount + computeCaseCount + pauseCaseCount + progressDotsCaseCount + compareSidesCaseCount + runsListCaseCount + evidenceCaseCount + spendCaseCount + discardCaseCount + holdoutCaseCount + runAgreementCaseCount + appUpdateCaseCount + runThroughCaseCount} case(s) failed`);
+		console.error(`${failed} of ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount + runStatusCaseCount + routeCaseCount + fleetProvCaseCount + chunkCaseCount + sandboxCaseCount + dataLakeCaseCount + dataActivityCaseCount + runSiteCaseCount + runImagesCaseCount + fleetResultCaseCount + askDataCaseCount + runFilesCaseCount + tableColumnsCaseCount + dataJobsCaseCount + returnToCaseCount + activityCaseCount + runAnswerCaseCount + researchMapCaseCount + timelineCaseCount + evolutionCaseCount + modelLabelCaseCount + spaceCaseCount + appSpecCaseCount + variantFormCaseCount + compareCaseCount + dashboardCaseCount + measureCaseCount + computeCaseCount + pauseCaseCount + progressDotsCaseCount + compareSidesCaseCount + runsListCaseCount + evidenceCaseCount + spendCaseCount + discardCaseCount + holdoutCaseCount + runAgreementCaseCount + appUpdateCaseCount + runThroughCaseCount + modulesCaseCount} case(s) failed`);
 		if (proc) proc.exitCode = 1;
 	} else {
 		// eslint-disable-next-line no-console
-		console.log(`workflow core: all ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount + runStatusCaseCount + routeCaseCount + fleetProvCaseCount + chunkCaseCount + sandboxCaseCount + dataLakeCaseCount + dataActivityCaseCount + runSiteCaseCount + runImagesCaseCount + fleetResultCaseCount + askDataCaseCount + runFilesCaseCount + tableColumnsCaseCount + dataJobsCaseCount + returnToCaseCount + activityCaseCount + runAnswerCaseCount + researchMapCaseCount + timelineCaseCount + evolutionCaseCount + modelLabelCaseCount + spaceCaseCount + appSpecCaseCount + variantFormCaseCount + compareCaseCount + dashboardCaseCount + measureCaseCount + computeCaseCount + pauseCaseCount + progressDotsCaseCount + compareSidesCaseCount + runsListCaseCount + evidenceCaseCount + spendCaseCount + discardCaseCount + holdoutCaseCount + runAgreementCaseCount + appUpdateCaseCount + runThroughCaseCount} cases passed`);
+		console.log(`workflow core: all ${checks.length + docCaseCount + editCaseCount + fmCaseCount + xpioCaseCount + importCaseCount + cycleIdCaseCount + awaitCaseCount + runStatusCaseCount + routeCaseCount + fleetProvCaseCount + chunkCaseCount + sandboxCaseCount + dataLakeCaseCount + dataActivityCaseCount + runSiteCaseCount + runImagesCaseCount + fleetResultCaseCount + askDataCaseCount + runFilesCaseCount + tableColumnsCaseCount + dataJobsCaseCount + returnToCaseCount + activityCaseCount + runAnswerCaseCount + researchMapCaseCount + timelineCaseCount + evolutionCaseCount + modelLabelCaseCount + spaceCaseCount + appSpecCaseCount + variantFormCaseCount + compareCaseCount + dashboardCaseCount + measureCaseCount + computeCaseCount + pauseCaseCount + progressDotsCaseCount + compareSidesCaseCount + runsListCaseCount + evidenceCaseCount + spendCaseCount + discardCaseCount + holdoutCaseCount + runAgreementCaseCount + appUpdateCaseCount + runThroughCaseCount + modulesCaseCount} cases passed`);
 	}
 }

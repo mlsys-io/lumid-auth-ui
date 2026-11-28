@@ -1203,6 +1203,15 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 												</span>
 											</Link>
 										</DropdownMenuItem>
+										<DropdownMenuItem asChild>
+											<Link to={`/studio/a/${encodeURIComponent(app)}/manage#modules`}>
+												<Cpu className="w-3.5 h-3.5" />
+												<span className="flex flex-col">
+													<span>Compute modules</span>
+													<span className="text-micro text-ink-600">small compute lum.id runs for it</span>
+												</span>
+											</Link>
+										</DropdownMenuItem>
 										<DropdownMenuItem
 											disabled={!!shareBusy}
 											onSelect={() => shareAction("pull", "update", "Update queued — upstream changes merge in ~a minute (your edits are preserved).")}
