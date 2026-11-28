@@ -20,7 +20,7 @@ import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useState } f
 import type { LoopDefinition } from "@/api/me";
 import { isEmptyLoop } from "@/workflow/adapters/xpio";
 import { Link } from "react-router-dom";
-import { ArrowRight, GitBranch, MessagesSquare, Play, Plus, Scale, Trash2, X } from "lucide-react";
+import { ArrowRight, GitBranch, MessagesSquare, Pencil, Play, Plus, Scale, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { me, type MeCycleDetail, type MeCycleListItem, type MeExperiment, type MeWorkflowRow } from "@/api/me";
 import type { AppSpec, FeedbackStep, SpecNode, SpecWorkflow } from "@/lib/app-spec";
@@ -42,6 +42,7 @@ import { loopLabel } from "@/lib/workflow-names";
 import { appTitle } from "@/components/workflow/AppCard";
 import RunAnswerCard from "@/components/workflow/RunAnswerCard";
 import WorkflowInsights from "@/components/workflow/WorkflowInsights";
+const WorkflowShapeEditor = lazy(() => import("@/components/research/WorkflowShapeEditor"));
 import { Segmented } from "@/components/ui/segmented";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -387,7 +388,9 @@ function StepsGraph({ app, wf, spec, cycles }: { app: string; wf: SpecWorkflow; 
 		return () => { live = false; };
 	}, [app, wf.id, last?.ts, last]);
 	if (def === undefined) return <div className="h-40 rounded-lg lumen-skeleton" role="status" aria-label="Reading its steps" />;
-	if (def && !isEmptyLoop(def)) {
+	// A chain draws its stages: the scheduler's definition of a chain is one
+	// generic command node, which hid Simulate → Sandbox behind "command".
+	if (def && !isEmptyLoop(def) && !wf.steps.workflows?.length) {
 		return (
 			<div className="overflow-hidden rounded-lg border border-ink-200" data-steps-canvas>
 				<Suspense fallback={<div className="h-56 lumen-skeleton" />}>
@@ -429,24 +432,45 @@ function SetupView({ app, wf, spec, row, cycles, helpers, save, editable }: {
 	app: string; wf: SpecWorkflow; spec: AppSpec; row?: MeWorkflowRow; cycles: MeCycleListItem[] | null; helpers: SpecWorkflow[];
 	save: (edit: (t: string) => string, files?: Array<{ path: string; content: string }>) => Promise<unknown>; editable: boolean;
 }) {
+	const [editing, setEditing] = useState(false);
+	useEffect(() => { setEditing(false); }, [wf.id]);
 	const compute = { ...spec.compute, ...wf.compute };
 	const rows: Array<[string, React.ReactNode]> = [];
-	const steps = wf.steps.python ? <>Python <code className="font-mono text-micro">commands/{wf.steps.python}.py</code></> : wf.steps.dag ? <>A step graph <code className="font-mono text-micro">{wf.steps.dag}</code></> : wf.steps.skills?.length ? wf.steps.skills.join(" → ") : null;
+	const steps = wf.steps.workflows?.length ? wf.steps.workflows.map((st) => { const id = typeof st === "string" ? st : st.use; const w = spec.workflows.find((x) => x.id === id); return w ? wfLabel(w) : id; }).join(" → ") : wf.steps.python ? <>Python <code className="font-mono text-micro">commands/{wf.steps.python}.py</code></> : wf.steps.dag ? <>A step graph <code className="font-mono text-micro">{wf.steps.dag}</code></> : wf.steps.skills?.length ? wf.steps.skills.join(" → ") : null;
 	if (steps) rows.push(["Steps", steps]);
 	if (Object.keys(wf.inputs).length) rows.push(["Inputs", <span className="font-mono text-micro text-ink-800">{Object.entries(wf.inputs).map(([k, v]) => `${k}=${String(v) || "…"}`).join(" · ")}</span>]);
 	if (wf.data.length) rows.push(["Data", wf.data.join(", ")]);
 	rows.push(["Compute", compute.site ? `${compute.site}${compute.gpu ? ` · GPU ${compute.gpu}` : ""}` : "the app's default"]);
 	rows.push(["Starts", wf.run === "manual" ? "When you press Run" : `On its own (${row?.trigger || wf.run}) — and when you press Run`]);
 	if (helpers.length) rows.push(["Helpers", helpers.map(wfLabel).join(", ")]);
+	// Whether its shape can be changed here; the older loops form is changed in Manage → Spec.
+	const canShape = editable && !wf.legacy;
 	return (
 		<div className="space-y-4">
-			<StepsGraph app={app} wf={wf} spec={spec} cycles={cycles} />
-			<section aria-label="What it's made of" className="space-y-1">
-				<h3 className="eyebrow">What it&apos;s made of</h3>
-				<dl className="grid grid-cols-[5.5rem_1fr] gap-x-2 gap-y-1 text-caption">
-					{rows.map(([k, v]) => (<Fragment key={k}><dt className="text-ink-600">{k}</dt><dd className="min-w-0 text-ink-900">{v}</dd></Fragment>))}
-				</dl>
-			</section>
+			{editing ? (
+				<Suspense fallback={<div className="h-56 rounded-lg lumen-skeleton" role="status" aria-label="Opening the editor" />}>
+					<WorkflowShapeEditor app={app} wf={wf} spec={spec} save={save} onDone={() => setEditing(false)} />
+				</Suspense>
+			) : (
+				<>
+					<div className="flex items-center gap-2">
+						<h3 className="eyebrow">How it&apos;s built</h3>
+						{canShape && (
+							<Button size="sm" variant="secondary" className="ml-auto" onClick={() => setEditing(true)} title="Change its steps, data, inputs and where it runs">
+								<Pencil className="h-3.5 w-3.5" />Edit
+							</Button>
+						)}
+					</div>
+					<StepsGraph app={app} wf={wf} spec={spec} cycles={cycles} />
+					<section aria-label="What it's made of" className="space-y-1">
+						<h3 className="eyebrow">What it&apos;s made of</h3>
+						<dl className="grid grid-cols-[5.5rem_1fr] gap-x-2 gap-y-1 text-caption">
+							{rows.map(([k, v]) => (<Fragment key={k}><dt className="text-ink-600">{k}</dt><dd className="min-w-0 text-ink-900">{v}</dd></Fragment>))}
+						</dl>
+						{editable && wf.legacy && <p className="text-micro text-ink-600">It is written in the older format; change it in Manage → Spec.</p>}
+					</section>
+				</>
+			)}
 			<FeedbackView app={app} wf={wf} cycles={cycles} save={save} editable={editable} />
 		</div>
 	);
@@ -754,6 +778,13 @@ function FeedbackView({ app, wf, cycles, save, editable }: {
 						</select>
 					</div>
 					{st.service && <p className="text-micro text-ink-700">{measuredBy(st.service, instruments)}</p>}
+					{/* The step's pass condition: a chain stops here when a run misses it. */}
+					<div className="flex items-center gap-1.5 text-micro">
+						<label className="text-ink-600" htmlFor={`gate-${wf.id}-${i}`}>Passes when</label>
+						<input id={`gate-${wf.id}-${i}`} value={st.gate ?? ""} disabled={!editable} placeholder="always (no gate), e.g. meets_constraints >= 1"
+							onChange={(e) => upd(i, (s) => { const { gate: _drop, ...rest } = s; return e.target.value ? { ...rest, gate: e.target.value } : rest; })}
+							className="h-6 min-w-0 flex-1 rounded-md border border-ink-200 bg-card px-1.5 font-mono text-micro text-ink-800" />
+					</div>
 					{st.metrics.map((m, k) => (
 						<div key={k} className="flex items-center gap-1.5 text-caption">
 							<input aria-label="Metric" list={`metrics-${wf.id}`} value={m.name} disabled={!editable} onChange={(e) => upd(i, (s) => ({ ...s, metrics: s.metrics.map((x, q) => (q === k ? { ...x, name: e.target.value } : x)) }))}
