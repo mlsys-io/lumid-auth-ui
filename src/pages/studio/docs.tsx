@@ -31,6 +31,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ErrorState } from '@/components/ui/error-state';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ErrorFrayed, NotFound } from '@/components/illustrations/scenes';
+import { me } from '@/api/me';
+import { APP_DOCS, appDocHref, fetchAppDoc } from '@/lib/app-docs';
 
 interface DocEntry {
 	slug: string;
@@ -60,6 +62,8 @@ const DOCS: DocEntry[] = [
 		// looks — first-run is 800 lines and opens with a changelog. This is the
 		// short path; first-run stays the long, evidenced one.
 		slug: 'quant-quickstart',
+		// Lives in its app now (src/lib/app-docs.ts); the slug still opens it.
+		hidden: true,
 		title: 'Quant Research Quickstart',
 		description: 'Your first strategy in about 15 minutes, no trading experience needed: what a prediction-market contract is, the words you will meet, five steps, three real results and how to read them, and a checklist for "is it any good?".',
 		md: 'quant-quickstart.md',
@@ -71,6 +75,8 @@ const DOCS: DocEntry[] = [
 		// Second, after the quickstart: it is the only doc that assumes you have
 		// never logged in, and every other Guide here reads better after it.
 		slug: 'first-run',
+		// Lives in its app now (src/lib/app-docs.ts); the slug still opens it.
+		hidden: true,
 		title: 'Quant Research Onboarding',
 		description: 'The actual path, walked end to end as a plain user account — your first token, chat, installing the Quant Research app, and writing, deploying and reading a strategy. Records what misled, not just what worked.',
 		md: 'first-run.md',
@@ -84,6 +90,8 @@ const DOCS: DocEntry[] = [
 		// split back out so each track reads end to end on its own page. The slug
 		// never went away (it was a hidden alias), so old links keep working.
 		slug: 'mbb-consultant',
+		// Lives in its app now (src/lib/app-docs.ts); the slug still opens it.
+		hidden: true,
 		title: 'AI Consulting Onboarding',
 		description: 'Scored case interviews in the MBB Consultant app, walked end to end as a plain user account — the invitation code, installing the app, picking a mode, reading your score against the answer key, and staging corrections.',
 		md: 'mbb-consultant.md',
@@ -178,6 +186,8 @@ const DOCS: DocEntry[] = [
 	},
 	{
 		slug: 'lqt-strategies',
+		// Lives in its app now (src/lib/app-docs.ts); the slug still opens it.
+		hidden: true,
 		title: 'LQT strategies',
 		description: 'Write & submit a prediction-market trading strategy — DSL, compile pipeline, canary lanes, telemetry.',
 		md: 'lqt-strategies.md',
@@ -191,6 +201,8 @@ const DOCS: DocEntry[] = [
 		// reference manual (replay axes, venues, signal publishing, retention,
 		// fee model) inside a tab. The tab keeps a summary and links here.
 		slug: 'lqt-backtest-data',
+		// Lives in its app now (src/lib/app-docs.ts); the slug still opens it.
+		hidden: true,
 		title: 'Backtest data',
 		description: 'What a backtest can replay: venues and instrument ids, recorded signals, the replay window, fees and book, and how to get new data recorded.',
 		md: 'lqt-backtest-data.md',
@@ -204,6 +216,8 @@ const DOCS: DocEntry[] = [
 		// SECOND project, so it reads better as its own page with a pointer left
 		// behind — not as a digression inside the walkthrough.
 		slug: 'lqt-signals',
+		// Lives in its app now (src/lib/app-docs.ts); the slug still opens it.
+		hidden: true,
 		title: 'Producing your own signal',
 		description: 'The other half of a strategy: when no one publishes the signal you need. An LLM reading news, end to end — what the signal is, where the code runs, and what it costs.',
 		md: 'lqt-signals.md',
@@ -467,15 +481,39 @@ function DocReader({ doc }: { doc: DocEntry }) {
 	const [markdown, setMarkdown] = useState('');
 	const [error, setError] = useState('');
 	const [attempt, setAttempt] = useState(0);
+	// A guide that lives in its app: open it there for anyone who has the app;
+	// read the app's published copy for anyone who has not (src/lib/app-docs.ts).
+	const appDoc = APP_DOCS[doc.slug];
+	// true = the installed app has this guide's page (open it there); false =
+	// read the published copy here. An install from before the guides moved has
+	// the app but not the page (its pages come from the installed version).
+	const [hasApp, setHasApp] = useState<boolean | null>(appDoc ? null : false);
+	const [installed, setInstalled] = useState(false);
 
 	useEffect(() => {
+		if (!appDoc) return;
+		let live = true;
+		me.appUI(appDoc.app, appDoc.surface)
+			.then(() => { if (live) setHasApp(true); })
+			.catch(() => { if (live) setHasApp(false); });
+		me.listApps()
+			.then((r) => { if (live) setInstalled((r.apps || []).some((a) => a.name === appDoc.app)); })
+			.catch(() => {});
+		return () => { live = false; };
+	}, [appDoc]);
+
+	useEffect(() => {
+		if (hasApp !== false) return;
 		setMarkdown('');
 		setError('');
-		fetch(`/docs/${doc.md}?v=${import.meta.env.VITE_APP_VERSION ?? Date.now()}`, { cache: 'no-store' })
-			.then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.text(); })
-			.then(setMarkdown)
-			.catch((e) => setError(String(e)));
-	}, [doc.md, attempt]);
+		const read = appDoc
+			? fetchAppDoc(appDoc)
+			: fetch(`/docs/${doc.md}?v=${import.meta.env.VITE_APP_VERSION ?? Date.now()}`, { cache: 'no-store' })
+				.then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.text(); });
+		read.then(setMarkdown).catch((e) => setError(String(e)));
+	}, [doc.md, appDoc, hasApp, attempt]);
+
+	if (appDoc && hasApp) return <Navigate to={appDocHref(appDoc)} replace />;
 
 	return (
 		<div className="max-w-[880px] pt-2">
@@ -489,11 +527,24 @@ function DocReader({ doc }: { doc: DocEntry }) {
 							{doc.companion.label} →
 						</Link>
 					)}
-					<a href={`/docs/${doc.md}`} download className="font-medium text-gold-700 hover:text-gold-800">
-						Download .md
-					</a>
+					{!appDoc && (
+						<a href={`/docs/${doc.md}`} download className="font-medium text-gold-700 hover:text-gold-800">
+							Download .md
+						</a>
+					)}
 				</span>
 			</div>
+			{appDoc && (
+				<p className="mb-5 rounded-md border border-border bg-muted px-3 py-2 text-meta text-ink-700">
+					{installed ? (
+						<>This guide is part of the {appDoc.appTitle} app. Choose <b>Get updates</b> on the app and it opens inside it, beside your work.</>
+					) : (
+						<>This guide is part of the {appDoc.appTitle} app. Add the app from the{' '}
+						<Link to="/studio/library/marketplace" className="font-medium text-gold-700 hover:text-gold-800">Library</Link>{' '}
+						and it opens inside the app, beside your work.</>
+					)}
+				</p>
+			)}
 			{error ? (
 				<ErrorState error={new Error(error)} what="this doc" art={<ErrorFrayed />} onRetry={() => setAttempt((n) => n + 1)} />
 			) : !markdown ? (

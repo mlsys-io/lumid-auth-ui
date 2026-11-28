@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { APP_DOCS, fetchAppDoc } from '@/lib/app-docs';
 import { Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
 import 'github-markdown-css/github-markdown-light.css';
@@ -6,11 +7,10 @@ import 'github-markdown-css/github-markdown-light.css';
 // /docs/quant-quickstart — PUBLIC, no auth required (like /docs/xpio-autoresearch).
 //
 // The logged-out landing at `/` links here so a visitor can read what Quant
-// Research asks of them before signing up. The raw /docs/quant-quickstart.md
-// is public too, but nginx serves .md as application/octet-stream, so a
-// browser downloads it instead of showing it. The same file is rendered for
-// signed-in users at /studio/docs/quant-quickstart (studio/docs.tsx); this
-// route adds no copy of its own.
+// Research asks of them before signing up. The guide lives in the Quant
+// Research app (ui/guide/quickstart.md, its Guide tab) since 2026-11-28; this
+// route reads the app's published copy (src/lib/app-docs.ts), as does
+// /studio/docs/quant-quickstart for anyone without the app. No copy here.
 
 export default function QuantQuickstartDoc() {
 	const [markdown, setMarkdown] = useState<string>('');
@@ -18,11 +18,7 @@ export default function QuantQuickstartDoc() {
 
 	useEffect(() => {
 		document.title = 'Quant Research Quickstart · Lumid';
-		fetch('/docs/quant-quickstart.md')
-			.then((r) => {
-				if (!r.ok) throw new Error(`HTTP ${r.status}`);
-				return r.text();
-			})
+		fetchAppDoc(APP_DOCS['quant-quickstart'])
 			.then(setMarkdown)
 			.catch((e) => setError(String(e)));
 	}, []);

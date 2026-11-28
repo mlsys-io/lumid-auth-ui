@@ -1,25 +1,21 @@
 import { useEffect, useState } from 'react';
+import { APP_DOCS, appDocHref, fetchAppDoc } from '@/lib/app-docs';
 import ReactMarkdown from 'react-markdown';
 import 'github-markdown-css/github-markdown-light.css';
 
 // /docs/lqt-strategies — AUTH REQUIRED (matches /docs/plugin-image-cd), since
 // writing + submitting a strategy needs a signed-in lum.id account and a PAT.
 //
-// Renders the end-user "Write & Submit an LQT Strategy" guide fetched from
-// /docs/lqt-strategies.md. The MD asset lives at
-// /proj/lumid_ui/public/docs/lqt-strategies.md and is the source-of-truth
-// mirror of /proj/LQT/docs/dsl/ (a `make docs-sync` target is the follow-up).
+// Renders the end-user "Write & Submit an LQT Strategy" guide. It lives in the
+// Quant Research app (ui/guide/strategies.md, its Guide tab) since 2026-11-28;
+// this route reads the app's published copy (src/lib/app-docs.ts).
 
 export default function LqtStrategiesDoc() {
 	const [markdown, setMarkdown] = useState<string>('');
 	const [error, setError] = useState<string>('');
 
 	useEffect(() => {
-		fetch('/docs/lqt-strategies.md')
-			.then((r) => {
-				if (!r.ok) throw new Error(`HTTP ${r.status}`);
-				return r.text();
-			})
+		fetchAppDoc(APP_DOCS['lqt-strategies'])
 			.then(setMarkdown)
 			.catch((e) => setError(String(e)));
 	}, []);
@@ -43,11 +39,10 @@ export default function LqtStrategiesDoc() {
 			<div className="text-xs text-muted-foreground mb-4 flex items-center justify-between">
 				<span>LQT · strategies · write &amp; submit</span>
 				<a
-					href="/docs/lqt-strategies.md"
+					href={appDocHref(APP_DOCS['lqt-strategies'])}
 					className="text-indigo-600 hover:underline"
-					download
 				>
-					Download .md →
+					Open in Quant Research →
 				</a>
 			</div>
 			<article className="markdown-body" style={{ background: 'transparent' }}>
