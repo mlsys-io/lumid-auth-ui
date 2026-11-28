@@ -21,7 +21,7 @@ import { me, waitForIntent, type MeExperiment, type MeExperimentRow } from "@/ap
 import { askOrStash } from "@/components/chat/askBus";
 import { Button } from "@/components/ui/button";
 import { bestWords, cellValue, cellWords, evidenceOf, nextWords, runningVersions, stepFootWords, stepPassWords, type CellState, type Evidence, type EvidenceNext, type EvidenceStepSpec } from "@/lib/evidence";
-import { batchProgress, experimentLoop, humanId, versionsOf, type BatchProgress } from "@/lib/research-map";
+import { batchProgress, experimentLoop, humanId, versionsOf, type BatchProgress, experimentLabel} from "@/lib/research-map";
 import type { QueueRow } from "@/lib/compute";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 import { cn } from "@/lib/utils";
@@ -164,7 +164,7 @@ function RunReady({ app, e, next }: { app: string; e: MeExperiment; next?: Evide
 		setOver(false);
 		if (e.dispatch?.ask) {
 			askOrStash({
-				prompt: `Run ${next.versions.join(", ")} of the "${humanId(e.id)}" experiment on ${app} through ${next.label} with dispatch_experiment_arm. ${e.dispatch.ask} Ask me for anything you don't know, then queue them.`,
+				prompt: `Run ${next.versions.join(", ")} of the "${experimentLabel(e)}" experiment on ${app} through ${next.label} with dispatch_experiment_arm. ${e.dispatch.ask} Ask me for anything you don't know, then queue them.`,
 				context: { page: "research", app, loop },
 			});
 			setChat(true);

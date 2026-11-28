@@ -10,7 +10,7 @@
 import type { MeCycleDetail, MeExperimentDetail, MeExperimentVariantAgg } from "@/api/me";
 import { runMetricValues, metricBetter, type SideInput, type SideStats, type MetricSpec, type SideCell } from "@/lib/compare";
 import { humanMetric, fmtMetricValue, primaryMetricKey, measuredOn, isFindingKey } from "@/lib/run-answer";
-import { humanId, versionsOf } from "@/lib/research-map";
+import { humanId, versionsOf, experimentLabel} from "@/lib/research-map";
 import { toCycleId } from "@/lib/cycle-id";
 import { dirIdToSec } from "@/lib/activity";
 
@@ -189,7 +189,7 @@ export function versionSide(e: MeExperimentDetail, versionId: string, index: num
 	}
 	const info = versionsOf(e).find((v) => v.id === versionId);
 	const vName = info?.label ?? versionName(versionId);
-	const settings: Array<[string, string]> = [["Experiment", humanId(e.id)], ["Version", vName]];
+	const settings: Array<[string, string]> = [["Experiment", experimentLabel(e)], ["Version", vName]];
 	const loop = e.dispatch?.loop || e.loops?.[0];
 	if (loop) settings.push(["Workflow", opts.workflowTitle?.(loop) || humanId(loop)]);
 	const arm = (e.arms || []).find((a) => a.id === versionId);
@@ -201,7 +201,7 @@ export function versionSide(e: MeExperimentDetail, versionId: string, index: num
 	const comparable = (state.comparable ?? e.comparable) as boolean | undefined;
 	const instruments = (state.instruments ?? e.instruments) as number | null | undefined;
 	const letter = LETTERS[index] ?? String(index + 1);
-	const name = opts.showExperiment ? `${vName} (${humanId(e.id)})` : vName;
+	const name = opts.showExperiment ? `${vName} (${experimentLabel(e)})` : vName;
 	return {
 		key: `v:${e.id}:${versionId}`, letter, name, label: sideLabel(letter, name),
 		sub: !n ? "no results yet" : rows.length ? `${n.toLocaleString()} result${n === 1 ? "" : "s"}` : `${n.toLocaleString()} result${n === 1 ? "" : "s"} (averages only)`,

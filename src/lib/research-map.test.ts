@@ -2,7 +2,7 @@
 // Fixtures are trimmed copies of real lum.id experiments (2026-11-24).
 import type { MeExperiment } from "@/api/me";
 import { appPages, pageHref } from "./app-pages";
-import { humanId, experimentStatus, versionsOf, criteriaInWords, buildResearchTree, pathTo, mapSummary, comparabilityNote, suggestionParent, experimentLoop, versionsToRun, triedVersions, proposalCheck, shortStatus, batchProgress, type Proposal } from "./research-map";
+import { humanId, experimentStatus, versionsOf, criteriaInWords, buildResearchTree, pathTo, mapSummary, comparabilityNote, suggestionParent, experimentLoop, versionsToRun, triedVersions, settingRows, experimentLabel, proposalCheck, shortStatus, batchProgress, type Proposal } from "./research-map";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -169,6 +169,21 @@ check("app pages always lead with the home", () => {
 	eq(pageHref("q", { surface: "data", label: "Data", home: false }, true), "/studio/apps/q?surface=data");
 });
 
+check("settings: an object input reads as key: value rows, meta fields aren't settings", () => {
+	eq(settingRows({ id: "v", about: "x", title: "T", overrides: { "deployments.model": "llm-0.6b", "serving.max_concurrency": 16 }, task: "9.2", tags: ["a", "b"] }),
+		[["Overrides · deployments.model", "llm-0.6b"], ["Overrides · serving.max_concurrency", "16"], ["Task", "9.2"], ["Tags", "a, b"]]);
+	eq(settingRows(undefined), []);
+});
+check("a version's title wins over its id", () => {
+	const e = { id: "x", arms: [{ id: "serve_9_2_c16", title: "9.2 at c16" }, { id: "mom_6_1" }], variants: {} } as unknown as MeExperiment;
+	eq(versionsOf(e).map((v) => v.label), ["9.2 at c16", "Mom 6 1"]);
+});
+
+check("an experiment's title wins over its id", () => {
+	eq(experimentLabel({ id: "serve_9_2", title: "Serve 9.2" }), "Serve 9.2");
+	eq(experimentLabel({ id: "strategy_search" }), "Strategy search");
+	eq(experimentLabel({ id: "x_y", title: "  " }), "X y");
+});
 export function run(): number {
 	let failed = 0;
 	for (const c of checks) {

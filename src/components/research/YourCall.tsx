@@ -14,7 +14,7 @@ import { useEffect, useMemo, useState } from "react";
 import { MessagesSquare, Target } from "lucide-react";
 import type { MeExperiment } from "@/api/me";
 import { Button } from "@/components/ui/button";
-import { humanId, versionsOf } from "@/lib/research-map";
+import { humanId, versionsOf, experimentLabel} from "@/lib/research-map";
 import { cn } from "@/lib/utils";
 
 interface Call { version: string; why: string; at: number }
@@ -40,7 +40,7 @@ export default function YourCall({ app, e, compact = false }: { app: string; e: 
 	const leader = e.comparable !== false ? e.best_variant : undefined;
 	const labelOf = (id: string) => versions.find((v) => v.id === id)?.label ?? humanId(id);
 	const ask = (c: Call) => window.dispatchEvent(new CustomEvent("studio:ask", { detail: {
-		prompt: `My call on the "${humanId(e.id)}" experiment: I expect ${labelOf(c.version)} to win, because ${c.why || "(no reason given)"}. `
+		prompt: `My call on the "${experimentLabel(e)}" experiment: I expect ${labelOf(c.version)} to win, because ${c.why || "(no reason given)"}. `
 			+ `Check my reasoning: what would make it right or wrong, and what result should I look for? Don't tell me the results.`,
 		context: { app },
 	} }));

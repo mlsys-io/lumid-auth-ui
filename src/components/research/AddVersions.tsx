@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useAppGraph } from "@/hooks/useAppGraph";
 import { addVersions, parseNewVersions, versionIds, versionInputs, versionTemplate } from "@/lib/app-spec";
-import { experimentLoop, humanId } from "@/lib/research-map";
+import { experimentLoop, humanId, experimentLabel} from "@/lib/research-map";
 import type { MeExperiment } from "@/api/me";
 
 export default function AddVersions({ app, e, onClose }: { app: string; e: MeExperiment; onClose: () => void }) {
@@ -36,7 +36,7 @@ export default function AddVersions({ app, e, onClose }: { app: string; e: MeExp
 		try {
 			await save((cur) => addVersions(cur, e.id, parsed.versions));
 			window.dispatchEvent(new CustomEvent("studio:data", { detail: { scopes: ["experiments"] } }));
-			toast.success(`${n} version${n === 1 ? "" : "s"} added to ${humanId(e.id)}`, {
+			toast.success(`${n} version${n === 1 ? "" : "s"} added to ${experimentLabel(e)}`, {
 				description: "Nothing has run yet — press “Run the untried versions” when you're ready.",
 			});
 			onClose();
@@ -55,7 +55,7 @@ export default function AddVersions({ app, e, onClose }: { app: string; e: MeExp
 			<div className="w-full max-w-xl space-y-3 rounded-xl border border-ink-200 bg-card p-4 shadow-e3 map-panel-in" onClick={(ev) => ev.stopPropagation()}>
 				<div>
 					<div className="eyebrow text-plum-700">Add versions</div>
-					<div className="text-title font-semibold text-ink-900">{humanId(e.id)}</div>
+					<div className="text-title font-semibold text-ink-900">{experimentLabel(e)}</div>
 				</div>
 				<p className="text-caption text-ink-700">
 					One entry per version: an <span className="font-mono">id</span>, what it changes (<span className="font-mono">about</span>), and the inputs it sets

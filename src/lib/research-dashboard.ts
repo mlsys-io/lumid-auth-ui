@@ -4,7 +4,7 @@
 // control and inspiring" — show progress, not inventory).
 
 import type { MeExperiment, MeRunRow, MeWorkflowRow } from "@/api/me";
-import { experimentStatus, humanId, type Tone } from "@/lib/research-map";
+import { experimentStatus, humanId, type Tone, experimentLabel} from "@/lib/research-map";
 import { fmtMetricValue, humanMetric } from "@/lib/run-answer";
 
 const WEEK_S = 7 * 86400;
@@ -40,7 +40,7 @@ export function bestResult(e: MeExperiment): BestResult | null {
 	if (!v || !metric || !Number.isFinite(v.mean)) return null;
 	const standing = e.criteria_met ? "winning" : e.not_separable_from?.length ? "can't tell apart yet" : "leads";
 	return {
-		select: `exp:${e.id}`, experiment: humanId(e.id), leader: humanId(e.best_variant), metric: humanMetric(metric).label,
+		select: `exp:${e.id}`, experiment: experimentLabel(e), leader: humanId(e.best_variant), metric: humanMetric(metric).label,
 		value: v.mean, valueText: metricText(metric, v.mean), standing, n: e.n_results,
 		higherIsBetter: e.higher_is_better ?? e.metric?.higher_is_better ?? true, updatedAt: e.updated_at,
 	};
@@ -92,7 +92,7 @@ export function researchHeadline(input: {
 	if (ideas) return { tone: "attention", select: input.firstIdea, text: `${ideas[0].toUpperCase()}${ideas.slice(1)} — open one to decide` };
 	for (const e of input.exps) {
 		const st = experimentStatus(e);
-		if (st.text.startsWith("Collecting results")) return { tone: "running", select: `exp:${e.id}`, text: `${humanId(e.id)}: ${st.text[0].toLowerCase()}${st.text.slice(1)}` };
+		if (st.text.startsWith("Collecting results")) return { tone: "running", select: `exp:${e.id}`, text: `${experimentLabel(e)}: ${st.text[0].toLowerCase()}${st.text.slice(1)}` };
 	}
 	return null;
 }
