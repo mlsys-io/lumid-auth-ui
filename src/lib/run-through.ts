@@ -24,14 +24,28 @@ export interface ThroughChoice {
 
 const joinWords = (xs: string[]) => (xs.length <= 1 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 
+/** A step costs money when its runs so far averaged at least this much each
+ *  (a CPU-metered step costs fractions of a cent and stays "free"). */
+export const PAID_STEP_USD = 0.01;
+
+/** The first step whose own past runs averaged a real cost, or -1. */
+export function firstPaidStep(steps: EvidenceStepSpec[], rows?: MeExperimentRow[] | null): number {
+	if (!rows?.length) return -1;
+	return steps.findIndex((s) => {
+		const sp = stepSpend(rows, s.step);
+		return sp.metered > 0 && sp.cost_usd / sp.metered >= PAID_STEP_USD;
+	});
+}
+
 /**
  * The ways a press can run a chain of steps: through each step but the last
- * (holding the rest), or all the way. None for a single step. The default is
- * the one that holds only the LAST step — in a gated chain the last step is the
- * expensive or the final one (real hardware, the held-out data), so it waits
- * for the reader to look at what came before.
+ * (holding the rest), or all the way. None for a single step. The default holds
+ * the LAST step — in a gated chain it is the expensive or the final one (real
+ * hardware, the held-out data) — and never runs a PAID step unasked: when the
+ * experiment's own rows show a step costing money, the default stops before it.
+ * (2026-11-28: MBB's default ran its paid Claude step, $0.92 nobody chose.)
  */
-export function throughChoices(steps: EvidenceStepSpec[]): { choices: ThroughChoice[]; preferred: number } {
+export function throughChoices(steps: EvidenceStepSpec[], rows?: MeExperimentRow[] | null): { choices: ThroughChoice[]; preferred: number } {
 	if (steps.length < 2) return { choices: [], preferred: 0 };
 	const names = steps.map((s) => humanId(s.step));
 	const choices: ThroughChoice[] = names.slice(0, -1).map((_, k) => ({
@@ -40,7 +54,10 @@ export function throughChoices(steps: EvidenceStepSpec[]): { choices: ThroughCho
 		holds: `holds ${joinWords(names.slice(k + 1))}`,
 	}));
 	choices.push({ until: null, through: joinWords(names), holds: "" });
-	return { choices, preferred: choices.length - 2 };
+	let preferred = choices.length - 2;
+	const paid = firstPaidStep(steps, rows);
+	if (paid >= 0) preferred = Math.max(0, Math.min(preferred, paid - 1));
+	return { choices, preferred };
 }
 
 /**

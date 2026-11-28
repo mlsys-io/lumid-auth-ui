@@ -94,10 +94,11 @@ export default function RunVersions({ app, e, onQueued, only, tried }: { app: st
 	// experiment's own metered history, checked against the app's budget.
 	const { graph } = useAppGraph(app);
 	const steps = graph ? experimentSteps(graph.spec, e, graph.text) : [];
-	const { choices, preferred } = throughChoices(steps);
+	const rows = useExperimentRows(app, e.id);
+	// …and never a PAID step unasked (the default stops before one).
+	const { choices, preferred } = throughChoices(steps, rows);
 	const [pick, setPick] = useState<number | null>(null);
 	const choice = choices.length ? choices[Math.min(pick ?? preferred, choices.length - 1)] : null;
-	const rows = useExperimentRows(app, e.id);
 	const usage = useAppUsage(app);
 	const press = choice ? pressWords({ runs: ids.length, estimate: estimateThrough(rows, steps, choice.until), usage, through: choice.through }) : null;
 	// Shared experiments are measured centrally (sharedLine): nothing to run here.

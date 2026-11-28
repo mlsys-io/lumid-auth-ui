@@ -26,6 +26,25 @@ check("through: every step but the last, or all the way; holds the last by defau
 const row = (stage: string, m: Record<string, number>, dims: Record<string, string> = {}) =>
 	({ ts: "", variant_id: "v", metrics: m, dims: { stage, ...dims } }) as unknown as MeExperimentRow;
 
+check("through: the default never runs a paid step unasked", () => {
+	const S3 = [{ step: "quick", metrics: [] }, { step: "dev_eval", metrics: [] }, { step: "holdout_eval", metrics: [] }];
+	const paidMid = [
+		row("quick", { cpu_s: 5, cost_usd: 0.0001 }, { metered: "measured" }),
+		row("dev_eval", { cost_usd: 0.18 }, { metered: "measured" }),
+		row("dev_eval", { cost_usd: 0.22 }, { metered: "measured" }),
+	];
+	eq(throughChoices(S3, paidMid).preferred, 0);                 // Quick only — holds the paid Dev eval
+	eq(throughChoices(S3).preferred, 1);                          // no history: as before, holds the last
+	// CPU-metered fractions of a cent are not "paid": quant keeps its default
+	const cheap = [row("data_check", { cpu_s: 100, cost_usd: 0.0009 }, { metered: "measured" }),
+		row("robustness", { cpu_s: 60, cost_usd: 0.0003 }, { metered: "measured" })];
+	eq(throughChoices(STEPS, cheap).preferred, 1);
+	// the FIRST step paid: the least the press can run is that step
+	eq(throughChoices(S3, [row("quick", { cost_usd: 0.5 }, { metered: "measured" })]).preferred, 0);
+	// a paid LAST step is already held by default
+	eq(throughChoices(STEPS, [row("robustness", { gpu_s: 120, cost_usd: 0.5 }, { metered: "measured" })]).preferred, 1);
+});
+
 check("through: priced from the experiment's own metered steps, per run", () => {
 	const rows = [
 		row("data_check", { cpu_s: 10, cost_usd: 0.001 }, { metered: "measured" }),
