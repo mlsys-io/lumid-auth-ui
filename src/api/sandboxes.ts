@@ -238,6 +238,8 @@ export interface SandboxPort {
 	container_port: number;
 	node_port: number;
 	connect?: string;
+	/** What the person called it ("jupyter"), set on the Sandboxes page. Empty when unlabelled. */
+	label?: string;
 }
 
 /**
@@ -673,6 +675,11 @@ export async function deleteSandbox(site: string, name: string): Promise<void> {
 
 /** Re-mirror the caller's lum.id SSH keys into that site's gateway. Per-site: each
  *  site's gateway holds its own authorized_keys Secret. */
+/** Publish exactly these container ports on a RUNNING sandbox (empty = none). Kept ports keep their public number. */
+export async function setSandboxPorts(site: string, name: string, ports: { port: number; label?: string }[]): Promise<SandboxPort[]> {
+	return (await sbx.put(sbxUrl(site, `/api/sandboxes/${encodeURIComponent(name)}/ports`), { ports })).data?.ports ?? [];
+}
+
 export async function syncKeys(site: string): Promise<{ user: string; keys_authorized: number; hint?: string | null }> {
 	return (await sbx.post(sbxUrl(site, "/api/keys/sync"))).data;
 }

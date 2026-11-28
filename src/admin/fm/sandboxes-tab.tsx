@@ -71,6 +71,9 @@ import { fanoutForSites, listTasksForSite, type FmFanout, type FmTask } from "..
 const SSH_TASKS = { task_type: "ssh" } as const;
 import { deleteSshKey, listSshKeys, uploadSshKey, type SshKey } from "../../api/ssh-keys";
 import { SiteBadge, SiteStrip, TabShell, shortGpu, useFanout } from "./shared";
+import UsernameCard from "./username-card";
+import PortsEditor from "./ports-editor";
+import { portNote } from "../../lib/username";
 import { PUBLIC_SITE } from "./fleet-tab";
 
 /** Sites whose shells come from FlowMesh rather than sandbox-control. Admin-only:
@@ -206,6 +209,8 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 	// the list of their running sandboxes -- below the fold. Creating is
 	// occasional; looking is constant.
 	const [createOpen, setCreateOpen] = useState(false);
+	// Which running sandbox's ports are being edited ("site/name"), if any.
+	const [editingPorts, setEditingPorts] = useState<string | null>(null);
 	// WHO YOU ARE AT THE TARGET SITE. Per site: home and NUS name the same person differently.
 	// null = the site predates usernames (or has not answered), and nothing below renders.
 	const [ident, setIdent] = useState<UsernameInfo | null>(null);
@@ -688,6 +693,7 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 			onRefresh={refresh}
 		>
 			<SiteStrip sites={siteStatus} />
+			<UsernameCard />
 
 			{idlePolicy ? (
 				<p className="mb-3 text-xs text-ink-600">
@@ -951,6 +957,12 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 					    Free/total is the SITE's, not yours: the pool is shared fleet-wide
 					    because each port costs a capped LB frontend, so a full pool has to
 					    be visible here rather than discovered at the refusal. */}
+					{!pool.enabled && (
+						<p className="text-xs text-ink-600">
+							<span className="font-medium text-ink-700">Public ports</span> — not available at this site. Use the
+							home or office site to publish a web app, notebook or database.
+						</p>
+					)}
 					{pool.enabled && (
 						<fieldset className="text-xs text-ink-600">
 							<legend className="mb-1">
@@ -975,6 +987,11 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 										: `reachable as ${pool.host ?? "lum.id"}:<assigned>`}
 								</span>
 							</div>
+							<p className="mt-1 max-w-xl text-ink-600">
+								Type the port your service listens on inside the sandbox (Jupyter 8888, a web app 8000…). Each gets
+								a public address on {pool.host ?? "lum.id"} that anyone on the internet can reach — put a password
+								or token on the service. You can add, remove or label ports later from the list below.
+							</p>
 						</fieldset>
 					)}
 					{/* Datasets are INFORMATIONAL, not selectable — they are already
@@ -1253,11 +1270,24 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 									    time in a response the user has already dismissed. */}
 									{r.ports?.map((p) => (
 										<span key={p.node_port} className="mt-0.5 block text-ink-600"
-											title={`container port ${p.container_port} published publicly`}>
+											title={portNote(p.connect ?? `:${p.node_port}`, p.container_port)}>
 											{p.connect ?? `:${p.node_port}`}
 											<span className="text-ink-600"> → {p.container_port}</span>
+											{p.label && <span className="ml-1 font-sans text-ink-700">· {p.label}</span>}
 										</span>
 									))}
+									{r.kind === "sandbox" && r.state === "Running" && portPoolForSite(r.site).enabled && (
+										editingPorts === `${r.site}/${r.name}` ? (
+											<PortsEditor site={r.site} name={r.name} ports={r.ports ?? []}
+												max={portPoolForSite(r.site).max_per_sandbox ?? 2}
+												onDone={() => { setEditingPorts(null); refresh(); }} />
+										) : (
+											<button type="button" onClick={() => setEditingPorts(`${r.site}/${r.name}`)}
+												className="mt-1 block font-sans text-xs text-plum-700 hover:underline">
+												{r.ports?.length ? "Edit ports" : "+ Publish a port"}
+											</button>
+										)
+									)}
 								</td>
 								<td className="px-3 py-2 text-xs text-ink-600">{r.owner ?? "you"}</td>
 								<td className="px-3 py-2 text-xs text-ink-600">
