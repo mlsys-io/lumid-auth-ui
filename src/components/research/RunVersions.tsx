@@ -80,7 +80,8 @@ export default function RunVersions({ app, e, onQueued, only }: { app: string; e
 	const untried = only ? !(e.variants?.[only]?.n) : all.untried;
 	const [over, setOver] = useState(false);
 	const prog = useBatch(app, sent, () => { setOver(true); sentByExperiment.delete(key); });
-	if (!loop || !ids.length || e.status && /concluded|done|archived|closed/i.test(e.status)) return null;
+	// Shared experiments are measured centrally (sharedLine): nothing to run here.
+	if (!loop || !ids.length || e.shared || e.status && /concluded|done|archived|closed/i.test(e.status)) return null;
 	const label = only ? `Run ${humanId(only)} once` : untried
 		? ids.length === 1 ? `Run the untried version (${humanId(ids[0])})` : `Run the ${ids.length} untried versions`
 		: `Run each version once more (${ids.length} runs)`;
