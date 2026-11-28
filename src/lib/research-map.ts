@@ -81,6 +81,16 @@ export function experimentStatus(e: MeExperiment): { tone: Tone; text: string } 
 	}
 	if (!e.n_results) {
 		if (e.unfed) return { tone: "attention", text: "Can't start — no workflow runs it" };
+		// Rows exist, none with the experiment's own metric yet: a chained
+		// experiment whose versions so far stopped at, or wait for, the step
+		// that scores it. Was "Not started yet — none of its versions has run"
+		// over a grid of 16 results (2026-11-28, Quant Research round 5).
+		const rows = e.n_rows_total ?? 0;
+		if (rows > 0) {
+			const m = e.metric?.name || e.metric_name;
+			const what = m ? `${humanMetric(m).label.toLowerCase()}` : "the experiment's own number";
+			return { tone: "running", text: `Under way — ${rows} result${rows === 1 ? "" : "s"} so far, none with ${what} yet` };
+		}
 		// `starved` covers three cases (identity markStarved/markUndispatched):
 		// its workflow never ran, it waits to be dispatched, or the workflow
 		// failed its recent runs. Only the last is "failing" — a brand-new
