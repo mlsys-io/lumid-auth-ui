@@ -1,5 +1,5 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
-import { readAppSpec, addWorkflows, setWorkflowNode, addNode, renameNode, moveNode, removeNode, setFeedback, nodeIdFrom, chainStages } from "./app-spec";
+import { readAppSpec, addWorkflows, setWorkflowNode, addNode, renameNode, moveNode, removeNode, setFeedback, nodeIdFrom, chainStages, addVersions, parseNewVersions, versionInputs, versionIds, versionTemplate } from "./app-spec";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -45,6 +45,60 @@ loops:
   schedule: '@trigger'
   engine: {type: lumilake, workflow: kol_score, hardware: {gpu_memory: 16Gi}}
 `;
+
+
+const EXP = `name: quant-research
+workflows:
+  - id: data_check
+    steps: {python: data_check}
+    inputs: {spec: "@baseline:m", min_coverage: "90"}
+  - id: bar_backtest
+    steps: {python: bar_backtest}
+    inputs: {spec: "@baseline:m", eval_start: "2021-01-04"}
+  - id: screen
+    steps: {workflows: [data_check, bar_backtest]}
+experiments:
+  - id: strategy_search   # the funnel
+    workflow: screen
+    versions:
+      - id: baseline_m
+        about: momentum
+        inputs: {spec: {signal: "lag(ret_231, 21)"}}
+  - id: old_style
+    workflow: screen
+    arms: [{id: a}]
+`;
+check("versions: a chain's inputs are every stage's", () => {
+	eq(versionInputs(readAppSpec(EXP), "screen").sort(), ["eval_start", "min_coverage", "spec"]);
+	eq(versionIds(EXP, "strategy_search"), ["baseline_m"]);
+	eq(versionIds(EXP, "old_style"), ["a"]);
+});
+check("versions: the template is the first version, renamed", () => {
+	const t = versionTemplate(EXP, "strategy_search");
+	const r = parseNewVersions(t, ["baseline_m"], ["spec"]);
+	eq([r.problems, r.versions.map((v) => v.id), r.versions[0].inputs], [[], ["baseline_m_2"], { spec: { signal: "lag(ret_231, 21)" } }]);
+});
+check("versions: parse says every problem in words", () => {
+	const r = parseNewVersions(`- {id: mom_6_1, about: six-month, inputs: {spec: {signal: x}}}
+- {id: baseline_m, inputs: {spec: {}}}
+- {id: Bad Id}
+- {id: typo, inputs: {spce: {}}}
+- {id: flat, spec: {}}`, ["baseline_m"], ["spec", "eval_start"]);
+	eq(r.versions.map((v) => v.id), ["mom_6_1"]);
+	eq(r.problems.length, 4);
+	eq(/already a version/.test(r.problems[0]) && /lower-case/.test(r.problems[1]) && /spce isn't an input/.test(r.problems[2]) && /under inputs/.test(r.problems[3]), true);
+	eq(parseNewVersions("{id: one, inputs: {spec: {}}}", [], ["spec"]).versions.length, 1);
+	eq(parseNewVersions("", [], []).problems.length, 1);
+	eq(/valid YAML/.test(parseNewVersions("- {id: [", [], []).problems[0]), true);
+});
+check("versions: added after the last one, comments kept", () => {
+	const out = addVersions(EXP, "strategy_search", [{ id: "mom_6_1", about: "six-month", inputs: { spec: { signal: "lag(ret_105, 21)" } } }]);
+	eq(out.includes("# the funnel"), true);
+	eq(versionIds(out, "strategy_search"), ["baseline_m", "mom_6_1"]);
+	throws(() => addVersions(out, "strategy_search", [{ id: "mom_6_1", inputs: {} }]), /already a version/);
+	throws(() => addVersions(EXP, "old_style", [{ id: "b", inputs: {} }]), /older form/);
+	throws(() => addVersions(EXP, "nope", [{ id: "b", inputs: {} }]), /no experiment/);
+});
 
 check("reads the simple scheme", () => {
 	const sp = readAppSpec(V2);

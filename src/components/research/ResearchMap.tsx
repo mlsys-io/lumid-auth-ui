@@ -34,6 +34,7 @@ import EmptyResearchSpace from "@/components/research/EmptyResearchSpace";
 import Space3D from "@/components/research/Space3D";
 import RunVersions from "@/components/research/RunVersions";
 import EvidenceGrid from "@/components/research/EvidenceGrid";
+import AddVersions from "@/components/research/AddVersions";
 import { experimentSteps } from "@/lib/evidence";
 import YourCall from "@/components/research/YourCall";
 import WorkflowPanel, { NodePanel, CompareView, wfLabel, type CompareSide, type PanelView } from "@/components/research/WorkflowPanel";
@@ -487,6 +488,12 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 }) {
 	const st = experimentStatus(e);
 	const seriesData = useSeries(app, e.id);
+	// "Add versions" opens a sheet; a shared experiment is the operator's, not the reader's to edit.
+	const [adding, setAdding] = useState(false);
+	const addVersions = !e.shared && (
+		<Button size="sm" variant="ghost" onClick={() => setAdding(true)}><Plus className="w-3.5 h-3.5" /> Add versions</Button>
+	);
+	const addSheet = adding && <AddVersions app={app} e={e} onClose={() => setAdding(false)} />;
 	const series = seriesData?.series ?? null;
 	const versions = versionsOf(e);
 	// Lines in DECLARED version order, so colours follow the version. A series
@@ -643,8 +650,10 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 				</div>
 				<div className="flex flex-wrap items-center gap-1.5 border-t border-ink-100 bg-muted/30 px-3 py-2">
 					<RunVersions app={app} e={e} tried={seriesData?.tried} />
+					{addVersions}
 					{onCompare && <div className="ml-auto"><Button size="sm" variant="ghost" onClick={onCompare}>Compare with…</Button></div>}
 				</div>
+				{addSheet}
 			</div>
 		);
 	}
@@ -658,7 +667,8 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 			{chain}
 			<YourCall app={app} e={e} />
 			<RunVersions app={app} e={e} tried={seriesData?.tried} />
-			<div className="flex items-center gap-2 flex-wrap pt-0.5">{links}</div>
+			<div className="flex items-center gap-2 flex-wrap pt-0.5">{addVersions}{links}</div>
+			{addSheet}
 		</div>
 	);
 }
