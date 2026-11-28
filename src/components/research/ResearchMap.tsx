@@ -906,6 +906,11 @@ export default function ResearchMap({ app }: { app: string }) {
 		setSelected(id);
 	}, [selected, picking, sideOf]);
 
+	// Every hook above the early returns below: a hook after them rendered a
+	// different number of hooks on the next render (React #310 — the MBB app
+	// home crashed in the visual gate, 2026-11-28).
+	const [panelWide, setPanelWideState] = useState(() => { try { return localStorage.getItem("studio:panel-wide") === "1"; } catch { return false; } });
+	const setPanelWide = (w: boolean) => { setPanelWideState(w); try { localStorage.setItem("studio:panel-wide", w ? "1" : "0"); } catch { /* private mode */ } };
 	if (!data && !graph) return null;
 	// Nothing yet: the same stage, showing what will grow there and how to start.
 	if (workflows.length === 0 && exps.length === 0 && pending.length === 0) return <><EmptyResearchSpace app={app} />{newSheet}</>;
@@ -933,8 +938,6 @@ export default function ResearchMap({ app }: { app: string }) {
 	// map, at the right edge; the camera frames the path in the space left.
 	const selProposalIdx = selKind === "sug" ? pending.findIndex((p) => `sug:${p.id}` === selected) : -1;
 	const panelOpen = !!(selWf || selNode || selExp || selProposalIdx >= 0 || selKind === "app");
-	const [panelWide, setPanelWideState] = useState(() => { try { return localStorage.getItem("studio:panel-wide") === "1"; } catch { return false; } });
-	const setPanelWide = (w: boolean) => { setPanelWideState(w); try { localStorage.setItem("studio:panel-wide", w ? "1" : "0"); } catch { /* private mode */ } };
 	// An idea's card needs a little more width for its three answers.
 	// The side panel takes a third of the stage (2026-11-27: "the experiment
 	// panel can take 1/3 of the graph space"), between 352 and 600 px; the graph
