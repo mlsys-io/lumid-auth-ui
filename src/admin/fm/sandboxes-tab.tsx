@@ -693,7 +693,7 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 			onRefresh={refresh}
 		>
 			<SiteStrip sites={siteStatus} />
-			<UsernameCard />
+			<UsernameCard sites={sites} />
 
 			{idlePolicy ? (
 				<p className="mb-3 text-xs text-ink-600">

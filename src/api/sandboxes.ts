@@ -534,6 +534,27 @@ export interface UsernameInfo {
 	/** Hosts whose real /home your boxes can mount. */
 	host_homes: string[];
 	hosts: string[];
+	/** The lum.id username this site sees (phase 3+); absent on sites that predate it. */
+	lumid_username?: string | null;
+	/** Why the lum.id username is not in use here (taken, retired, …). */
+	username_conflict?: string | null;
+	/** A rename that started but has not finished (home still moving). */
+	rename_pending?: string | null;
+}
+
+/** What one site did when asked to adopt your lum.id username. */
+export interface RenameResult {
+	from: string | null;
+	to: string;
+	stopped: string[];
+	/** moved | unchanged | host | skipped:<why> | pending:<why> */
+	home: string;
+	note?: string;
+}
+
+/** Ask a site to adopt your lum.id username NOW (stops boxes under the old name, moves the home). */
+export async function applyUsername(site: string): Promise<RenameResult> {
+	return (await sbx.post<RenameResult>(sbxUrl(site, "/api/username/apply"))).data;
 }
 
 export interface ClaimStart {
