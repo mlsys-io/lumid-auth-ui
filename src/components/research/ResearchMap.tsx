@@ -49,7 +49,7 @@ import { fmtAgo } from "@/lib/activity";
 import {
 	buildResearchTree, comparabilityNote, criteriaInWords, experimentStatus, humanId, mapSummary, pathTo, versionsOf, OTHER_NODE, DOT_SIZE,
 	type MapEdge, type MapNode, type Proposal, type Tone, type VersionInfo,
-	shortStatus, rowStatus, triedVersions, experimentLoop, settingRows, experimentLabel, nextStepWords} from "@/lib/research-map";
+	shortStatus, rowStatus, triedVersions, experimentLoop, settingRows, experimentLabel, nextStepWords, roundOver} from "@/lib/research-map";
 import { humanMetric, fmtMetricValue } from "@/lib/run-answer";
 import { workflowPath } from "@/lib/run-routes";
 import { loopLabel } from "@/lib/workflow-names";
@@ -494,7 +494,7 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 	// "Add versions" opens a sheet; a shared experiment is the operator's, not the reader's to edit.
 	const [adding, setAdding] = useState(false);
 	const addVersions = !e.shared && (
-		<Button size="sm" variant="ghost" onClick={() => setAdding(true)}><Plus className="w-3.5 h-3.5" /> Add versions</Button>
+		<Button size="sm" variant={roundOver(e) ? "accent" : "ghost"} onClick={() => setAdding(true)}><Plus className="w-3.5 h-3.5" /> Add versions</Button>
 	);
 	const addSheet = adding && <AddVersions app={app} e={e} onClose={() => setAdding(false)} />;
 	const series = seriesData?.series ?? null;

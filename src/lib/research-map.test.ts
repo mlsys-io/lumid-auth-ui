@@ -2,7 +2,7 @@
 // Fixtures are trimmed copies of real lum.id experiments (2026-11-24).
 import type { MeExperiment } from "@/api/me";
 import { appPages, pageHref } from "./app-pages";
-import { humanId, inSentence, experimentStatus, versionsOf, nextStepWords, tiedAtTop, criteriaInWords, buildResearchTree, pathTo, mapSummary, comparabilityNote, suggestionParent, experimentLoop, versionsToRun, triedVersions, settingRows, experimentLabel, proposalCheck, shortStatus, batchProgress, type Proposal } from "./research-map";
+import { roundOver, humanId, inSentence, experimentStatus, versionsOf, nextStepWords, tiedAtTop, criteriaInWords, buildResearchTree, pathTo, mapSummary, comparabilityNote, suggestionParent, experimentLoop, versionsToRun, triedVersions, settingRows, experimentLabel, proposalCheck, shortStatus, batchProgress, type Proposal } from "./research-map";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -254,6 +254,12 @@ check("gated chains: the next move is said in words", () => {
 	const ran = { id: "x", arms: [{ id: "a" }, { id: "b" }], variants: { a: { n: 1, mean: 1 } }, metric: { name: "goodput" } } as unknown as MeExperiment;
 	eq([humanId("profit_gpa"), humanId("oos_sharpe"), humanId("dsr_p")], ["Profit GPA", "OOS sharpe", "DSR p"]);
 	eq([inSentence("OOS sharpe"), inSentence("Goodput"), inSentence("PnL"), inSentence("TTFT p99")], ["OOS sharpe", "goodput", "PnL", "TTFT p99"]);
+	{
+		const gp = (a: boolean, b: boolean) => ({ id: "r", arms: [{ id: "a" }, { id: "b" }], gate_progress: { a: { reached: "x", index: 1, passed: a }, b: { reached: "y", index: 2, passed: b } } }) as unknown as MeExperiment;
+		eq([roundOver(gp(false, false)), roundOver(gp(true, false)), roundOver({ id: "u", arms: [{ id: "a" }] } as unknown as MeExperiment)], [true, false, false]);
+		const untried = { id: "r", arms: [{ id: "a" }, { id: "c" }], gate_progress: { a: { reached: "x", index: 1, passed: false } } } as unknown as MeExperiment;
+		eq(roundOver(untried), false);
+	}
 	eq(nextStepWords(ran, ["simulate"]), "Next: run the 1 untried version — the cheap steps first.");
 	eq(nextStepWords(ran, ["simulate"], ["a", "b"]), "Next: 1 version ran but recorded no goodput — open it to see why before running it again.");
 	eq(versionsOf(ran, ["b"]).find((v) => v.id === "b")?.tag, "ran, no score");

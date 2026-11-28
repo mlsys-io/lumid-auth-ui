@@ -15,7 +15,7 @@ import { Play } from "lucide-react";
 import { me, waitForIntent, type MeExperiment } from "@/api/me";
 import { askOrStash } from "@/components/chat/askBus";
 import { Button } from "@/components/ui/button";
-import { batchProgress, experimentLoop, humanId, versionsToRun, type BatchProgress, experimentLabel} from "@/lib/research-map";
+import { batchProgress, experimentLoop, humanId, roundOver, versionsToRun, type BatchProgress, experimentLabel} from "@/lib/research-map";
 import type { QueueRow } from "@/lib/compute";
 import { cn } from "@/lib/utils";
 import { loopLabel } from "@/lib/workflow-names";
@@ -103,6 +103,9 @@ export default function RunVersions({ app, e, onQueued, only, tried }: { app: st
 	const press = choice ? pressWords({ runs: ids.length, estimate: estimateThrough(rows, steps, choice.until), usage, through: choice.through }) : null;
 	// Shared experiments are measured centrally (sharedLine): nothing to run here.
 	if (!loop || !ids.length || e.shared || e.status && /concluded|done|archived|closed/i.test(e.status)) return null;
+	// A finished gated round asks for new versions (Add versions), not the same
+	// ones again; one version's own panel still offers "Run X once".
+	if (!only && roundOver(e)) return null;
 	const label = only ? `Run ${humanId(only)} once` : untried
 		? ids.length === 1 ? `Run the untried version (${humanId(ids[0])})` : `Run the ${ids.length} untried versions`
 		: `Run each version once more (${ids.length} runs)`;

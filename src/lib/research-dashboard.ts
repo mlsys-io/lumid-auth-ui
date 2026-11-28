@@ -25,7 +25,9 @@ export interface BestResult {
 	value: number;
 	valueText: string;
 	/** "winning" (criteria met) · "leads" · "can't tell apart yet". */
-	standing: "winning" | "leads" | "can't tell apart yet";
+	standing: "winning" | "leads" | "can't tell apart yet" | "didn't pass a step";
+	/** The step that stopped the top number (with "didn't pass a step"). */
+	stoppedAt?: string;
 	n: number;
 	higherIsBetter: boolean;
 	updatedAt?: string;
@@ -38,18 +40,23 @@ export function bestResult(e: MeExperiment): BestResult | null {
 	const v = e.variants?.[e.best_variant];
 	const metric = e.metric?.name || e.metric_name || "";
 	if (!v || !metric || !Number.isFinite(v.mean)) return null;
-	const standing = e.criteria_met ? "winning" : e.not_separable_from?.length ? "can't tell apart yet" : "leads";
+	// A top number a gate stopped is not a lead: it says where it stopped and
+	// sorts last (2026-11-28: "Strategy search (Lowvol top)" headed Best results
+	// after every version failed Robustness).
+	const failed = !!e.best_failed_gate;
+	const standing = failed ? "didn't pass a step" : e.criteria_met ? "winning" : e.not_separable_from?.length ? "can't tell apart yet" : "leads";
 	return {
 		select: `exp:${e.id}`, experiment: experimentLabel(e), leader: humanId(e.best_variant), metric: humanMetric(metric).label,
 		value: v.mean, valueText: metricText(metric, v.mean), standing, n: e.n_results,
 		higherIsBetter: e.higher_is_better ?? e.metric?.higher_is_better ?? true, updatedAt: e.updated_at,
+		...(failed && e.best_stopped_at ? { stoppedAt: humanId(e.best_stopped_at) } : {}),
 	};
 }
 
 /** The experiments worth showing first: settled winners, then leaders with
  *  the most results; newest first among equals. */
 export function bestResults(exps: MeExperiment[]): BestResult[] {
-	const rank = (b: BestResult) => (b.standing === "winning" ? 0 : b.standing === "leads" ? 1 : 2);
+	const rank = (b: BestResult) => (b.standing === "winning" ? 0 : b.standing === "leads" ? 1 : b.standing === "can't tell apart yet" ? 2 : 3);
 	return exps.map(bestResult).filter((b): b is BestResult => !!b)
 		.sort((a, b) => rank(a) - rank(b) || b.n - a.n || (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
 }
@@ -88,7 +95,7 @@ export function researchHeadline(input: {
 		const recent = Number.isFinite(at) && now - at < WEEK_S;
 		const id = b.select.slice(4);
 		const changed = input.seen ? input.seen[id] !== undefined && input.seen[id] !== b.leader : false;
-		return b.standing !== "can't tell apart yet" && (changed || (recent && b.standing === "winning"));
+		return b.standing !== "can't tell apart yet" && b.standing !== "didn't pass a step" && (changed || (recent && b.standing === "winning"));
 	});
 	if (fresh) {
 		const verb = fresh.standing === "winning" ? "wins" : "now leads";
