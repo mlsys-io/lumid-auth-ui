@@ -76,7 +76,7 @@ const ACTION_VERB: Record<string, string> = {
 	kickstart: "First run",
 };
 
-export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromLabel, schedule, onClose, onLaunched, onChanged }: {
+export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromLabel, schedule, onClose, onLaunched, onChanged, inline = false }: {
 	app: string;
 	loop: string;
 	/** Whether this loop actually feeds an experiment.
@@ -91,6 +91,8 @@ export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromL
 	fromLabel?: string;
 	schedule?: string;     // the loop's current recurring cadence (cron / "@trigger")
 	onClose: () => void;
+	/** Shown in the run's own pane (Re-run… on the run page) instead of as a popup; Cancel returns to the run. */
+	inline?: boolean;
 	onLaunched?: () => void;
 	onChanged?: () => void; // fired after the recurring schedule is saved
 }) {
@@ -294,9 +296,12 @@ export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromL
 	const fanCount = tryMode === "fanout" ? Math.max(1, variantRows.filter((t) => Object.keys(parseOverrides(t)).length > 0).length) : 1;
 	const press = useWorkflowPress(app, loop, fanCount, fanCount > 1 ? `Run ${loopLabel("", loop)} ${fanCount} times` : `Run ${loopLabel("", loop)} once`);
 
-	return createPortal(
-		<div className="fixed inset-0 z-[90] flex items-center justify-center bg-ink-900/30 backdrop-blur-sm animate-in fade-in duration-150" onClick={onClose}>
-			<div className="w-[460px] max-w-[94vw] h-[600px] max-h-[90vh] flex flex-col rounded-xl border border-ink-200 bg-card shadow-2xl animate-in zoom-in-95 duration-150" onClick={(e) => e.stopPropagation()}>
+	const card = (
+			<div role={inline ? "region" : undefined} aria-label={inline ? "Run with changes" : undefined}
+				className={inline
+					? "flex max-h-[80vh] w-full flex-col rounded-xl border border-ink-200 bg-card shadow-e1 animate-in fade-in duration-150"
+					: "w-[460px] max-w-[94vw] h-[600px] max-h-[90vh] flex flex-col rounded-xl border border-ink-200 bg-card shadow-2xl animate-in zoom-in-95 duration-150"}
+				onClick={(e) => e.stopPropagation()}>
 				{/* header (fixed) */}
 				<div className="flex items-center gap-2 px-4 py-3 border-b border-ink-100 flex-shrink-0">
 					<GitBranch className="w-4 h-4 text-gold-600 flex-shrink-0" />
@@ -491,6 +496,11 @@ export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromL
 					<span className="ml-auto text-nano text-ink-600 hidden sm:inline">⌘↵ to run</span>
 				</div>
 			</div>
+	);
+	if (inline) return card;
+	return createPortal(
+		<div className="fixed inset-0 z-[90] flex items-center justify-center bg-ink-900/30 backdrop-blur-sm animate-in fade-in duration-150" onClick={onClose}>
+			{card}
 		</div>,
 		document.body,
 	);

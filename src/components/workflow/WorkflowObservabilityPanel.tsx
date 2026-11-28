@@ -769,8 +769,16 @@ export default function WorkflowObservabilityPanel({
 		) : base
 	);
 
+	// Re-run… on a run opens IN that run's pane (Cancel returns to the run),
+	// never as a popup over it (operator, 2026-11-28). Other entry points
+	// (the chat's "plan", the graph's branch) have no pane and keep the popup.
+	const rerunInPane = !!branchFor?.ts && branchFor.ts === overlayTs;
+	const composerEl = branchFor ? (
+		<NextRunComposer app={app} loop={loop} isExperiment={!!loopExp} fromTs={branchFor.ts} fromLabel={branchFor.label} schedule={schedSeed} inline={rerunInPane}
+			onClose={() => setBranchFor(null)} onLaunched={() => { setOptimisticRun(true); window.setTimeout(() => setOptimisticRun(false), 120_000); }} onChanged={onChanged} />
+	) : null;
 	// The selected run — shared by the grid layout and the list layout.
-	const runDetailEl = (
+	const runDetailEl = rerunInPane ? composerEl : (
 		<RunDetail app={app} loop={loop} runId={overlayTs} detail={canvasFor === overlayTs ? canvasCycle : null}
 			loading={detailLoading} listRow={selectedRow} cycles={cycleList ?? []}
 			step={qStep} pane={qPane} compare={qCompare}
@@ -1062,10 +1070,7 @@ export default function WorkflowObservabilityPanel({
 			)}
 
 			{/* WS-5 — branch-with-intention dialog (also the run page's Re-run…). */}
-			{branchFor && (
-				<NextRunComposer app={app} loop={loop} isExperiment={!!loopExp} fromTs={branchFor.ts} fromLabel={branchFor.label} schedule={schedSeed}
-					onClose={() => setBranchFor(null)} onLaunched={() => { setOptimisticRun(true); window.setTimeout(() => setOptimisticRun(false), 120_000); }} onChanged={onChanged} />
-			)}
+			{branchFor && !rerunInPane && composerEl}
 
 		</div>
 		</ErrorBoundary>

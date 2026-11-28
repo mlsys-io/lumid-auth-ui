@@ -20,7 +20,7 @@ import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useState } f
 import type { LoopDefinition } from "@/api/me";
 import { isEmptyLoop } from "@/workflow/adapters/xpio";
 import { Link } from "react-router-dom";
-import { ArrowRight, GitBranch, MessagesSquare, Pencil, Play, Plus, Scale, Trash2, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, GitBranch, MessagesSquare, Pencil, Play, Plus, Scale, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { me, type MeCycleDetail, type MeCycleListItem, type MeExperiment, type MeWorkflowRow } from "@/api/me";
 import type { AppSpec, FeedbackStep, SpecNode, SpecWorkflow } from "@/lib/app-spec";
@@ -42,6 +42,10 @@ import { loopLabel } from "@/lib/workflow-names";
 import { appTitle } from "@/components/workflow/AppCard";
 import RunAnswerCard from "@/components/workflow/RunAnswerCard";
 import WorkflowInsights from "@/components/workflow/WorkflowInsights";
+// A panel's own forms (New variant, New experiment) open IN the panel, with
+// Back — never as a popup over it (operator, 2026-11-28).
+const VariantSheetBody = lazy(() => import("@/components/research/VariantSheet").then((m) => ({ default: m.VariantSheetBody })));
+const TrySetupsBody = lazy(() => import("@/components/research/TrySetups").then((m) => ({ default: m.TrySetupsBody })));
 const WorkflowShapeEditor = lazy(() => import("@/components/research/WorkflowShapeEditor"));
 import { Segmented } from "@/components/ui/segmented";
 import { Button } from "@/components/ui/button";
@@ -112,19 +116,22 @@ function useLatestMetrics(app: string, loop: string, cycles: MeCycleListItem[] |
 
 // ── shell ─────────────────────────────────────────────────────────────────
 
-function PanelShell({ kicker, title, sub, onClose, children, foot, actions, label, style, page = false }: {
+function PanelShell({ kicker, title, sub, onClose, onBack, backLabel, children, foot, actions, label, style, page = false }: {
 	kicker: string; title: string; sub?: React.ReactNode; onClose: () => void; children: React.ReactNode; foot?: React.ReactNode; label: string; style?: React.CSSProperties;
+	/** A view inside the panel (a form): Back returns to the panel, and Esc does too. */
+	onBack?: () => void; backLabel?: string;
 	/** The panel's verbs, beside its title (Run · Ask · ⋯). */
 	actions?: React.ReactNode;
 	/** The workflow's own page: the same panel, full width, in the flow. */
 	page?: boolean;
 }) {
 	useEffect(() => {
-		if (page) return;
-		const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") onClose(); };
+		// A page has nothing to close, but a form in it still goes Back on Esc.
+		if (page && !onBack) return;
+		const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") (onBack ?? onClose)(); };
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
-	}, [onClose, page]);
+	}, [onClose, onBack, page]);
 	return (
 		<div role={page ? "region" : "dialog"} aria-label={label} style={style}
 			className={page
@@ -132,6 +139,12 @@ function PanelShell({ kicker, title, sub, onClose, children, foot, actions, labe
 				: "absolute right-3 top-12 z-[6100] flex w-[22rem] max-w-[48%] flex-col overflow-hidden rounded-xl border border-ink-200 bg-card shadow-e3 map-panel-in 2xl:w-[26rem]"}>
 			<div className="space-y-1 border-b border-ink-100 px-3.5 pb-2.5 pt-3">
 				<div className="flex items-center gap-2">
+					{onBack && (
+						<button type="button" onClick={onBack} aria-label={backLabel ?? "Back"} title={`${backLabel ?? "Back"} (Esc)`}
+							className="-ml-1 inline-flex h-6 items-center gap-1 rounded-md px-1 text-caption text-ink-700 hover:bg-ink-100 hover:text-ink-900">
+							<ArrowLeft className="h-3.5 w-3.5" />
+						</button>
+					)}
 					<span className="eyebrow text-plum-700">{kicker}</span>
 					{!page && (
 						<button type="button" onClick={onClose} aria-label="Close" title="Close (Esc)"
@@ -154,7 +167,7 @@ function PanelShell({ kicker, title, sub, onClose, children, foot, actions, labe
 
 // ── workflow panel ────────────────────────────────────────────────────────
 
-export default function WorkflowPanel({ app, wf, spec, row, exps, view, onView, compareWith, onPickCompare, onMakeVariant, onTrySetups, onSelect, save, editable, onClose, style, page = false }: {
+export default function WorkflowPanel({ app, wf, spec, row, exps, view, onView, compareWith, onPickCompare, onSelect, save, editable, onClose, style, page = false }: {
 	app: string;
 	wf: SpecWorkflow;
 	spec: AppSpec;
@@ -166,8 +179,9 @@ export default function WorkflowPanel({ app, wf, spec, row, exps, view, onView, 
 	compareWith: CompareSide | null;
 	/** Start picking B on the graph (the next click). */
 	onPickCompare: () => void;
-	onMakeVariant: () => void;
-	onTrySetups: () => void;
+	/** Unused: New variant and New experiment open in this panel (kept so callers compile). */
+	onMakeVariant?: () => void;
+	onTrySetups?: () => void;
 	onSelect: (graphId: string) => void;
 	save: (edit: (t: string) => string, files?: Array<{ path: string; content: string }>) => Promise<unknown>;
 	editable: boolean;
@@ -178,6 +192,11 @@ export default function WorkflowPanel({ app, wf, spec, row, exps, view, onView, 
 }) {
 	const [limit, setLimit] = useState(40);
 	const { cycles, reload } = useCycles(app, wf.id, limit);
+	// A form shown in this panel in place of its tabs (Back returns).
+	const [form, setForm] = useState<null | "variant" | "setups">(null);
+	useEffect(() => { setForm(null); }, [wf.id]);
+	const onMakeVariant = () => setForm("variant");
+	const onTrySetups = () => setForm("setups");
 	// null = still reading: never say "Hasn't run yet" about a list we haven't read.
 	const status = useMemo(() => (cycles === null
 		? { tone: "none" as const, text: "Reading its runs…" }
@@ -222,6 +241,24 @@ export default function WorkflowPanel({ app, wf, spec, row, exps, view, onView, 
 			</div>
 		</div>
 	);
+	if (form) {
+		const back = () => setForm(null);
+		const wider = !page && style ? { ...style, width: Math.max(Number(style.width) || 0, 600) } : style;
+		const isVariant = form === "variant";
+		return (
+			<PanelShell kicker={isVariant ? "New variant" : "New experiment"} title={wfLabel(wf)} onClose={onClose} onBack={back} backLabel={`Back to ${wfLabel(wf)}`}
+				label={`${isVariant ? "New variant of" : "New experiment on"} ${wfLabel(wf)}`} style={wider} page={page}
+				sub={<p className="text-caption text-ink-600">{isVariant
+					? "A new workflow made from this one — change its steps, data, compute or feedback. It runs only when you start it."
+					: "Try values of one input: one version per value, compared on one metric. Nothing runs until you press Run."}</p>}>
+				<Suspense fallback={<div className="m-3 h-40 rounded-lg lumen-skeleton" role="status" aria-label="Opening the form" />}>
+					{isVariant
+						? <div className="flex min-h-0 flex-1 flex-col"><VariantSheetBody app={app} parent={wf} spec={spec} save={save} onClose={back} onCreated={(ids) => { back(); if (ids[0]) onSelect(`wf:${ids[0]}`); }} /></div>
+						: <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-3.5 py-3"><TrySetupsBody app={app} wf={wf} spec={spec} onCreated={(id) => { back(); onSelect(`exp:${id}`); }} /></div>}
+				</Suspense>
+			</PanelShell>
+		);
+	}
 	const askAbout = () => ask(`How is ${wfLabel(wf)} in ${appTitle(app)} doing, and what should it try next? Look at its recent runs and their metrics first; cite run ids. Suggest the next runs, but start nothing.`, { app, workflow: wf.id });
 	// Compare is a tab only while a B is picked (⇧-click on the graph).
 	const tabs = [{ value: "overview", label: "Summary" }, { value: "runs", label: "Runs" }, { value: "feedback", label: "Steps" }];
