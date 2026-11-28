@@ -20,7 +20,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { fleet, type FleetJob } from "../../api/fleet";
 import { USER_SANDBOX_SITES } from "../../api/sandboxes";
-import { countOf, fleetAccessNote } from "../../lib/fleet-view";
+import { countOf, fleetAccessNote, startNowLine, workerName, workerStatusWords } from "../../lib/fleet-view";
 import {
 	FM_DEFAULT_COST_PER_HOUR,
 	fanoutForSites,
@@ -49,7 +49,7 @@ function isLive(lastSeen?: string | null): boolean {
 
 function gpuLabel(w: FmWorker): string {
 	const d = w.hardware?.gpu?.devices;
-	if (!d?.length) return "—";
+	if (!d?.length) return "";
 	const name = shortGpu(d[0].name ?? "GPU");
 	return d.length > 1 ? `${d.length}× ${name}` : name;
 }
@@ -139,6 +139,13 @@ export default function FleetTab({ isAdmin }: { isAdmin: boolean }) {
 		return { live: live.length, total: ws.length, busy: live.filter((w) => w.status === "BUSY").length };
 	}, [workers.data]);
 
+	// The first thing a researcher asks here: can my run start now, and where?
+	const startNow = useMemo(() => startNowLine(tree.map(([site, entries]) => ({
+		site,
+		workers: entries.flatMap((e) => e.workers).filter((w) => isLive(w.last_seen))
+			.map((w) => ({ status: w.status, gpu: !!w.hardware?.gpu?.devices?.length })),
+	}))), [tree]);
+
 	const loading = nodes.loading || workers.loading;
 	const refresh = () => {
 		nodes.refresh();
@@ -157,6 +164,7 @@ export default function FleetTab({ isAdmin }: { isAdmin: boolean }) {
 			error={nodes.error || workers.error}
 			onRefresh={refresh}
 		>
+			{tree.length > 0 && <p className="mb-2 text-meta font-medium text-ink-900" data-testid="fleet-start-now">{startNow}</p>}
 			<SiteStrip sites={nodes.data?.sites ?? []} />
 
 			{/* It used to say office was "restricted to admins" while every GPU
@@ -205,6 +213,8 @@ export default function FleetTab({ isAdmin }: { isAdmin: boolean }) {
 						0,
 					);
 					const siteGpu = uniformGpu(entries.flatMap((e) => e.workers));
+					// A machine with no live worker is one line at the foot, not an empty box.
+					const idleNodes = showStale ? 0 : entries.filter((e) => !e.workers.some((w) => isLive(w.last_seen))).length;
 					return (
 						<div key={site} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
 							<div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-3 py-2">
@@ -224,13 +234,13 @@ export default function FleetTab({ isAdmin }: { isAdmin: boolean }) {
 									workers={entries.flatMap((e) => e.workers)}
 								/>
 							)}
-							<div className="grid gap-3 p-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr))]">
+							{entries.length > idleNodes && <div className="grid gap-3 p-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr))]">
 								{entries.map((e) => {
 									const nodeLive = isLive(e.node.last_seen);
 									const shown = showStale
 										? e.workers
 										: e.workers.filter((w) => isLive(w.last_seen));
-									if (!showStale && !nodeLive && shown.length === 0) return null;
+									if (!showStale && shown.length === 0) return null;
 									const busy = shown.filter((w) => String(w.status).toUpperCase() !== "IDLE").length;
 									return (
 										<div
@@ -239,15 +249,14 @@ export default function FleetTab({ isAdmin }: { isAdmin: boolean }) {
 											className={`flex flex-col rounded-md border bg-card p-3 text-sm shadow-e1 ${nodeLive ? "border-ink-200" : "border-ember-200/70 opacity-75"}`}
 										>
 											<div className="flex items-baseline justify-between gap-2">
-												<span className="truncate font-medium text-ink-900" title={e.node.id}>
-													{e.node.alias ?? e.node.id}
+												<span className="truncate font-medium text-ink-900" title={`node ${e.node.id}`}>
+													{e.node.alias && e.node.alias !== "node" ? e.node.alias : `Machine ${e.node.id.replace(/^nde-/, "")}`}
 												</span>
 												<span className="shrink-0 text-caption text-ink-600">
 													<Age seconds={secondsSince(e.node.last_seen)} />
 												</span>
 											</div>
 											<div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-caption text-ink-600">
-												<span className="font-mono">{e.node.id}</span>
 												<span>
 													{shown.length} worker{shown.length === 1 ? "" : "s"}
 													{busy ? ` · ${busy} busy` : ""}
@@ -265,9 +274,9 @@ export default function FleetTab({ isAdmin }: { isAdmin: boolean }) {
 																isLive(w.last_seen) ? "" : "opacity-50"
 															}`}
 														>
-															<StatusPill status={w.status} />
-															<span className="font-medium text-ink-800">{w.alias ?? w.id}</span>
-															{gpuLabel(w) !== siteGpu && <span className="text-ink-600">{gpuLabel(w)}</span>}
+															<StatusPill status={w.status} label={workerStatusWords(w.status)} />
+															<span className="font-medium text-ink-800" title={w.id}>{workerName(w.alias ?? w.id)}</span>
+															{gpuLabel(w) && gpuLabel(w) !== siteGpu && <span className="text-ink-600">{gpuLabel(w)}</span>}
 															{/* The 1.0 default is WORKER_COST_PER_HOUR, not a price —
 															    rendering it printed "$1.000" for boxes we own outright. */}
 															{w.cost_per_hour != null && w.cost_per_hour !== FM_DEFAULT_COST_PER_HOUR && (
@@ -286,7 +295,12 @@ export default function FleetTab({ isAdmin }: { isAdmin: boolean }) {
 										</div>
 									);
 								})}
-							</div>
+							</div>}
+							{idleNodes > 0 && (
+								<p className={`px-3 py-1.5 text-caption text-ink-600 ${entries.length > idleNodes ? "border-t border-ink-100" : ""}`}>
+									{countOf(idleNodes, entries.length > idleNodes ? "more machine" : "machine")} with no live worker. Tick &ldquo;Show stale rows&rdquo; to see {idleNodes === 1 ? "it" : "them"}.
+								</p>
+							)}
 						</div>
 					);
 				})}

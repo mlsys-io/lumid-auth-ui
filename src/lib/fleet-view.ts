@@ -168,3 +168,42 @@ export function fleetAccessNote(opts: { listed: string; hidden: string[]; sandbo
 export function sandboxSitesWords(isAdmin: boolean, sites: string[]): string {
 	return isAdmin ? "Every site." : `On ${siteList(sites) || "home"}.`;
 }
+
+// ── Research Fleet machines in words (quant audit 6 gap 12, 2026-11-28) ─────
+// The machine boxes said "nde-855", "cpu_0 —" and "IDLE", and nothing answered
+// the one question a researcher has here: can my run start now, and where?
+
+/** A worker's status in plain words. */
+export function workerStatusWords(status?: string | null): string {
+	const s = String(status ?? "").toUpperCase();
+	return s === "IDLE" ? "free" : s === "BUSY" ? "busy" : s === "STARTING" ? "starting" : s === "STOPPING" ? "stopping" : s === "STOPPED" ? "stopped" : s ? s.toLowerCase() : "unknown";
+}
+
+/** "cpu_0" → "CPU worker 1", "gpu_1" → "GPU worker 2"; any other name is kept. */
+export function workerName(name: string): string {
+	const m = /^(cpu|gpu)[_-]?(\d+)$/i.exec(name.trim());
+	return m ? `${m[1].toUpperCase()} worker ${Number(m[2]) + 1}` : name;
+}
+
+export interface SiteWorkers { site: string; workers: Array<{ status?: string | null; gpu: boolean }> }
+
+/** The first line of Research Fleet: can a run start now, and where. */
+export function startNowLine(sites: SiteWorkers[]): string {
+	const tally = (gpu: boolean) => {
+		const per: Array<{ site: string; free: number; all: number }> = [];
+		for (const s of sites) {
+			const ws = s.workers.filter((w) => w.gpu === gpu);
+			if (!ws.length) continue;
+			per.push({ site: s.site, free: ws.filter((w) => workerStatusWords(w.status) === "free").length, all: ws.length });
+		}
+		return { per, free: per.reduce((a, p) => a + p.free, 0), all: per.reduce((a, p) => a + p.all, 0) };
+	};
+	const where = (per: Array<{ site: string; free: number }>) => per.filter((p) => p.free).map((p) => `${siteName(p.site)} ${p.free}`).join(", ");
+	const g = tally(true), c = tally(false);
+	if (!g.all && !c.all) return "No machine is answering right now, so a run would wait.";
+	const gpu = !g.all ? "No GPU machine is answering, so a GPU run would wait."
+		: g.free ? `A GPU run can start now: ${countOf(g.free, "GPU worker")} free (${where(g.per)}).`
+			: `A GPU run waits: all ${countOf(g.all, "GPU worker")} are busy.`;
+	const cpu = !c.all ? "" : c.free ? ` A CPU run can start too: ${c.free} free.` : ` CPU runs wait: all ${countOf(c.all, "CPU worker")} are busy.`;
+	return gpu + cpu;
+}

@@ -2,7 +2,7 @@
 import type { FleetJob } from "../api/fleet";
 import {
 	FLEET_SETTLE_S, answerTime, countOf, fleetAccessNote, fleetWhen, railAction, railFleetJobs, railToConfirm, runPlace,
-	runSites, sandboxSitesWords, siteAnswerTitle, siteList, siteName, workflowsLine, type FleetFresh,
+	runSites, sandboxSitesWords, siteAnswerTitle, siteList, siteName, workflowsLine, type FleetFresh, startNowLine, workerName, workerStatusWords,
 } from "./fleet-view";
 
 type Check = { name: string; run: () => void };
@@ -118,6 +118,20 @@ check("the non-admin note says where their GPU work really runs", () => {
 check("the Sandboxes subtitle names every site the person may use", () => {
 	eq(sandboxSitesWords(false, ["home", "office"]), "On home and office.");
 	eq(sandboxSitesWords(true, ["home", "office", "nus"]), "Every site.");
+});
+
+check("machines in words, and whether a run can start now", () => {
+	eq([workerStatusWords("IDLE"), workerStatusWords("BUSY"), workerStatusWords(null)], ["free", "busy", "unknown"]);
+	eq([workerName("cpu_0"), workerName("gpu_1"), workerName("wkr-3319")], ["CPU worker 1", "GPU worker 2", "wkr-3319"]);
+	const w = (status: string, gpu: boolean) => ({ status, gpu });
+	eq(startNowLine([
+		{ site: "home", workers: [w("IDLE", true), w("IDLE", false), w("BUSY", true)] },
+		{ site: "office", workers: [w("IDLE", true), w("IDLE", true), w("IDLE", false)] },
+		{ site: "cloud", workers: [] },
+	]), "A GPU run can start now: 3 GPU workers free (Home 1, Office 2). A CPU run can start too: 2 free.");
+	eq(startNowLine([{ site: "office", workers: [w("BUSY", true), w("BUSY", true)] }]), "A GPU run waits: all 2 GPU workers are busy.");
+	eq(startNowLine([{ site: "home", workers: [w("IDLE", false)] }]), "No GPU machine is answering, so a GPU run would wait. A CPU run can start too: 1 free.");
+	eq(startNowLine([]), "No machine is answering right now, so a run would wait.");
 });
 
 export function run(): number {

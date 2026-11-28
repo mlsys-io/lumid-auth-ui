@@ -167,7 +167,7 @@ export function SiteBadge({ site }: { site?: string }) {
 	);
 }
 
-export function StatusPill({ status }: { status: string }) {
+export function StatusPill({ status, label }: { status: string; /** Plain words to show instead of the raw status. */ label?: string }) {
 	const s = status.toUpperCase();
 	const tone =
 		s === "IDLE" || s === "DONE"
@@ -179,7 +179,7 @@ export function StatusPill({ status }: { status: string }) {
 					: s === "FAILED"
 						? "bg-brick-50 text-brick-700 border-brick-200"
 						: "bg-ink-50 text-ink-600 border-ink-200";
-	return <span className={`rounded border px-1.5 py-0.5 text-xs ${tone}`}>{s}</span>;
+	return <span className={`rounded border px-1.5 py-0.5 text-xs ${tone}`} title={label ? s : undefined}>{label ?? s}</span>;
 }
 
 // `title` is OPTIONAL and the fm tabs deliberately omit it. Every one of them
