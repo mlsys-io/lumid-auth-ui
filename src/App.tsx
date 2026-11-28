@@ -45,6 +45,7 @@ function XpioRedirect() {
 }
 // Phase S3-C — app editor (lean v1).
 const StudioApps         = lazy(() => import("./pages/studio/apps"));
+const NewAppPage         = lazy(() => import("./pages/studio/new-app"));
 const StudioWorkspace    = lazy(() => import("./pages/studio/StudioWorkspace"));
 // App-defined UI surface (runtime-loaded markdown / native escape-hatch) at /studio/a/:app
 const AppSurface         = lazy(() => import("./components/app-surface/AppSurface"));
@@ -960,6 +961,7 @@ export default function App() {
                 /apps/all is the full installed-app inventory (reached from the
                 user menu's "Manage apps"). */}
             <Route path="apps"                         element={<StudioWorkspace />} />
+            <Route path="apps/new"                     element={<NewAppPage />} />
             <Route path="apps/all"                     element={<StudioApps />} />
             <Route path="apps/:app"                    element={<StudioWorkspace />} />
             {/* A workflow and one of its runs are ADDRESSES (lib/run-routes.ts):

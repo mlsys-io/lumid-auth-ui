@@ -421,8 +421,15 @@ export const me = {
     call<{ path: string; content: string; sha: string; source: string; editable: boolean }>("GET", `/apps/${encodeURIComponent(app)}/files?path=${encodeURIComponent(path)}`),
   // Publish the app bundle to its xp.io repo — commits the current prompts/
   // config/UI edits and auto-bumps semver (app_push). Versions the "tuning".
-  publishApp: (app: string, body?: { commit_message?: string; summary?: string }) =>
-    call<{ message: string; data?: Record<string, unknown> }>(
+  // A brand-new app in your account from the research-app starter (identity
+  // v0.5.532+ / scheduler new_app): 202 + an intent; it shows in Your Apps as
+  // installing, then ready. Nothing is published and nothing runs.
+  newApp: (body: { name: string; title?: string; summary?: string }) =>
+    call<{ intent_id: string; app: string }>("POST", "/apps/new", body),
+  // visibility: "public" lists it in the Marketplace, "private" keeps it to
+  // you, omitted keeps what it was (identity v0.5.532+).
+  publishApp: (app: string, body?: { commit_message?: string; summary?: string; visibility?: "public" | "private" }) =>
+    call<{ intent_id: string; repo_url?: string }>(
       "POST", `/apps/${encodeURIComponent(app)}/publish`, body || {}),
   // Write a surface for an installed app: `markdown` for .md surfaces, `spec`
   // (raw page.yaml text, compiler-validated server-side) for structured page

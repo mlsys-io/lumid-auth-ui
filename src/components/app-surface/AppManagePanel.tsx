@@ -29,6 +29,7 @@ import { appTitle } from "@/components/workflow/AppCard";
 import { loopLabel } from "@/lib/workflow-names";
 import { bearerHeader } from "@/api/session-bearer";
 import AppSecretsSection, { type ConfigField } from "./AppSecretsSection";
+import PublishSection from "./PublishSection";
 import ModulesPanel from "@/components/modules/ModulesPanel";
 import { newWorkflowPath } from "@/components/research/new-workflow";
 import {
@@ -447,6 +448,10 @@ export default function AppManagePanel() {
 					</div>
 				)}
 			</section>
+
+			{/* Publish — to the owner's repo; in the Marketplace or private */}
+			<PublishSection app={app} summary={String(js?.summary ?? js?.description ?? "")} visibility={String(js?.visibility ?? "")}
+				forkOf={typeof js?.fork_of === "string" ? js.fork_of : undefined} readOnly={readOnly} />
 
 			{/* Credentials — pure-UI secret entry driven by xpcloud.yaml config_schema */}
 			<section className="rounded-xl border border-ink-200 bg-card p-4">
