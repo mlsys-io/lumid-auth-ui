@@ -8,8 +8,12 @@
 // `qr_fwd_<run>` and is DISABLED at the end, pass or fail. No money moves:
 // every lane a registered strategy can reach is SHADOW (decisions, no fills).
 //
-//   LUMID_BASE=https://lum.id LUMID_PAT=$(cat ~/.lumid/admin.pat) \
+//   LUMID_BASE=https://lum.id LUMID_PAT=<a TEST account's PAT> \
 //   e2e/in-container.sh e2e/scenario-quant-research.mjs
+//
+// Never the operator's account: the copy it installs is a mock item in that
+// account's Studio (the operator removed both e2e copies from admin@lum.id on
+// 2026-11-28). It refuses an admin or super_admin token unless ALLOW_OPERATOR_ACCOUNT=1.
 //
 // Steps, each through the UI and through the chat where both exist:
 //   1 the app on the graph          2 write a strategy (chat)
@@ -37,6 +41,17 @@ const STRAT = `qr_fwd_${RUN}`;
 const FORWARD_WAIT_MIN = Number(process.env.FORWARD_WAIT_MIN || 25);
 fs.mkdirSync(OUT, { recursive: true });
 if (!PAT) { console.error('LUMID_PAT is required'); process.exit(2); }
+{
+	// Which account is this? The scenario installs `$APP` there.
+	const r = await fetch(`${BASE}/api/v1/user`, { headers: { Authorization: `Bearer ${PAT}` } }).catch(() => null);
+	const u = r && r.ok ? await r.json().catch(() => null) : null;
+	const role = (u?.data ?? u)?.role;
+	if (!role) { console.error(`could not read the token's account (GET /api/v1/user: ${r ? r.status : 'no answer'})`); process.exit(2); }
+	if ((role === 'admin' || role === 'super_admin') && process.env.ALLOW_OPERATOR_ACCOUNT !== '1') {
+		console.error(`refusing to run as an admin account: ${APP} would be installed in the operator's Studio. Use a test account's PAT (or set ALLOW_OPERATOR_ACCOUNT=1 on purpose).`);
+		process.exit(2);
+	}
+}
 
 // The sample strategy (sample_data/ofi_momentum_v1.lqts), one lot, renamed.
 const STRAT_BODY = `strategy ${STRAT} {
