@@ -24,7 +24,7 @@ import { Minus, Plus, RotateCcw } from "lucide-react";
 import type { MapEdge, MapNode } from "@/lib/research-map";
 import {
 	AUTO_ROTATE_IDLE_MS, AUTO_ROTATE_RAD_PER_MS, DISTANCE, FOCAL, HOME, PITCH_LIMIT, depthCue, dustField, easeInOutCubic, frameCamera, layoutSpace, nearestYaw, project, sceneFloor, stepCameraSpring, turnHull, ZERO_VEL, type CameraVel,
-	type Camera,
+	type Camera, BOB_UNITS, SWAY_UNITS, BoxGrid, declutterLabels, driftEnvelope, labelBox, labelRank, type Box, type LabelItem, type LabelMemory, type LabelMetrics,
 } from "@/lib/space3d";
 import { cn } from "@/lib/utils";
 
@@ -119,8 +119,9 @@ function setS(el: HTMLElement | SVGElement, prop: "opacity" | "transform" | "zIn
 	if (m[k] !== v) { m[k] = v; el.style[prop] = v; }
 }
 
-// Sink and float: world units of vertical bob, and the period range.
-const BOB_UNITS = 11, BOB_MS = 5200, BOB_SPREAD_MS = 1800;
+// Sink and float: the period range (the bob's height is BOB_UNITS, in lib/space3d —
+// labels reserve the band a dot drifts through).
+const BOB_MS = 5200, BOB_SPREAD_MS = 1800;
 // A mouse left still this long over empty space counts as idle (the space turns).
 const POINTER_REST_MS = 3000;
 
@@ -144,11 +145,24 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 	// springs out of its parent.
 	const springs = useRef(new Map<string, { x: number; y: number; vx: number; vy: number }>());
 	const labelEls = useRef(new Map<string, SVGTextElement>());
-	// Each dot's label element and its unscaled size (text never changes).
-	const dotLabels = useRef(new Map<string, { el: HTMLElement; w: number; h: number }>());
+	// Each dot's label element, its offset from the dot's centre and its
+	// unscaled size — measured once per data/selection change, not per frame.
+	const dotLabels = useRef(new Map<string, { el: HTMLElement; m: LabelMetrics }>());
 	// Whether each dot's label is showing, and since when it has wanted the
-	// other state (labels change only after ~0.45 s, so they don't blink).
-	const labelState = useRef(new Map<string, { shown: boolean; since: number }>());
+	// other state (labels change only after ~0.5 s, so they don't blink).
+	const labelState = useRef(new Map<string, LabelMemory>());
+	// Areas no label may sit under: the controls corner and the how-to hint
+	// (2026-11-28: the top row of names was clipped under the hint line).
+	const controlsEl = useRef<HTMLDivElement>(null);
+	const hintEl = useRef<HTMLDivElement>(null);
+	const reserved = useRef<Box[]>([]);
+	const measureReserved = () => {
+		const out: Box[] = [];
+		for (const el of [controlsEl.current, hintEl.current]) {
+			if (el && el.offsetWidth) out.push([el.offsetLeft - 4, el.offsetTop - 4, el.offsetLeft + el.offsetWidth + 4, el.offsetTop + el.offsetHeight + 4]);
+		}
+		reserved.current = out;
+	};
 	// The layout follows the tree's SHAPE (ids, parents, depths), not the array:
 	// every background refresh rebuilds `nodes`, and re-laying out on identity
 	// re-framed the camera, un-parked a zoomed reader and replayed the fly home
@@ -280,6 +294,9 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 			// Only a real size change re-frames (observe() reports the current size once).
 			if (s.current.framed && Math.abs(width - s.current.W) < 1 && Math.abs(h - s.current.H) < 1) return;
 			s.current.W = width; s.current.H = h;
+			// Labels re-wrap and the corners move with the box: measure them again.
+			dotLabels.current.clear();
+			measureReserved();
 			// Every size change re-frames (not only the first): enlarging or
 			// shrinking the window left the space at the old zoom, off-centre and
 			// at the wrong ratio (user, 2026-11-25). Instant — no fly on resize.
@@ -353,6 +370,10 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		// its screen offset, taken back out before labels are placed.
 		const bobs = new Map<string, number>();
 		const bobOff = new Map<string, [number, number]>();
+		// Each node's drawn scale this frame (read by the label pass).
+		const sizeOf = new Map<string, number>();
+		// Text may differ from the last data (counts, "running now"): measure afresh.
+		dotLabels.current.clear();
 		const frame = (t: number) => {
 			st.raf = 0;
 			const dt = Math.min(50, t - (st.lastT || t));
@@ -536,7 +557,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				const c = clk.c;
 				const period = BOB_MS + BOB_SPREAD_MS * (ph / (2 * Math.PI));
 				const bob = on ? 0.82 * Math.sin((c / period) * 2 * Math.PI + ph) + 0.18 * Math.sin((c / period) * 4.6 * Math.PI + ph * 2.3) : 0;
-				const sway = on ? 2 : 0;
+				const sway = on ? SWAY_UNITS : 0;
 				// World y grows downward: a positive bob lifts the dot.
 				const q = { x: p.x + sway * Math.sin(c / 4300 + ph), y: p.y - BOB_UNITS * bob, z: p.z + sway * Math.cos(c / 4700 + ph) };
 				bobs.set(id, bob);
@@ -589,7 +610,9 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				// small"). Open cards keep a little more depth.
 				const floor = el.dataset.full !== undefined ? 0.85 : 0.95;
 				const size = Math.max(floor, Math.min(1, (p.scale / (FOCAL / DISTANCE)) * 0.9)) * pick;
-				setS(el, "transform", `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) translate(-50%, -50%) scale(${(size * (0.9 + 0.1 * born)).toFixed(3)})`);
+				const drawn = size * (0.9 + 0.1 * born);
+				sizeOf.set(n.id, drawn);
+				setS(el, "transform", `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) translate(-50%, -50%) scale(${drawn.toFixed(3)})`);
 				setS(el, "opacity", String(((dim ? 0.42 : lit ? Math.max(0.9, cue.alpha) : cue.alpha) * born).toFixed(3)));
 				// The hovered node sits above every other open card: its card must never
 				// have another node's dot on top of it, or that dot takes the pointer.
@@ -644,84 +667,93 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				setS(c, "opacity", String((q.visible ? (dimP ? 0.03 : 0.16 + 0.38 * cue.near) * bornP : 0).toFixed(3)));
 			});
 		};
-		// Labels that would collide are hidden, most important first: what's
-		// selected or under the pointer, the app, experiments, suggestions, then
-		// versions last.
-		// (The hovered node is NOT ranked up: hovering one node must not hide
-		// another's label.)
-		const rank = (n: MapNode) => (n.id === selected ? 0 : lit?.has(n.id) ? 2 : n.depth === 0 ? 3 : n.kind === "experiment" ? 4 : n.kind === "suggested" ? 5 : 6);
+		// Labels never overprint (2026-11-28): each label's box — at its node's
+		// REST point, grown by the band the node bobs through — is claimed most
+		// important first (lib/space3d: labelRank, declutterLabels); a label that
+		// would cross one already placed draws as a bare dot until hovered or
+		// selected. Before, the boxes were shrunk to a thin core and decided at
+		// the rest point only, so two neighbours bobbing out of phase overprinted.
+		// The hovered node is NOT ranked up (hovering must not hide another's
+		// label); its own hidden label peeks over the rest instead.
+		type Item = LabelItem & { id: string; lab: { el: HTMLElement; m: LabelMetrics } | null; off: boolean };
+		const items = new Map<string, Item>();
+		const list: Item[] = [];
+		const grid = new BoxGrid();
+		const env = { x: 0, y: 0 };
+		const measure = (el: HTMLElement) => {
+			const le = el.querySelector<HTMLElement>(".space3d-label");
+			if (!le) return null;
+			const host = le.offsetParent as HTMLElement | null;
+			const m: LabelMetrics = { dx: le.offsetLeft - (host?.offsetWidth ?? 0) / 2, dy: le.offsetTop - (host?.offsetHeight ?? 0) / 2, w: le.offsetWidth, h: le.offsetHeight };
+			return { el: le, m };
+		};
 		const declutter = (proj: Map<string, ReturnType<typeof project>>, t: number) => {
 			const cam0 = st.cam;
-			const placed: Array<[number, number, number, number]> = [];
-			const hit = (b: [number, number, number, number]) => placed.some((q) => b[0] < q[2] && b[2] > q[0] && b[1] < q[3] && b[3] > q[1]);
-			const items = nodes
-				.map((n) => ({ n, p: proj.get(n.id), el: cardEls.current.get(n.id) }))
-				.filter((x) => x.p?.visible && x.el)
-				// Same rank: a label already showing goes first (it keeps its place),
-				// then a fixed order. Sorting by depth made neighbours swap which one
-				// showed as the space turned — labels blinked (user, 2026-11-25).
-				.sort((a, b) => rank(a.n) - rank(b.n)
-					|| Number(!labelState.current.get(a.n.id)?.shown) - Number(!labelState.current.get(b.n.id)?.shown)
-					|| (nodeIndex.get(a.n.id) ?? 0) - (nodeIndex.get(b.n.id) ?? 0));
-			for (const { n, p: pb, el } of items) {
+			list.length = 0;
+			for (const n of nodes) {
+				const pb = proj.get(n.id), el = cardEls.current.get(n.id);
+				if (!pb?.visible || !el) continue;
 				const o = bobOff.get(n.id);
-				const p = o ? { ...pb!, x: pb!.x - o[0], y: pb!.y - o[1] } : pb;
-				const size = Number(/scale\(([\d.]+)\)/.exec(el!.style.transform)?.[1] ?? 1);
-				if (el!.dataset.full !== undefined) {
+				const x = o ? pb.x - o[0] : pb.x, y = o ? pb.y - o[1] : pb.y;
+				const size = sizeOf.get(n.id) ?? 1;
+				let it = items.get(n.id);
+				if (!it) {
+					let mem = labelState.current.get(n.id);
+					if (!mem) { mem = { shown: false, since: 0 }; labelState.current.set(n.id, mem); }
+					it = { id: n.id, rank: 6, order: 0, box: [0, 0, 0, 0], mem, eligible: true, lab: null, off: false };
+					items.set(n.id, it);
+				}
+				it.order = nodeIndex.get(n.id) ?? 0;
+				it.rank = labelRank(n.kind, n.depth, { selected: n.id === selected, onPath: !!lit?.has(n.id) });
+				it.fixed = false; it.now = false; it.off = false; it.lab = null;
+				if (el.dataset.full !== undefined) {
 					// A card opened by HOVER sits on top (z) over an opaque face and
 					// claims nothing: labels under it stay put, so the rest of the space
 					// does not change under the pointer. Selected / path cards claim
 					// their box; labels under those give way.
 					if (n.id === hoveredRef.current && n.id !== selected && !lit?.has(n.id)) continue;
-					// An open card claims its own box; labels under it give way.
-					const w = el!.offsetWidth * size, h = el!.offsetHeight * size;
-					placed.push([p!.x - w / 2, p!.y - h / 2, p!.x + w / 2, p!.y + h / 2]);
+					const w = el.offsetWidth * size, h = el.offsetHeight * size;
+					it.box[0] = x - w / 2; it.box[1] = y - h / 2; it.box[2] = x + w / 2; it.box[3] = y + h / 2;
+					it.fixed = true;
+					list.push(it);
 					continue;
 				}
 				let lab = dotLabels.current.get(n.id);
-				if (!lab || !lab.w) {
-					const le = el!.querySelector<HTMLElement>(".space3d-label");
-					if (!le) continue;
-					lab = { el: le, w: le.offsetWidth, h: le.offsetHeight };
+				if (!lab || !lab.m.w) {
+					const got = measure(el);
+					if (!got) continue;
+					lab = got;
 					dotLabels.current.set(n.id, lab);
 				}
 				// Versions are labelled too, but the ones at the back of the space
 				// drop their label (depth of field) unless their experiment is in play.
 				const inPlay = lit?.has(n.id) || (n.parent && selected === n.parent);
-				const quiet = n.kind === "version" && !inPlay && depthCue(p!.scale, cam0.zoom).near < 0.35;
+				const quiet = n.kind === "version" && !inPlay && depthCue(pb.scale, cam0.zoom).near < 0.35;
 				const off = !!lit && !lit.has(n.id);
 				// Always RIGHT of the dot — a label never changes side (moving to the
-				// other side when blocked read as constant flipping). Blocked, it
-				// fades; it appears or disappears only once that has held ~0.45 s.
-				const hh = (lab.h * size) / 2 + 1, ww = lab.w * size + 2;
-				const box: [number, number, number, number] = [p!.x + 12 * size - 2, p!.y - hh, p!.x + 12 * size + ww, p!.y + hh];
-				// Collide on the label's core, not its padding and halo: a slight
-				// overlap is fine, hiding for it made labels blink.
-				const mem = labelState.current.get(n.id) ?? { shown: false, since: 0 };
-				// Spatial hysteresis on top of the timed one: a showing label holds
-				// until it is overlapped a few px deeper than a hidden one needs
-				// clear to appear.
-				const g = mem.shown ? 3 : -2;
-				const core: [number, number, number, number] = [box[0] + ww * 0.08 + g, box[1] + hh * 0.35 + g, box[2] - ww * 0.08 - g, box[3] - hh * 0.35 - g];
-				labelState.current.set(n.id, mem);
-				const want = !(quiet || off) && !hit(core);
-				if (off) { mem.shown = false; mem.since = 0; } // dimmed by a selection: at once
-				else if (want === mem.shown) mem.since = 0;
-				else {
-					if (!mem.since) mem.since = t;
-					// Slower to hide (0.7 s) than to show (0.5 s): a brief crossing
-					// leaves the label alone. Under reduced motion nothing moves, so
-					// there is nothing to blink against — and the loop stops after a
-					// still frame, so a delayed change would never be applied: on a
-					// laptop set to reduce motion, the first load showed 0 labels at 2 s
-					// and 18 of 29 after (2026-11-27). Decide at once there.
-					if (reduced || t - mem.since > (want ? 500 : 700)) { mem.shown = want; mem.since = 0; }
-				}
-				if (mem.shown) placed.push(core);
-				setS(lab.el, "opacity", mem.shown ? "" : "0");
+				// other side when blocked read as constant flipping).
+				labelBox(it.box, x, y, lab.m, size, driftEnvelope(pb.scale, cam0.pitch, !!o, env));
+				it.eligible = !(quiet || off) && lab.m.w > 0;
+				// Dimmed by a selection: at once. Under reduced motion nothing moves to
+				// blink against, and the loop stops after a still frame — a delayed
+				// change would never be applied (2026-11-27), so decide at once there.
+				it.now = off || reduced;
+				it.off = off;
+				it.lab = lab;
+				list.push(it);
+			}
+			declutterLabels(list, t, grid, reserved.current);
+			for (const it of list) {
+				if (!it.lab) continue;
+				const shown = it.mem.shown;
+				// A name that lost its place still reads under the pointer: it peeks
+				// on a card-coloured backing (claiming nothing).
+				const peek = !shown && !it.off && it.id === hoveredRef.current;
+				setS(it.lab.el, "opacity", shown || peek ? "" : "0");
+				setA(it.lab.el, "data-label", shown ? "shown" : peek ? "peek" : "hidden");
 				// A shown label or panel is part of its node (hover/click); a hidden
 				// one must not catch the pointer meant for what lies under it.
-				setS(lab.el, "pointerEvents", mem.shown && !off ? "auto" : "none");
+				setS(it.lab.el, "pointerEvents", shown && !it.off ? "auto" : "none");
 			}
 		};
 		kick.current = () => { if (!st.raf) st.raf = requestAnimationFrame(frame); };
@@ -901,6 +933,9 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 		e.preventDefault();
 	};
 
+	// The reserved corners change with the hint and the "Paused" chip.
+	useLayoutEffect(() => { measureReserved(); kick.current(); }, [hint, parkedUi]);
+
 	// Re-render cards when selection changes (their content shows it).
 	useEffect(() => { force((x) => x + 1); }, [selected]);
 
@@ -999,7 +1034,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 					</div>
 				);
 			})}
-			<div className="absolute right-2 top-2 flex items-center gap-1 z-[6000]" onPointerDown={(e) => e.stopPropagation()}>
+			<div ref={controlsEl} className="absolute right-2 top-2 flex items-center gap-1 z-[6000]" onPointerDown={(e) => e.stopPropagation()}>
 				{/* Zoomed in or moved: it holds still on purpose — say so, and offer the way back. */}
 				{parkedUi && !lit && (
 					<button type="button" onClick={reset} className="mr-1 inline-flex h-7 items-center gap-1 rounded-lg border border-ink-200 bg-card/90 px-2 text-micro text-ink-700 hover:border-ink-300 hover:text-ink-900">
@@ -1012,8 +1047,9 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 				<MouseHelp />
 			</div>
 			{/* How to use it — until the first time you do. */}
+			{/* On a card-coloured backing, and no label sits under it (reserved). */}
 			{hint && (
-				<div className="absolute left-3 top-2.5 z-[6000] text-nano text-ink-600 pointer-events-none transition-opacity">
+				<div ref={hintEl} className="absolute left-2 right-40 top-2 z-[6000] w-fit rounded-md bg-card/90 px-1.5 py-0.5 text-nano text-ink-600 pointer-events-none transition-opacity">
 					Drag to turn · two fingers or both buttons to move · scroll or pinch to zoom · click a dot to open it
 				</div>
 			)}
