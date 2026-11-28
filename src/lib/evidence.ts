@@ -131,6 +131,9 @@ export interface EvidenceStep {
 	duration_s: number;
 	n_passed?: number;
 	n_failed?: number;
+	/** The step's other declared metrics with a declared direction — what
+	 *  decides when its key metric ties. */
+	tieBreakers?: Array<{ name: string; label: string; unit: string; higherIsBetter: boolean }>;
 }
 
 export interface EvidenceNext { step: string; label: string; versions: string[]; labels: string[]; runs: number }
@@ -140,8 +143,10 @@ export interface Evidence {
 	/** Versions in order (declared first, then any seen only in results). */
 	versions: Array<{ id: string; label: string }>;
 	cells: Map<string, Map<string, EvidenceCell>>;
-	/** The best number at the furthest step anything (not failed) reached. */
-	best: { version: string; step: string; metric: string; value: number } | null;
+	/** The best number at the furthest step anything (not failed) reached.
+	 *  `tied`: every version showing that same number (incl. the best);
+	 *  `decidedBy`: the metric that broke the tie, when one did. */
+	best: { version: string; step: string; metric: string; value: number; tied?: string[]; decidedBy?: { name: string; label: string; unit: string; value: number } } | null;
 	/** Versions ready for the next step: they passed (or were measured at) step k
 	 *  and have no result at k+1. Furthest step first. Nothing runs without a press. */
 	next: EvidenceNext[];
@@ -241,11 +246,15 @@ export function evidenceOf(input: {
 		const h = metric ? humanMetric(metric) : { label: "", unit: "" };
 		const gate = gateOf(s);
 		const higher = declared?.better ? declared.better !== "lower" : metric === input.metric ? input.higherIsBetter ?? true : true;
+		const tieBreakers = s.metrics
+			.filter((m) => m.name && m.name !== metric && (m.better === "higher" || m.better === "lower"))
+			.map((m) => { const hm = humanMetric(m.name); return { name: m.name, label: hm.label, unit: hm.unit, higherIsBetter: m.better !== "lower" }; });
 		return {
 			step: s.step, label: input.steps.length ? humanId(s.step) : h.label || "Result", gated: !!gate,
 			...(gate ? { gateText: `Passes when ${ruleInWords(gate).replace(/^./, (c) => c.toLowerCase())}` } : {}),
 			metric, metricLabel: h.label, unit: h.unit, higherIsBetter: higher,
 			runs: 0, cost_usd: 0, duration_s: 0, ...(gate ? { n_passed: 0, n_failed: 0 } : {}),
+			...(tieBreakers.length ? { tieBreakers } : {}),
 		};
 	});
 
@@ -292,6 +301,34 @@ export function evidenceOf(input: {
 			const c = cells.get(v.id)!.get(st.step)!;
 			if (c.value == null || c.state === "failed") continue;
 			if (!best || (st.higherIsBetter ? c.value > best.value : c.value < best.value)) best = { version: v.id, step: st.step, metric: st.metric, value: c.value };
+		}
+	}
+	// A tie is a tie as the reader sees it: the same number at the shown
+	// precision (MLSys 9.2: 8 of 14 designs saturate at 22.4 tok/s, so "best"
+	// was an arbitrary pick). The step's next declared metric decides, when one
+	// separates them; otherwise the words say the metric can't tell them apart.
+	if (best) {
+		const b = best;
+		const st = steps.find((x) => x.step === b.step)!;
+		const shown = (x: number) => fmtMetricValue(x, st.unit, st.metric);
+		const tied = versions.filter((v) => {
+			const c = cells.get(v.id)!.get(b.step)!;
+			return c.value != null && c.state !== "failed" && shown(c.value) === shown(b.value);
+		}).map((v) => v.id);
+		if (tied.length > 1) {
+			b.tied = tied;
+			for (const tb of st.tieBreakers ?? []) {
+				const vals = tied
+					.map((id) => ({ id, x: Number(cells.get(id)!.get(b.step)!.metrics?.[tb.name]) }))
+					.filter((o) => Number.isFinite(o.x));
+				if (vals.length < 2) continue;
+				const pickBest = vals.reduce((a, o) => (tb.higherIsBetter ? (o.x > a.x ? o : a) : (o.x < a.x ? o : a)));
+				const fmt = (x: number) => fmtMetricValue(x, tb.unit, tb.name);
+				if (vals.filter((o) => fmt(o.x) === fmt(pickBest.x)).length > 1) continue;
+				b.version = pickBest.id;
+				b.decidedBy = { name: tb.name, label: tb.label, unit: tb.unit, value: pickBest.x };
+				break;
+			}
 		}
 	}
 
@@ -371,5 +408,14 @@ export function bestWords(ev: Evidence): string {
 	const st = ev.steps.find((s) => s.step === b.step)!;
 	const label = ev.versions.find((v) => v.id === b.version)?.label ?? humanId(b.version);
 	const num = `${st.metricLabel} ${fmtMetricValue(b.value, st.unit, st.metric)}`;
-	return `Best so far: ${label} — ${num}${ev.steps.length > 1 ? ` at ${st.label}` : ""}`;
+	const at = ev.steps.length > 1 ? ` at ${st.label}` : "";
+	const others = (b.tied?.length ?? 1) - 1;
+	if (others > 0 && b.decidedBy) {
+		return `Best so far: ${label} — ${num}${at}, tied with ${others} other${others === 1 ? "" : "s"}; `
+			+ `${b.decidedBy.label} decides (${fmtMetricValue(b.decidedBy.value, b.decidedBy.unit, b.decidedBy.name)})`;
+	}
+	if (others > 0) {
+		return `${others + 1} versions tie at ${num}${at} — it can't tell them apart. Add a metric that can, or a harder test.`;
+	}
+	return `Best so far: ${label} — ${num}${at}`;
 }
