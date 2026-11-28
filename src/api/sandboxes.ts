@@ -603,6 +603,12 @@ function makeClient(): AxiosInstance {
 
 const sbx = makeClient();
 
+/** This site's storage: shared folders + mirror + registry (everyone), the caller's own usage rows, every
+ *  user's rows for admins. Fed every 10 min by k8s-lift/storage-status; `public` is null until the first run. */
+export async function getStorage(site: string): Promise<import("../lib/storage-status").StorageStatus> {
+	return (await sbx.get(sbxUrl(site, "/api/storage"))).data;
+}
+
 export async function whoami(site = PUBLIC_SANDBOX_SITE): Promise<{ email: string; user: string; admin: boolean }> {
 	return (await sbx.get(sbxUrl(site, "/api/whoami"))).data;
 }
