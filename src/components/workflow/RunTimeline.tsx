@@ -14,7 +14,7 @@
 // lib/run-timeline.ts.
 
 import { useRef, useState } from "react";
-import { AlertTriangle, Check, X } from "lucide-react";
+import { AlertTriangle, Check, Minus, PauseCircle, X } from "lucide-react";
 import type { MeRunStepEvent } from "@/api/me";
 import { buildTimeline } from "@/lib/run-timeline";
 import { cn } from "@/lib/utils";
@@ -44,16 +44,21 @@ export default function RunTimeline({ events, app, running }: { events: MeRunSte
 						<div className="flex flex-wrap gap-1">
 							{g.rows.map((r) => (
 								<button key={r.i} type="button" onClick={() => jump(r.i)}
-									title={`${r.name}${r.duration ? ` · ${r.duration}` : ""}${r.ok ? "" : " · failed"}`}
-									aria-label={`${r.name}, ${r.running ? "running" : r.ok ? "done" : "failed"}`}
+									title={`${r.name}${r.duration ? ` · ${r.duration}` : ""}${r.held ? " · held (not run)" : r.ok ? "" : " · failed"}`}
+									aria-label={`${r.name}, ${r.running ? "running" : r.held ? "held, not run" : r.ok ? "done" : "failed"}`}
 									className={cn("w-3.5 h-3.5 rounded-[3px] transition-transform hover:scale-125 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40",
-										r.running ? "bg-lagoon-400 animate-lumen-breathe" : r.ok ? "bg-gold-400" : "bg-brick-500",
+										r.running ? "bg-lagoon-400 animate-lumen-breathe" : r.held ? "bg-card border border-dashed border-ink-400" : r.ok ? "bg-gold-400" : "bg-brick-500",
 										hl === r.i && "ring-2 ring-gold-500 ring-offset-1")} />
 							))}
 						</div>
 					</div>
 				))}
 			</div>
+			{t.held && !t.failure && (
+				<div className="flex items-start gap-1.5 text-caption text-ink-700">
+					<PauseCircle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0 text-ember-600" aria-hidden /> {t.held}
+				</div>
+			)}
 			{t.failure && (
 				<div className="flex items-start gap-1.5 text-caption text-brick-700">
 					<AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" aria-hidden /> {t.failure}
@@ -69,13 +74,13 @@ export default function RunTimeline({ events, app, running }: { events: MeRunSte
 						<span className="font-mono text-nano text-ink-600 tabular-nums">{r.offset}</span>
 						<span className="self-start pt-1" aria-hidden>
 							{r.running ? <span className="block w-2 h-2 rounded-full bg-lagoon-500 animate-lumen-breathe" />
-								: r.ok ? <Check className="w-3 h-3 text-gold-600" /> : <X className="w-3 h-3 text-brick-600" />}
+								: r.held ? <Minus className="w-3 h-3 text-ink-500" /> : r.ok ? <Check className="w-3 h-3 text-gold-600" /> : <X className="w-3 h-3 text-brick-600" />}
 						</span>
 						<span className="min-w-0">
 							<span className="text-caption font-medium text-ink-900">{r.name}</span>
 							{r.kind && <span className="ml-1.5 text-nano text-ink-600">{r.kind}</span>}
 							{!r.ok && <span className="sr-only"> failed</span>}
-							{r.summary && <span className={cn("block text-micro leading-snug line-clamp-2", r.ok ? "text-ink-600" : "text-brick-700")} title={r.summary}>{r.summary}</span>}
+							{r.summary && <span className={cn("block text-micro leading-snug line-clamp-2", r.held ? "text-ember-700" : r.ok ? "text-ink-600" : "text-brick-700")} title={r.summary}>{r.summary}</span>}
 						</span>
 						<span className="text-micro text-ink-600 tabular-nums">{r.running ? "running" : r.duration}</span>
 					</li>

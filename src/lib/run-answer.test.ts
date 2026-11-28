@@ -1,7 +1,10 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 // Fixtures are trimmed copies of real lum.id cycles (2026-11-24).
 import type { MeCycleDetail } from "@/api/me";
-import { humanMetric, fmtMetricValue, primaryMetricKey, runMetrics, stepFailed, stepLabel, stepLine, runAnswer, vsUsual, runOutputs, runLimits, measuredOn, measuredLine, runFiles } from "./run-answer";
+import { humanMetric, fmtMetricValue, primaryMetricKey, runMetrics, stepFailed, stepLabel, stepLine, runAnswer, vsUsual, runOutputs, runLimits, measuredOn, measuredLine, runFiles,
+	notRun, retryWords, retryAtSec, runEndSec, gateStop, gateMissing, stepHeld, runGate, gateBasis, gateWords, meetsOp, runExperiment, primaryHigherIsBetter, isMeasuredRun,
+	isFlagKey, isCountKey, beforeAfter, notApplied, sameVersionRuns } from "./run-answer";
+import { RUN_NOT_MEASURED, RUN_GPU_ENERGY, RUN_GATE_STOPPED, RUN_CALIBRATE_TOO_FEW, RUN_PAGE_CONTEXT } from "@/dev/run-page-fixtures";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -165,6 +168,116 @@ check("files: inlined documents and sidecars become files; results.json always",
 	eq(f[1].label, "Design");
 	if (!f[1].content.includes('"schema": "mlab.v1"')) throw new Error("design not pretty JSON");
 	eq(runFiles({ ok: true, steps: [], summary: {} } as unknown as MeCycleDetail), []);
+});
+
+// ── round 10 (2026-11-28): one verdict per run page ─────────────────────
+const NOW = 1795865046.765 + 3600; // an hour after the refused run ended
+check("a refused / not-measured run didn't run: not Succeeded, the app's reason, a retry time", () => {
+	const a = runAnswer(RUN_NOT_MEASURED, { now: NOW });
+	eq([a.tone, a.headline], ["not_run", "Didn't run"]);
+	eq(a.sentence.startsWith("Not measured on a GPU: your daily budget of 12 GPU measurements is used"), true);
+	if (!a.retry?.startsWith("Try again after ")) throw new Error(String(a.retry));
+	if (!a.retry.endsWith("(in about 4 h)")) throw new Error(a.retry);
+	eq(notRun(RUN_GPU_ENERGY), null);
+	// The retry time is said in words, never as a "Retry after 18,000" tile.
+	eq(runMetrics(RUN_NOT_MEASURED, 99).some((m) => m.key === "retry_after"), false);
+	eq(notRun(simulate), null);
+});
+check("not run without the app's words, and the retry forms", () => {
+	const d = { ok: true, ts: "20261128T000000Z", summary: { duration_s: 10, metrics: { status: "not_measured", retry_after: "2026-11-28T01:00:00Z" } }, steps: [] } as unknown as MeCycleDetail;
+	const nr = notRun(d, Date.UTC(2026, 10, 28, 0, 30) / 1000)!;
+	eq(nr.sentence, "It wasn't measured");
+	eq(nr.retry, "Try again in about 30 min");
+	eq(retryAtSec({ ...d, summary: { duration_s: 10, metrics: { status: "not_measured", retry_after: 600 } } } as unknown as MeCycleDetail), Date.UTC(2026, 10, 28) / 1000 + 610);
+	eq(retryWords(100, 200), "You can try again now");
+	eq(retryWords(10_000 + 7200, 10_000, () => "3:00 AM").startsWith("Try again after 3:00 AM"), true);
+	eq(runAnswer({ ...d, ok: false } as unknown as MeCycleDetail).tone, "failed");
+});
+check("a gate stop is one verdict: Stopped after Simulate, the missed limit, the held step", () => {
+	const a = runAnswer(RUN_GATE_STOPPED);
+	eq(a.tone, "stopped");
+	eq(a.headline, "Stopped after Simulate");
+	eq(a.sentence, "Missed TTFT p99 (2,173.1 ms > 2,000 ms); Sandbox held (not run)");
+	const g = gateStop(RUN_GATE_STOPPED)!;
+	eq(g.held, ["Sandbox"]);
+	eq(gateStop(RUN_GPU_ENERGY), null);
+});
+check("a held step neither failed nor succeeded", () => {
+	const held = RUN_GATE_STOPPED.steps[1];
+	eq([stepHeld(held), stepFailed(held), stepLine(held)], [true, false, "Held (not run)"]);
+	eq(stepHeld(harvest.steps![0]), false);
+});
+check("limits: raw and calibrated side by side; which numbers the gate checks", () => {
+	const L = runLimits(RUN_GATE_STOPPED);
+	eq(L.map((l) => [l.label, l.observed, l.met, l.calibrated?.observed, l.calibrated?.met]), [["TTFT p99", "2,173.1 ms", false, "1,281 ms", true], ["Completion rate", "100%", true, "100%", true]]);
+	const gate = runGate(RUN_GATE_STOPPED);
+	eq(gate, "calibrated_meets_constraints >= 1");
+	eq(gateBasis(gate), "calibrated");
+	eq(gateBasis("meets_constraints >= 1"), "raw");
+	eq(gateWords("calibrated_meets_constraints >= 1 and n >= 30"), "Calibrated meets constraints ≥ 1 and n ≥ 30");
+	eq(runGate(simulate, "score >= 0.5"), "score >= 0.5");
+	// Simulate's own results lacked the number its gate reads: say so.
+	eq(gateMissing(RUN_GATE_STOPPED)?.words, "Simulate's results didn't include Calibrated meets constraints, so its gate couldn't pass");
+	eq(gateMissing(RUN_GPU_ENERGY), null);
+	eq([meetsOp(1, "<", 2), meetsOp(2, ">=", 2), meetsOp(1, "~", 2)], [true, true, null]);
+});
+check("the experiment's own metric leads, its limits are pinned next to it", () => {
+	const e = runExperiment(RUN_GPU_ENERGY, RUN_PAGE_CONTEXT.experiments)!;
+	eq(e.id, "serve_9_2_energy");
+	eq(primaryMetricKey(RUN_GPU_ENERGY, e), "estimated_energy_j_per_tok");
+	eq(primaryHigherIsBetter(RUN_GPU_ENERGY, e), false);
+	const ms = runMetrics(RUN_GPU_ENERGY, 6, e);
+	eq(ms.slice(0, 3).map((m) => m.key), ["estimated_energy_j_per_tok", "ttft_ms_p99", "completion_rate"]);
+	// Measured on the GPU: the estimate's name, a measurement's label.
+	eq([ms[0].label, ms[0].text], ["Energy", "0.366 J per token"]);
+	// No experiment, or the experiment's metric wasn't recorded: the app's metric.
+	eq(primaryMetricKey(RUN_GPU_ENERGY), "goodput_tok_s");
+	eq(primaryMetricKey(RUN_NOT_MEASURED, runExperiment(RUN_NOT_MEASURED, RUN_PAGE_CONTEXT.experiments)), null);
+	eq(runExperiment(RUN_GATE_STOPPED, RUN_PAGE_CONTEXT.experiments)?.id, "serve_9_2");
+	eq(runExperiment(RUN_GPU_ENERGY, []), null);
+});
+check("units: J, W, per token, per request, GiB; estimated said unless measured", () => {
+	eq(humanMetric("energy_j_per_tok"), { label: "Energy", unit: "J per token" });
+	eq(humanMetric("energy_j_per_req_net"), { label: "Energy (net)", unit: "J per request" });
+	eq(humanMetric("power_w_avg"), { label: "Power (average)", unit: "W" });
+	eq(humanMetric("energy_j"), { label: "Energy", unit: "J" });
+	eq(humanMetric("kv_peak_gib"), { label: "KV peak", unit: "GiB" });
+	eq(humanMetric("estimated_energy_j_per_req"), { label: "Energy (estimated)", unit: "J per request" });
+	eq(humanMetric("estimated_energy_j_per_req", { measured: true }), { label: "Energy", unit: "J per request" });
+	eq(fmtMetricValue(40.98, "J per request"), "40.98 J per request");
+	eq(isMeasuredRun(RUN_GPU_ENERGY), true);
+	eq(isMeasuredRun(RUN_CALIBRATE_TOO_FEW), false);
+});
+check("flags read yes/no; counts get no 'vs usual'", () => {
+	eq(fmtMetricValue(1, "", "calibrated_meets_constraints"), "yes");
+	eq(fmtMetricValue(0, "", "meets_all_workloads"), "no");
+	eq(fmtMetricValue(1, "", "same_gpu_as_simulated"), "yes");
+	eq(fmtMetricValue(0, "", "holdouts_met"), "0");
+	eq(fmtMetricValue(1.8502, "", "ratio_ttft_ms_p99"), "×1.85");
+	eq(humanMetric("ratio_ttft_ms_p99"), { label: "TTFT p99 ratio", unit: "" });
+	eq(humanMetric("ratio_decode_tok_s"), { label: "Decode ratio", unit: "" });
+	eq([isCountKey("n_designs"), isCountKey("energy_n_models"), isCountKey("resamples_asked"), isCountKey("goodput_tok_s"), isCountKey("error_after_pct")], [true, true, true, false, false]);
+	eq([isFlagKey("calibrated"), isFlagKey("calibrated_goodput_tok_s"), isFlagKey("meets_constraints")], [true, false, true]);
+});
+check("before → after: one line, better or worse, with the run's own status words", () => {
+	const p = beforeAfter(RUN_CALIBRATE_TOO_FEW);
+	eq(p.map((x) => [x.label, x.text, x.better]), [["Error", "64.8% → 136.4% (worse; not applied: 1 more design needed)", false]]);
+	eq(notApplied(RUN_CALIBRATE_TOO_FEW), "not applied: 1 more design needed");
+	const fitted = { ok: true, summary: { metrics: { status: "fitted", error_before_pct: 73.1, error_after_pct: 10.9 } }, steps: [] } as unknown as MeCycleDetail;
+	eq(beforeAfter(fitted)[0].text, "73.1% → 10.9% (better)");
+	eq(beforeAfter(simulate), []);
+	// The pair is a line, not two tiles.
+	const ks = runMetrics(RUN_CALIBRATE_TOO_FEW, 99).map((m) => m.key);
+	eq(ks.includes("error_before_pct") || ks.includes("error_after_pct"), false);
+});
+check("vs usual reads the same version's runs", () => {
+	const rows = [{ ts: "a", branch_label: "v1" }, { ts: "b", branch_label: "v2" }, { ts: "c" }];
+	eq(sameVersionRuns(rows, "v1").map((r) => r.ts), ["a"]);
+	eq(sameVersionRuns(rows, null).length, 3);
+});
+check("when the run ended", () => {
+	eq(runEndSec(RUN_NOT_MEASURED), 1795865046.765);
+	eq(runEndSec({ ts: "20261128T000000Z", summary: { duration_s: 5 }, steps: [] } as unknown as MeCycleDetail), Date.UTC(2026, 10, 28) / 1000 + 5);
 });
 
 export function run(): number {

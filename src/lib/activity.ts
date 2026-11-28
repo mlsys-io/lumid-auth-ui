@@ -45,6 +45,9 @@ export interface WorkflowActivity {
 	typicalS?: number;
 	costCents: number;
 	failing?: FailingStreak;
+	/** Runs that finished without doing the work (refused, not measured): not
+	 *  successes, not failures — counted apart ("2 didn't run"). */
+	didntRun: number;
 }
 
 export interface AppActivity {
@@ -77,6 +80,27 @@ export function loopOfRun(r: MeRunRow): string {
 	return i >= 0 ? slug.slice(i + 1) : slug || r.name || "";
 }
 
+// The words a run row's `reason` carries when the run was refused or could not
+// be measured (a daily GPU cap, no free worker). Identity copies the run's
+// outcome into `reason`; an app reports these as its status/outcome.
+const DIDNT_RUN = /^(not[_ ]measured|not[_ ]run|didn'?t[_ ]run|refused|over[_ ]budget|daily[_ ]cap|no[_ ]worker)\b/i;
+
+/** A finished run that didn't do the work: it neither succeeded nor failed. */
+export function didntRun(r: Pick<MeRunRow, "state" | "reason">): boolean {
+	return (r.state === "succeeded" || r.state === "skipped") && DIDNT_RUN.test((r.reason || "").trim());
+}
+
+/** "67 runs" · "67 runs · 2 didn't run". */
+export function runCountWords(wf: Pick<WorkflowActivity, "runs" | "didntRun">): string {
+	const n = wf.runs.length;
+	return `${n} run${n === 1 ? "" : "s"}${wf.didntRun ? ` · ${wf.didntRun} didn't run` : ""}`;
+}
+
+/** "1 result" / "3 results" — a count and its noun, singular when it is one. */
+export function plural(n: number, noun: string, many = `${noun}s`): string {
+	return `${n.toLocaleString()} ${n === 1 ? noun : many}`;
+}
+
 function sparkChar(state: string): string {
 	switch (state) {
 		case "succeeded": return "o";
@@ -102,28 +126,32 @@ function summarise(key: string, app: string, loop: string, rowsNewestFirst: MeRu
 
 	// The strip: newest 14, drawn oldest → newest.
 	const stripRuns = runs.slice(0, SPARK_MAX).reverse();
-	const spark = stripRuns.map((r) => sparkChar(r.state)).join("");
+	// A run that didn't run is not a gold success on the strip: it draws as a skip.
+	const charOf = (r: MeRunRow) => (didntRun(r) ? "_" : sparkChar(r.state));
+	const spark = stripRuns.map(charOf).join("");
 	const sparkRuns: SparkRun[] = stripRuns.map((r) => ({
 		ts: parseScheduledRunId(r.run_id)?.runId || "",
-		st: sparkChar(r.state),
+		st: charOf(r),
 	}));
 
 	// "Usually takes": successful runs first (a failure often dies early);
 	// fall back to every finished run when there are too few successes.
-	const okDur = finished.filter((r) => r.state === "succeeded" && (r.duration_s || 0) > 0).map((r) => r.duration_s as number);
-	const anyDur = finished.filter((r) => (r.duration_s || 0) > 0).map((r) => r.duration_s as number);
+	const okDur = finished.filter((r) => r.state === "succeeded" && !didntRun(r) && (r.duration_s || 0) > 0).map((r) => r.duration_s as number);
+	const anyDur = finished.filter((r) => !didntRun(r) && (r.duration_s || 0) > 0).map((r) => r.duration_s as number);
 	const typicalS = median(okDur.length >= 2 ? okDur : anyDur);
 
 	// A failing streak = consecutive failures ending at the latest finished run.
-	// Skipped runs don't break it (a skip is "nothing to do", not a recovery).
+	// Skipped runs don't break it (a skip is "nothing to do", not a recovery),
+	// and neither does a run that didn't run: it proves nothing works.
 	let failing: FailingStreak | undefined;
-	if (latestFinished?.state === "failed") {
+	const latestDecisive = finished.find((r) => !didntRun(r) && r.state !== "skipped" && r.state !== "canceled");
+	if (latestDecisive?.state === "failed") {
 		let count = 0;
-		let oldest = latestFinished;
+		let oldest = latestDecisive;
 		let brokeOnSuccess = false;
 		for (const r of finished) {
 			if (r.state === "failed") { count++; oldest = r; continue; }
-			if (r.state === "skipped" || r.state === "canceled") continue;
+			if (r.state === "skipped" || r.state === "canceled" || didntRun(r)) continue;
 			brokeOnSuccess = true;
 			break;
 		}
@@ -131,9 +159,9 @@ function summarise(key: string, app: string, loop: string, rowsNewestFirst: MeRu
 			count,
 			sinceSec: oldest.started_at,
 			coversWindow: !brokeOnSuccess,
-			cause: plainCause(latestFinished.reason),
-			rawReason: latestFinished.reason || "",
-			latestRunId: latestFinished.run_id,
+			cause: plainCause(latestDecisive.reason),
+			rawReason: latestDecisive.reason || "",
+			latestRunId: latestDecisive.run_id,
 		};
 	}
 
@@ -143,6 +171,7 @@ function summarise(key: string, app: string, loop: string, rowsNewestFirst: MeRu
 		runs, latestFinished, running, spark, sparkRuns, typicalS,
 		costCents: runs.reduce((s, r) => s + (r.cost_cents || 0), 0),
 		failing,
+		didntRun: finished.filter(didntRun).length,
 	};
 }
 
@@ -241,6 +270,13 @@ export function plainCause(reason?: string | null): string {
 	if (stage) {
 		const step = sentence(stage[1].replace(/[_-]+/g, " "));
 		return stage[2].trim() ? clip(`At ${step}: ${plainCause(stage[2])}`) : `At ${step}`;
+	}
+
+	// "sandbox:None failed: no error text" — a step that failed and said nothing.
+	const silent = s.match(/^([\w-]+)(?::[\w-]+)? failed: no error text\.?$/i);
+	if (silent) {
+		const w = silent[1].replace(/[_-]+/g, " ").trim();
+		return `${w.charAt(0).toUpperCase()}${w.slice(1)} failed without an error message`;
 	}
 
 	// "every arm failed: {...}" — every version of an experiment failed.

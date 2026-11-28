@@ -22,7 +22,7 @@ import AskAbout from "@/components/AskAbout";
 import RunAnswerCard from "@/components/workflow/RunAnswerCard";
 import RunTimeline from "@/components/workflow/RunTimeline";
 import { timelineWorthShowing } from "@/lib/run-timeline";
-import { stepFailed, stepLabel, stepLine, humanMetric, runAnswer } from "@/lib/run-answer";
+import { stepFailed, stepHeld, stepLabel, stepLine, humanMetric, runAnswer } from "@/lib/run-answer";
 import { triageFailure } from "@/lib/failure-triage";
 import StepInspectorPanel from "@/components/workflow/StepInspectorPanel";
 import TrajectoryLogView from "@/components/workflow/TrajectoryLogView";
@@ -325,11 +325,13 @@ export function RunDetail({
 			</div>
 		);
 	}
+	const answer = runAnswer(detail, { ok: listRow?.ok, running: listRow?.running });
+	// One verdict: the chip says what the answer card says (a run that didn't
+	// run, or that a gate stopped, is not "Succeeded").
 	const info = detail?.running || listRow?.running
 		? runStatus("running")
-		: cycleStatus({ ok: detail?.ok ?? listRow?.ok, running: false });
+		: cycleStatus({ ok: detail?.ok ?? listRow?.ok, running: false, outcome: answer.tone === "not_run" || answer.tone === "stopped" ? answer.tone : null });
 	const failed = info.status === "failed";
-	const answer = runAnswer(detail, { ok: listRow?.ok, running: listRow?.running });
 	const chatCtaInCard = answer.tone === "failed" && !!triageFailure(answer.raw || answer.sentence, app, loop).cta?.ask;
 	const steps = detail?.steps || [];
 	const duration = listRow?.duration_s ?? (typeof detail?.summary?.duration_s === "number" ? detail.summary.duration_s as number : undefined);
@@ -436,7 +438,7 @@ export function RunDetail({
 							{steps.map((st, i) => {
 								const id = stepIdOf(st, i);
 								const open = openStep === id;
-								const sInfo = stepFailed(st) ? runStatus("failed") : runStatus("succeeded");
+								const sInfo = stepHeld(st) ? runStatus("not_run") : stepFailed(st) ? runStatus("failed") : runStatus("succeeded");
 								const line = stepLine(st);
 								return (
 									<li key={`${id}-${i}`} className={cn("rounded-lg border", open ? "border-gold-300" : "border-ink-200")}>
@@ -448,7 +450,7 @@ export function RunDetail({
 											<span className="text-caption font-medium text-ink-900 flex-shrink-0" title={id}>{stepLabel(st)}</span>
 											<RunStatusChip info={sInfo} className="flex-shrink-0" />
 											{st.duration_s != null && <span className="text-micro text-ink-600 tabular-nums flex-shrink-0">{fmtDur(st.duration_s)}</span>}
-											<span className={cn("text-micro line-clamp-2 min-w-0 text-left", stepFailed(st) ? "text-brick-700" : "text-ink-600")} title={line}>{line}</span>
+											<span className={cn("text-micro line-clamp-2 min-w-0 text-left", stepFailed(st) ? "text-brick-700" : stepHeld(st) ? "text-ember-700" : "text-ink-600")} title={line}>{line}</span>
 										</button>
 										{open && (
 											<div className="px-2 pb-2 space-y-1.5">

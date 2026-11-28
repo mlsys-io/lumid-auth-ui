@@ -1,6 +1,6 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 import type { MeRunStepEvent } from "@/api/me";
-import { buildTimeline, fmtOffset, stepName, timelineWorthShowing, estimateSteps } from "./run-timeline";
+import { buildTimeline, fmtOffset, stepName, timelineWorthShowing, estimateSteps, eventHeld } from "./run-timeline";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -52,6 +52,17 @@ check("worth showing", () => {
 	eq(timelineWorthShowing([ev("engine_command", "act", 0, 60)]), true);
 	eq(timelineWorthShowing([ev("a", null, 0, 1), ev("b", null, 1, 2)]), true);
 	eq(timelineWorthShowing(undefined), false);
+});
+
+check("a held stage reads held (not run), not failed", () => {
+	const t = buildTimeline([ev("simulate", null, 0, 1, true, "done", "stage"), { step_id: "sandbox", stage: null, kind: "stage", started_at: null, ended_at: null, ok: false, summary: "held" }]);
+	eq(t.failure, null);
+	eq(t.held, "Sandbox held (not run)");
+	eq([t.rows[1].held, t.rows[1].ok, t.rows[1].summary], [true, true, "held (not run)"]);
+	eq(eventHeld({ ok: false, summary: "Held" }), true);
+	eq(eventHeld({ ok: true, summary: "held" }), false);
+	// A real failure still says so.
+	eq(buildTimeline([ev("x", null, 0, 1, false, "boom")]).held, null);
 });
 
 export function run(): number {

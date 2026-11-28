@@ -10,6 +10,7 @@ import { useState } from "react";
 import { Download, FileJson, FileText } from "lucide-react";
 import type { MeCycleDetail } from "@/api/me";
 import { runFiles, runOutputs, type RunFile } from "@/lib/run-answer";
+import { humanValue } from "@/lib/run-tables";
 import RunChildren from "@/components/workflow/RunChildren";
 import JsonView from "@/components/JsonView";
 import WarehouseActivity from "@/components/workflow/WarehouseActivity";
@@ -90,7 +91,7 @@ export default function RunOutputs({ detail, onFullOutput, runRef }: { detail: M
 							{o.fields.map((f) => (
 								<div key={f.label} className="contents">
 									<dt className="text-ink-600">{f.label}</dt>
-									<dd className="text-ink-900 break-words">{f.value}</dd>
+									<dd className="text-ink-900 break-words">{humanValue(f.value)}</dd>
 								</div>
 							))}
 						</dl>

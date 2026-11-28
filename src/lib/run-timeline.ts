@@ -17,13 +17,24 @@ export interface TimelineRow {
 	stage: string;      // label ("Act"), "" when the run named none
 	kind: string;       // in words
 	ok: boolean;
+	/** A gate held this step back: it didn't run, and it didn't fail. */
+	held: boolean;
 	running: boolean;
 	offset: string;     // "+0:19"
 	duration: string;   // "33s", "" when unknown
 	summary: string;
 }
 export interface TimelineGroup { stage: string; rows: TimelineRow[] }
-export interface Timeline { groups: TimelineGroup[]; rows: TimelineRow[]; failure: string | null; total: string }
+export interface Timeline {
+	groups: TimelineGroup[]; rows: TimelineRow[]; failure: string | null; total: string;
+	/** "Sandbox held (not run)" when a gate held steps back; null otherwise. */
+	held: string | null;
+}
+
+/** A step a gate held back (a chain records `{ok: false, summary: "held"}`). */
+export function eventHeld(e: Pick<MeRunStepEvent, "ok" | "summary">): boolean {
+	return e.ok === false && (e.summary || "").trim().toLowerCase() === "held";
+}
 
 /** "engine_command" → "Ran the app's command"; "score_docs" → "Score docs". */
 export function stepName(id: string, app = ""): string {
@@ -46,16 +57,18 @@ export function buildTimeline(events: MeRunStepEvent[], opts: { app?: string; ru
 	const rows: TimelineRow[] = events.map((e, i) => {
 		const running = !!opts.running && e.ended_at == null && i === events.length - 1;
 		const d = e.started_at != null && e.ended_at != null ? e.ended_at - e.started_at : null;
+		const held = eventHeld(e);
 		return {
 			i,
 			name: stepName(e.step_id, opts.app),
 			stage: e.stage ? STAGE_LABEL[e.stage] ?? "" : "",
 			kind: KIND_WORD[e.kind ?? ""] ?? "",
-			ok: e.ok !== false,
+			ok: e.ok !== false || held,
+			held,
 			running,
 			offset: start != null && e.started_at != null ? fmtOffset(e.started_at - start) : "",
 			duration: d != null && d >= 0 ? fmtDuration(d) : "",
-			summary: e.ok === false ? plainCause(e.summary || "") : (e.summary || ""),
+			summary: held ? "held (not run)" : e.ok === false ? plainCause(e.summary || "") : (e.summary || ""),
 		};
 	});
 	// Groups follow the run's own order; consecutive steps of one stage share
@@ -68,9 +81,11 @@ export function buildTimeline(events: MeRunStepEvent[], opts: { app?: string; ru
 	}
 	const bad = rows.find((r) => !r.ok);
 	const failure = bad ? `Failed at ${bad.stage ? `${bad.stage} — ` : ""}${bad.name}: ${bad.summary}` : null;
+	const heldRows = rows.filter((r) => r.held);
+	const held = heldRows.length ? `${heldRows.map((r) => r.name).join(", ")} held (not run)` : null;
 	const ends = events.map((e) => e.ended_at ?? e.started_at ?? NaN).filter((x) => isFinite(x));
 	const total = start != null && ends.length ? fmtDuration(Math.max(...ends) - start) : "";
-	return { groups, rows, failure, total };
+	return { groups, rows, failure, total, held };
 }
 
 /** Worth a timeline? One unstaged command step says nothing the answer card
