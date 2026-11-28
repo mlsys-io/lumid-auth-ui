@@ -177,8 +177,11 @@ function RunReady({ app, e, next }: { app: string; e: MeExperiment; next?: Evide
 			for (const id of next.versions) {
 				const { id: _id, description: _d, ...overrides } = (arms.get(id) || { id }) as Record<string, unknown>;
 				// Through THIS step, not the whole chain: the steps after it wait
-				// for their own press (until_step — the engine holds them).
-				const r = await me.enqueueRuns(app, loop, { variants: [{ ...overrides, arm: id }], branch_label: id, priority: 50, experiment_id: e.id, args: { until_step: next.step } });
+				// for their own press (until_step — the engine holds them). And
+				// FROM this step: the steps the version already passed with the same
+				// inputs and code are reused, not run again (from_step, LumidOS
+				// scheduler v0.4.134; quant re-ran 6 + 9 min a version before it).
+				const r = await me.enqueueRuns(app, loop, { variants: [{ ...overrides, arm: id }], branch_label: id, priority: 50, experiment_id: e.id, args: { from_step: next.step, until_step: next.step } });
 				intents.push(r.intent_id);
 			}
 			setSent({ intents, labels: next.labels });
