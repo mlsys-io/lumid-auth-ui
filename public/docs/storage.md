@@ -14,7 +14,7 @@ Your paths did not change. This page says which folder to use for what, and the 
 | **Local disk** | `/scratch` (sandbox) | build output, temporary data, caches | 50 GiB per person per machine |
 | **Models** | `/mnt/hf-hot` (office), `/huggingface` | model weights | 100 GB cache per machine |
 | **Images** | `harbor.lum.id/<project>/<name>:<tag>` | container images | 150 GB per office machine |
-| **Big data** | `/mnt/datasets` (office), central storage per cluster | datasets, anything shared | — |
+| **Big data** | `/mnt/datasets` (every cluster) | datasets, anything shared | — |
 
 ---
 
@@ -24,8 +24,8 @@ Same path on every machine you log into.
 
 **Capped at 500 GiB per person per machine — a hard limit.** At the cap, writes fail with
 "Disk quota exceeded" until you delete files or move big data to `/mnt/datasets`. Check your usage
-with `quota -s`. In force on office luyao0 and luyao3 since 2026-11-28; luyao1, luyao2, luyao4 and NUS
-follow at their next maintenance window.
+with `quota -s`. In force on the office machines since 2026-11-28; NUS and home follow at their next
+maintenance window.
 
 | Where you are | Your home is stored on | Notes |
 |---|---|---|
@@ -88,9 +88,12 @@ Large datasets and anything shared belong here, not in your home or on a local d
 
 | Cluster | Where | Space | Notes |
 |---|---|---|---|
-| **Office** | **QNAP NAS** (`192.168.6.150`) | ~43 TB free | **`/mnt/datasets` on every office machine** (luyao0–luyao4). Make a folder per project; anyone can read it, only the owner can delete. About 110 MB/s, so copy what a job reads hard to `/scratch` first. Not backed up. In office sandboxes, published datasets appear read-only at `/datasets`. luyao4's SSD (homes) is nearly full — do not put datasets there. |
-| **NUS** | storage-head `/data` (disk array, InfiniBand) | ~388 TB free | Datasets in `/data/data`, models in `/data/huggingface`. One disk array — not a backup. |
-| **Home** | n5-max pool `tank` | ~95 TB free | Sandbox homes, shared data. |
+| **Office** | QNAP NAS (`192.168.6.150`) | ~43 TB free | **`/mnt/datasets`** on luyao0–luyao4. About 110 MB/s today (the NAS link is 1 Gb/s), so copy what a job reads hard to `/scratch` first. luyao4's SSD (homes) is nearly full — do not put datasets there. |
+| **NUS** | storage-head `/data/data` (disk array, over InfiniBand) | ~48 TB free | **`/mnt/datasets`** on s0 and h0 (also at `/data/data` on s0). Models in `/data/huggingface`. |
+| **Home** | n5-max pool `tank` (10 Gb/s) | ~76 TB free | **`/mnt/datasets`** on n5-max, luyaobox9 and luyaomini–luyaomini5. |
+
+The same path on every cluster: make a folder per project; anyone can read it, only the owner can
+delete it. **Not backed up.** In sandboxes, published datasets appear read-only at `/datasets`.
 
 **Tables: query them, do not copy them.** FinData and Lumid Data answer queries in place — see
 [Sandboxes §5](/studio/docs/sandboxes#5-data--query-it-do-not-copy-it) and
@@ -105,7 +108,7 @@ Large datasets and anything shared belong here, not in your home or on a local d
 2. Put scratch work on the local disk and copy results home.
 3. Load models from the shared store instead of downloading your own copy.
 4. Push the images you rely on to a **public** Harbor project and use the `harbor.lum.id` name.
-5. Put large datasets on your cluster's central storage — `/mnt/datasets` at office — and keep your
+5. Put large datasets in `/mnt/datasets` (every cluster) and keep your
    home under 500 GiB.
 
 Questions, missing files, a model to add to the shared store, or an image to restore: ask Yao.
