@@ -66,18 +66,20 @@ const DOT: Record<string, string> = {
 	failed: "bg-brick-500",
 };
 
-export default function RunVersions({ app, e, onQueued, only }: { app: string; e: MeExperiment; onQueued?: () => void;
+export default function RunVersions({ app, e, onQueued, only, tried }: { app: string; e: MeExperiment; onQueued?: () => void;
 	/** Just this version (a version's own panel). */
-	only?: string }) {
+	only?: string;
+	/** Versions with a row at any step (see triedVersions). */
+	tried?: string[] }) {
 	const key = only ? `${e.id}:${only}` : e.id;
 	const [busy, setBusy] = useState(false);
 	const [sent, setSentState] = useState<Sent | null>(() => sentByExperiment.get(key) ?? null);
 	const setSent = (s: Sent | null) => { if (s) sentByExperiment.set(key, s); else sentByExperiment.delete(key); setSentState(s); };
 	const [err, setErr] = useState<string | null>(null);
 	const loop = experimentLoop(e);
-	const all = versionsToRun(e);
+	const all = versionsToRun(e, tried);
 	const ids = only ? [only] : all.ids;
-	const untried = only ? !(e.variants?.[only]?.n) : all.untried;
+	const untried = only ? !(e.variants?.[only]?.n) && !(tried || []).includes(only) : all.untried;
 	const [over, setOver] = useState(false);
 	const prog = useBatch(app, sent, () => { setOver(true); sentByExperiment.delete(key); });
 	// Shared experiments are measured centrally (sharedLine): nothing to run here.

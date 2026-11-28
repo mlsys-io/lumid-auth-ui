@@ -43,11 +43,11 @@ check("a run side: findings only, settings in words", () => {
 	eq(s.values.meets_constraints, [1]);
 	eq(s.primary, "goodput_tok_s");
 	if (!/ · succeeded$/.test(s.sub)) throw new Error(s.sub);
-	eq(s.name, "Simulate · Util 0 8");
-	eq(s.label, "B (Simulate · Util 0 8)");
+	eq(s.name, "Simulate · Util 0.8");
+	eq(s.label, "B (Simulate · Util 0.8)");
 	const st = Object.fromEntries(s.settings);
 	eq([st.Workflow, st.Version, st["Measured on"], st.Data, st.Compute, st.Mode, st["Design ID"]],
-		["Simulate", "Util 0 8", "Simulated RTX 5080", "Exercise protocol v1 20 (version v0.1.2)", "RTX 5080 at office", "Paper", "baseline"]);
+		["Simulate", "Util 0.8", "Simulated RTX 5080", "Exercise protocol v1 20 (version v0.1.2)", "RTX 5080 at office", "Paper", "baseline"]);
 	eq(runSide({ loop: "kol_poll", ts: "x" }, null, 0).sub, "x · couldn't read this run");
 	eq(runSide({ loop: "kol_poll", ts: "x" }, null, 0).settings, [["Workflow", "KOL poll"]]);
 });
@@ -67,7 +67,7 @@ check("a version side: ledger rows when there are some, served averages when not
 	eq(a.sub, "1 result (averages only)");
 	const st = Object.fromEntries(a.settings);
 	eq([st.Experiment, st.Version, st.Workflow, st["What it changes"], st["Changes: Serving GPU memory utilization"], st["Judged on"]],
-		["Edge memory budget", "Util 0 95", "Simulate", "Reserve 95%.", "0.95", "Meets constraints"]);
+		["Edge memory budget", "Util 0.95", "Simulate", "Reserve 95%.", "0.95", "Meets constraints"]);
 	const withRows = { ...EXP, results: [{ ts: "1", variant_id: "util_0_8", metrics: { meets_constraints: 1, goodput_tok_s: 20 } }, { ts: "2", variant_id: "util_0_8", metrics: { meets_constraints: 1, goodput_tok_s: 21 } }] } as unknown as MeExperimentDetail;
 	const b = versionSide(withRows, "util_0_8", 1);
 	eq([b.values.goodput_tok_s, b.sub, b.stats], [[20, 21], "2 results", {}]);
@@ -128,14 +128,14 @@ check("chart scale starts at zero unless values cross it", () => {
 	eq(chartScale([0, 0]), { lo: 0, hi: 1, fromZero: true });
 });
 check("names: short ones ride in sentences; two alike get their time", () => {
-	eq(sideLabel("A", "Util 0 8"), "A (Util 0 8)");
+	eq(sideLabel("A", "Util 0.8"), "A (Util 0.8)");
 	eq(sideLabel("A", "Stock backtests · Tape covered, 27 Nov 12:44"), "A");
 	const a = runSide({ loop: "simulate", ts: "20261125T092430Z" }, cyc({ arm: "util_0_8" }), 0, "Simulate");
 	const b = runSide({ loop: "simulate", ts: "20261125T092423Z" }, cyc({ arm: "util_0_8" }), 1, "Simulate");
 	const c = runSide({ loop: "simulate", ts: "20261125T092419Z" }, cyc({ arm: "util_0_9" }), 2, "Simulate");
 	const n = distinctNames([a, b, c]);
-	if (n[0].name === n[1].name || !n[0].name.startsWith("Simulate · Util 0 8, ")) throw new Error(JSON.stringify(n.map((x) => x.name)));
-	eq(n[2].name, "Simulate · Util 0 9");
+	if (n[0].name === n[1].name || !n[0].name.startsWith("Simulate · Util 0.8, ")) throw new Error(JSON.stringify(n.map((x) => x.name)));
+	eq(n[2].name, "Simulate · Util 0.9");
 });
 check("metrics that differ come before ones that read the same", () => {
 	const a = runSide({ loop: "s", ts: "1" }, cyc({ alpha: 1, beta: 2 }), 0);

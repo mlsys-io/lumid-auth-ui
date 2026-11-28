@@ -45,7 +45,7 @@ import { fmtAgo } from "@/lib/activity";
 import {
 	buildResearchTree, comparabilityNote, criteriaInWords, experimentStatus, humanId, mapSummary, pathTo, versionsOf, OTHER_NODE, DOT_SIZE,
 	type MapEdge, type MapNode, type Proposal, type Tone, type VersionInfo,
-	shortStatus, rowStatus,
+	shortStatus, rowStatus, triedVersions,
 } from "@/lib/research-map";
 import { humanMetric, fmtMetricValue } from "@/lib/run-answer";
 import { workflowPath } from "@/lib/run-routes";
@@ -435,7 +435,9 @@ function MapCanvas({ fresh, app, exps, proposals, workflows, groups, rows, marks
 
 // The experiment's results over time (detail endpoint; identity v0.5.474
 // serves cloud apps from the run store). Cached per experiment.
-type SeriesData = { series: MeExperimentDetail["series"]; runningMean: boolean };
+// `tried`: every version with a ledger row at ANY step. A version a gate
+// stopped at its first step has no row for the experiment's metric, yet it ran.
+type SeriesData = { series: MeExperimentDetail["series"]; runningMean: boolean; tried: string[] };
 const seriesCache = new Map<string, SeriesData>();
 function useSeries(app: string, id: string) {
 	const key = `${app}:${id}`;
@@ -445,11 +447,15 @@ function useSeries(app: string, id: string) {
 		setS(seriesCache.get(key) ?? null);
 		me.experiment(app, id)
 			.then((d) => {
-				const v = { series: d.series || [], runningMean: (d as { series_kind?: string }).series_kind === "running_mean" };
+				const v = {
+					series: d.series || [],
+					runningMean: (d as { series_kind?: string }).series_kind === "running_mean",
+					tried: triedVersions(d.results),
+				};
 				seriesCache.set(key, v);
 				if (live) setS(v);
 			})
-			.catch(() => { if (live) setS((cur) => cur ?? { series: [], runningMean: false }); });
+			.catch(() => { if (live) setS((cur) => cur ?? { series: [], runningMean: false, tried: [] }); });
 		return () => { live = false; };
 	}, [app, id, key]);
 	return s;
@@ -636,7 +642,7 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 					{about}
 				</div>
 				<div className="flex flex-wrap items-center gap-1.5 border-t border-ink-100 bg-muted/30 px-3 py-2">
-					<RunVersions app={app} e={e} />
+					<RunVersions app={app} e={e} tried={seriesData?.tried} />
 					{onCompare && <div className="ml-auto"><Button size="sm" variant="ghost" onClick={onCompare}>Compare with…</Button></div>}
 				</div>
 			</div>
@@ -651,7 +657,7 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 			{grid}
 			{chain}
 			<YourCall app={app} e={e} />
-			<RunVersions app={app} e={e} />
+			<RunVersions app={app} e={e} tried={seriesData?.tried} />
 			<div className="flex items-center gap-2 flex-wrap pt-0.5">{links}</div>
 		</div>
 	);
@@ -664,6 +670,7 @@ function VersionPanel({ app, e, version, style, onClose, onBack, onCompare }: {
 	onClose: () => void; onBack: () => void; onCompare: () => void;
 }) {
 	const v = versionsOf(e).find((x) => x.id === version);
+	const versionSeries = useSeries(app, e.id);
 	const agg = e.variants?.[version];
 	const metric = e.metric?.name || e.metric_name || "";
 	const m = metric ? humanMetric(metric) : null;
@@ -707,7 +714,7 @@ function VersionPanel({ app, e, version, style, onClose, onBack, onCompare }: {
 				)}
 			</div>
 			<div className="flex flex-wrap items-center gap-1.5 border-t border-ink-100 bg-muted/30 px-3 py-2">
-				<RunVersions app={app} e={e} only={version} />
+				<RunVersions app={app} e={e} only={version} tried={versionSeries?.tried} />
 				<Button size="sm" variant="ghost" onClick={onCompare} className="ml-auto">Compare with…</Button>
 			</div>
 		</div>

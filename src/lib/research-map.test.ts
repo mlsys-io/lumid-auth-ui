@@ -2,7 +2,7 @@
 // Fixtures are trimmed copies of real lum.id experiments (2026-11-24).
 import type { MeExperiment } from "@/api/me";
 import { appPages, pageHref } from "./app-pages";
-import { humanId, experimentStatus, versionsOf, criteriaInWords, buildResearchTree, pathTo, mapSummary, comparabilityNote, suggestionParent, experimentLoop, versionsToRun, proposalCheck, shortStatus, batchProgress, type Proposal } from "./research-map";
+import { humanId, experimentStatus, versionsOf, criteriaInWords, buildResearchTree, pathTo, mapSummary, comparabilityNote, suggestionParent, experimentLoop, versionsToRun, triedVersions, proposalCheck, shortStatus, batchProgress, type Proposal } from "./research-map";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -25,6 +25,15 @@ const fresh = { id: "analyst_local_gpu", kind: "arms", status: "active", hypothe
 	arms: [{ id: "a" }, { id: "b" }], variants: {} } as unknown as MeExperiment;
 
 check("ids read as words", () => { eq(humanId("kol_alpha"), "KOL alpha"); eq(humanId("musk_llm_scored"), "Musk LLM scored"); });
+check("ids keep their decimals", () => {
+	eq(humanId("llm_1_7b").includes("1.7b"), true);
+	eq(humanId("util_0_95").includes("0.95"), true);
+	eq(humanId("llm_0_6b").includes("0.6b"), true);
+	eq(humanId("run_2026_11_28").includes("2026.11"), false);
+	eq(humanId("mom_6_1").includes("6.1"), false);
+	eq(humanId("qwen3_8b").includes("3.8"), false);
+	eq(humanId("baseline_momentum_12_1").includes("12.1"), false);
+});
 check("status: not comparable, in words", () => eq(experimentStatus(kol), { tone: "attention", text: "Can't compare yet — the versions ran under 18 different setups" }));
 check("status: confirmed winner", () => eq(experimentStatus(won), { tone: "ok", text: "Winning: Plain style" }));
 check("status: never ran / starved / unfed", () => {
@@ -125,6 +134,9 @@ check("which versions a Run button starts, and from which workflow", () => {
 	eq(versionsToRun(kol), { ids: ["current", "musk_v1", "musk_llm_scored"], untried: false });
 	// Measured centrally for everyone: nothing for this install to run.
 	eq(versionsToRun({ ...kol, shared: true } as MeExperiment), { ids: [], untried: false });
+	// A version stopped at its first gate ran: it is not "untried".
+	eq(versionsToRun(fresh, triedVersions([{ variant_id: "a" }, { variant_id: "a" }])), { ids: ["b"], untried: true });
+	eq(versionsToRun(fresh, ["a", "b"]), { ids: ["a", "b"], untried: false });
 	eq(versionsToRun({ ...kol, variants: { current: { n: 3, mean: 1 } } } as unknown as MeExperiment), { ids: ["musk_v1", "musk_llm_scored"], untried: true });
 	eq(experimentLoop({ ...kol, dispatch: { loop: "kol_poll" }, loops: ["kol_strategy", "kol_poll"] } as unknown as MeExperiment), "kol_poll");
 	eq(experimentLoop({ ...kol, dispatch: { loop: "other" }, loops: ["kol_strategy"] } as unknown as MeExperiment), "kol_strategy");
