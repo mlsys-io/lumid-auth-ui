@@ -58,6 +58,7 @@ import { run as runCompareSidesChecks, caseCount as compareSidesCaseCount } from
 import { run as runRunsListChecks, caseCount as runsListCaseCount } from "@/lib/runs-list.test";
 import { run as runEvidenceChecks, caseCount as evidenceCaseCount } from "@/lib/evidence.test";
 import { run as runSpendChecks, caseCount as spendCaseCount } from "@/lib/spend.test";
+import { run as runPairedChecks, caseCount as pairedCaseCount } from "@/lib/paired.test";
 import { run as runDiscardChecks, caseCount as discardCaseCount } from "@/lib/discard.test";
 import { run as runHoldoutChecks, caseCount as holdoutCaseCount } from "@/lib/holdout.test";
 import { run as runRunAgreementChecks, caseCount as runAgreementCaseCount } from "@/lib/run-agreement.test";
@@ -391,7 +392,7 @@ check("isEmptyLoop is true only when nothing is declared", () => {
 export function run(): number {
 	// The document round-trip suite runs in the same process — it is the
 	// invariant everything else is built on, so it must never be skippable.
-	let failed = runDocChecks() + runEditChecks() + runFmChecks() + runXpioChecks() + runImportChecks() + runCycleIdChecks() + runAwaitChecks() + runRunStatusChecks() + runRouteChecks() + runFleetProvChecks() + runChunkChecks() + runSandboxChecks() + runDataLakeChecks() + runDataActivityChecks() + runRunSiteChecks() + runRunImagesChecks() + runFleetResultChecks() + runAskDataChecks() + runRunFilesChecks() + runTableColumnsChecks() + runDataJobsChecks() + runReturnToChecks() + runActivityChecks() + runRunAnswerChecks() + runResearchMapChecks() + runTimelineChecks() + runEvolutionChecks() + runModelLabelChecks() + runSpaceChecks() + runAppSpecChecks() + runVariantFormChecks() + runCompareChecks() + runDashboardChecks() + runMeasureChecks() + runComputeChecks() + runPauseChecks() + runProgressDotsChecks() + runCompareSidesChecks() + runRunsListChecks() + runEvidenceChecks() + runSpendChecks() + runDiscardChecks() + runHoldoutChecks() + runRunAgreementChecks() + runAppUpdateChecks() + runRunThroughChecks() + runStorageStatusChecks();
+	let failed = runDocChecks() + runEditChecks() + runFmChecks() + runXpioChecks() + runImportChecks() + runCycleIdChecks() + runAwaitChecks() + runRunStatusChecks() + runRouteChecks() + runFleetProvChecks() + runChunkChecks() + runSandboxChecks() + runDataLakeChecks() + runDataActivityChecks() + runRunSiteChecks() + runRunImagesChecks() + runFleetResultChecks() + runAskDataChecks() + runRunFilesChecks() + runTableColumnsChecks() + runDataJobsChecks() + runReturnToChecks() + runActivityChecks() + runRunAnswerChecks() + runResearchMapChecks() + runTimelineChecks() + runEvolutionChecks() + runModelLabelChecks() + runSpaceChecks() + runAppSpecChecks() + runVariantFormChecks() + runCompareChecks() + runDashboardChecks() + runMeasureChecks() + runComputeChecks() + runPauseChecks() + runProgressDotsChecks() + runCompareSidesChecks() + runRunsListChecks() + runEvidenceChecks() + runSpendChecks() + runPairedChecks() + runDiscardChecks() + runHoldoutChecks() + runRunAgreementChecks() + runAppUpdateChecks() + runRunThroughChecks() + runStorageStatusChecks();
 	for (const c of checks) {
 		try {
 			c.run();

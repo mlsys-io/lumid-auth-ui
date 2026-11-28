@@ -32,6 +32,8 @@ import ProgressPerSpend from "@/components/research/ProgressPerSpend";
 import SpendLine from "@/components/research/SpendLine";
 import StepAgreement from "@/components/research/StepAgreement";
 import { SPEND_ROWS, SPEND_STEPS, SPEND_USAGE, spendLabel } from "./spend-fixtures";
+import PairedDelta from "@/components/research/PairedDelta";
+import { PAIRED_ROWS, PAIRED_STEPS, pairedLabel, pairedStepLabel } from "./paired-fixtures";
 import { ModulesView } from "@/components/modules/ModulesPanel";
 import type { ModuleListing } from "@/lib/modules";
 import { MODULES_EMPTY_LISTING, MODULES_EMPTY_SPEC, MODULES_LISTING, MODULES_SPEC, MODULES_STALE_LISTING, galleryMeasureClient } from "./modules-fixtures";
@@ -251,6 +253,16 @@ export default function DesignGallery() {
 						<div className="rounded-xl border border-border bg-card p-4 space-y-4">
 							<StepAgreement steps={SPEND_STEPS} rows={SPEND_ROWS} label={spendLabel} />
 							<SpendLine usage={SPEND_USAGE} rows={SPEND_ROWS} />
+						</div>
+					</div>
+				</Section>
+				<Section id="paired" title="Compared on the same items — is a version really better than the baseline?">
+					<div className="grid gap-6 lg:grid-cols-2">
+						<div className="rounded-xl border border-border bg-card p-4">
+							<PairedDelta steps={PAIRED_STEPS} rows={PAIRED_ROWS} baseline="current_cards" label={pairedLabel} stepLabel={pairedStepLabel} />
+						</div>
+						<div className="rounded-xl border border-border bg-card p-4">
+							<PairedDelta steps={PAIRED_STEPS} rows={PAIRED_ROWS.filter((x) => x.dims?.stage === "quick" && x.variant_id === "self_review_one_pass")} baseline="current_cards" label={pairedLabel} stepLabel={pairedStepLabel} />
 						</div>
 					</div>
 				</Section>
