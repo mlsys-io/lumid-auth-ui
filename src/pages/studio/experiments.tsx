@@ -14,6 +14,7 @@ import { askExperiment } from "@/lib/grounded-asks";
 import { appTitle } from "@/components/workflow/AppCard";
 import { type ToneKey } from "@/lib/tones";
 import { cn } from "@/lib/utils";
+import { plural } from "@/lib/activity";
 import { EmptyStudies } from "@/components/illustrations/scenes";
 
 type Row = MeExperiment & { app: string };
@@ -45,7 +46,7 @@ export default function StudioExperiments() {
 	for (const e of filtered) idCounts.set(e.id, (idCounts.get(e.id) ?? 0) + 1);
 	const indexRows: IndexRow[] = filtered.map((e) => {
 		const tone: ToneKey = e.criteria_met ? "ok" : e.n_results > 0 ? "running" : "idle";
-		const statusLabel = e.criteria_met ? (e.verdict || "decided") : e.n_results > 0 ? `${e.n_results} results` : "pending";
+		const statusLabel = e.criteria_met ? (e.verdict || "decided") : e.n_results > 0 ? plural(e.n_results, "result") : "pending";
 		const ambiguous = (idCounts.get(e.id) ?? 0) > 1;
 		return {
 			id: `${e.app}:${e.id}`,

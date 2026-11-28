@@ -35,6 +35,9 @@ import { SPEND_ROWS, SPEND_STEPS, SPEND_USAGE, spendLabel } from "./spend-fixtur
 import PairedDelta from "@/components/research/PairedDelta";
 import { PAIRED_ROWS, PAIRED_STEPS, pairedLabel, pairedStepLabel } from "./paired-fixtures";
 import { ModulesView } from "@/components/modules/ModulesPanel";
+import RunAnswerCard from "@/components/workflow/RunAnswerCard";
+import RunTimeline from "@/components/workflow/RunTimeline";
+import { RUN_NOT_MEASURED, RUN_GPU_ENERGY, RUN_GATE_STOPPED, RUN_CALIBRATE_TOO_FEW, RUN_PAGE_CONTEXT, RUN_PAGE_LIST } from "./run-page-fixtures";
 import type { ModuleListing } from "@/lib/modules";
 import { MODULES_EMPTY_LISTING, MODULES_EMPTY_SPEC, MODULES_LISTING, MODULES_SPEC, MODULES_STALE_LISTING, galleryMeasureClient } from "./modules-fixtures";
 
@@ -254,6 +257,22 @@ export default function DesignGallery() {
 							<StepAgreement steps={SPEND_STEPS} rows={SPEND_ROWS} label={spendLabel} />
 							<SpendLine usage={SPEND_USAGE} rows={SPEND_ROWS} />
 						</div>
+					</div>
+				</Section>
+				<Section id="run-page" title="Run page — one verdict: didn't run, stopped by a gate, rows as tables">
+					<div className="grid gap-6 lg:grid-cols-2">
+						{[
+							{ title: "Refused by the daily GPU cap (not measured)", d: RUN_NOT_MEASURED },
+							{ title: "Stopped by the simulate gate", d: RUN_GATE_STOPPED },
+							{ title: "Measured on the GPU — the energy experiment's metric leads", d: RUN_GPU_ENERGY },
+							{ title: "Calibrate — a worse fit, not applied yet; arrays as tables", d: RUN_CALIBRATE_TOO_FEW },
+						].map(({ title, d }) => (
+							<div key={d.ts} className="space-y-2 rounded-xl border border-ink-200 bg-card p-3.5 shadow-e1" data-fixture={d.loop}>
+								<div className="text-micro text-ink-600">{title}</div>
+								<RunAnswerCard app="mlsys-research" loop={d.loop} runId={d.ts} detail={d} cycles={RUN_PAGE_LIST} context={RUN_PAGE_CONTEXT} />
+								{d.events && <RunTimeline events={d.events} app={d.loop} />}
+							</div>
+						))}
 					</div>
 				</Section>
 				<Section id="paired" title="Compared on the same items — is a version really better than the baseline?">

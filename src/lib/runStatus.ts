@@ -12,8 +12,13 @@
 
 import type { ToneKey } from "@/lib/tones";
 
-export type RunStatus = "queued" | "running" | "succeeded" | "failed" | "skipped" | "cancelled";
+// Two outcomes only a run's own detail can tell (2026-11-28): `not_run` — the
+// run was refused or could not be measured (a daily GPU cap, no free worker),
+// so it neither succeeded nor failed; `stopped` — a gate held its later steps
+// back. Both used to read "Succeeded" in gold.
+export type RunStatus = "queued" | "running" | "succeeded" | "failed" | "skipped" | "cancelled" | "not_run" | "stopped";
 
+/** The filterable six: a run LIST can't tell not_run / stopped apart yet. */
 export const RUN_STATUSES: RunStatus[] = ["queued", "running", "succeeded", "failed", "skipped", "cancelled"];
 
 export interface RunStatusInfo {
@@ -36,6 +41,8 @@ const TABLE: Record<string, RunStatus> = {
 	dispatched: "running", collecting: "running",
 	skipped: "skipped", "no_change": "skipped", "no_setup": "skipped", noop: "skipped",
 	canceled: "cancelled", cancelled: "cancelled", aborted: "cancelled", stopped: "cancelled",
+	not_measured: "not_run", not_run: "not_run", didnt_run: "not_run", over_budget: "not_run",
+	held: "stopped", gated: "stopped",
 	queued: "queued", pending: "queued", scheduled: "queued", waiting: "queued", created: "queued",
 	// RunSparkline state chars (MeWorkflowRow.run_spark)
 	o: "succeeded", r: "succeeded", x: "failed", _: "skipped", ".": "running",
@@ -54,9 +61,13 @@ export function runStatus(raw: string | null | undefined): RunStatusInfo {
 }
 
 /** A cycle row / cycle detail: `ok` true|false plus an optional `running`. */
-export function cycleStatus(c: { ok?: boolean | null; running?: boolean | null } | null | undefined): RunStatusInfo {
+export function cycleStatus(c: { ok?: boolean | null; running?: boolean | null; outcome?: "not_run" | "stopped" | null } | null | undefined): RunStatusInfo {
 	if (!c) return { status: "queued", raw: "" };
 	if (c.running) return { status: "running", raw: "running" };
+	// The run's own detail said it didn't run, or a gate stopped it (runAnswer's
+	// tone): that outranks `ok`, which is true for both.
+	if (c.outcome === "not_run" && c.ok !== false) return { status: "not_run", raw: "ok: true · not measured" };
+	if (c.outcome === "stopped" && c.ok !== false) return { status: "stopped", raw: "ok: true · held by a gate" };
 	if (c.ok === true) return { status: "succeeded", raw: "ok: true" };
 	if (c.ok === false) return { status: "failed", raw: "ok: false" };
 	return { status: "skipped", raw: "ok: (not recorded)" };
@@ -69,6 +80,8 @@ export const RUN_STATUS_LABEL: Record<RunStatus, string> = {
 	failed: "Failed",
 	skipped: "Skipped",
 	cancelled: "Cancelled",
+	not_run: "Didn't run",
+	stopped: "Stopped by a gate",
 };
 
 export const RUN_STATUS_TONE: Record<RunStatus, ToneKey> = {
@@ -78,6 +91,8 @@ export const RUN_STATUS_TONE: Record<RunStatus, ToneKey> = {
 	failed: "failing",
 	skipped: "idle",
 	cancelled: "idle",
+	not_run: "attention",
+	stopped: "attention",
 };
 
 /** Tooltip text: the unified word plus what the source said. */

@@ -1,6 +1,6 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts (the repo
 // has no standalone test runner; see that script's header).
-import { runStatus, cycleStatus, runStatusTitle, RUN_STATUSES } from "./runStatus";
+import { runStatus, cycleStatus, runStatusTitle, RUN_STATUSES, RUN_STATUS_LABEL, RUN_STATUS_TONE } from "./runStatus";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -42,6 +42,15 @@ check("cycle ok/running", () => {
 	eq(cycleStatus(null).status, "queued");
 });
 check("vocabulary is exactly six words", () => eq(RUN_STATUSES.join(","), "queued,running,succeeded,failed,skipped,cancelled"));
+
+check("a run that didn't run, or that a gate stopped, is not Succeeded", () => {
+	eq(cycleStatus({ ok: true, outcome: "not_run" }).status, "not_run");
+	eq(cycleStatus({ ok: true, outcome: "stopped" }).status, "stopped");
+	eq(cycleStatus({ ok: false, outcome: "not_run" }).status, "failed");
+	eq(RUN_STATUS_LABEL.not_run, "Didn't run");
+	eq(RUN_STATUS_TONE.not_run, "attention"); eq(RUN_STATUS_TONE.stopped, "attention");
+	eq(st("not_measured"), "not_run"); eq(st("held"), "stopped");
+});
 
 export function run(): number {
 	let failed = 0;

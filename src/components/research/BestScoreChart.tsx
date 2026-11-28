@@ -14,6 +14,7 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import type { Evolution } from "@/lib/evolution";
 import { fmtMetricValue } from "@/lib/run-answer";
 import { cn } from "@/lib/utils";
+import { plural } from "@/lib/activity";
 import { useMeasuredWidth } from "@/hooks/useMeasuredWidth";
 
 const FILL = ["fill-chart-1", "fill-chart-2", "fill-chart-3", "fill-chart-4", "fill-chart-5", "fill-chart-6", "fill-chart-7", "fill-chart-8"];
@@ -127,7 +128,7 @@ export default function BestScoreChart({ evo, labelOf, colorOf, metricKey, unit,
 						<RollingNumber value={evo.hero?.value ?? null} format={fmt} />
 					</div>
 					<div className="text-micro text-ink-600 mt-0.5">
-						{evo.hero ? `${labelOf(evo.hero.arm)} · ${evo.chain.find((c) => c.arm === evo.hero!.arm)?.n ?? 0} results` : `no version has ${minSamples} results yet`}
+						{evo.hero ? `${labelOf(evo.hero.arm)} · ${plural(evo.chain.find((c) => c.arm === evo.hero!.arm)?.n ?? 0, "result")}` : `no version has ${plural(minSamples, "result")} yet`}
 					</div>
 					{failedAt && <div className="text-micro text-ember-700 mt-0.5">didn&apos;t pass {failedAt}</div>}
 				</div>

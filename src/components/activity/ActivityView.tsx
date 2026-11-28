@@ -13,7 +13,7 @@ import { AlertTriangle, ArrowRight } from "lucide-react";
 import { me, type MeRunRow, type MeRunStepEvent } from "@/api/me";
 import { estimateSteps, type StepEstimate } from "@/lib/run-timeline";
 import {
-	groupActivity, fmtDuration, fmtTypical, fmtSince, fmtAgo, progressOf, isOverdue, failingSentence,
+	groupActivity, fmtDuration, fmtTypical, fmtSince, fmtAgo, progressOf, isOverdue, failingSentence, didntRun, runCountWords,
 	type RunningItem, type WorkflowActivity, type AppActivity,
 } from "@/lib/activity";
 import { runRowHref, workflowPath, parseScheduledRunId } from "@/lib/run-routes";
@@ -224,6 +224,7 @@ function lastOutcome(wf: WorkflowActivity, now: number): { text: string; tone: s
 	if (!r) return { text: "No runs yet", tone: "text-ink-600" };
 	const when = ago(r.started_at, now);
 	const dur = r.duration_s ? ` · ${fmtDuration(r.duration_s)}` : "";
+	if (didntRun(r)) return { text: `Didn't run ${when}`, tone: "text-ember-700" };
 	switch (r.state) {
 		case "succeeded": return { text: `Succeeded ${when}${dur}`, tone: "text-ink-700" };
 		case "failed": return { text: `Failed ${when}`, tone: "text-brick-700" };
@@ -257,7 +258,7 @@ export function WorkflowRow({ wf, now }: { wf: WorkflowActivity; now: number }) 
 				<RunSparkline spec={wf.spark} runs={wf.app ? wf.sparkRuns : undefined} app={wf.app || undefined} loop={wf.loop} />
 			</div>
 			<div className="hidden sm:block text-micro text-ink-600 text-right tabular-nums">
-				{wf.runs.length} run{wf.runs.length === 1 ? "" : "s"}
+				{runCountWords(wf)}
 				{wf.typicalS ? <> · usually {fmtTypical(wf.typicalS)}</> : null}
 			</div>
 		</div>

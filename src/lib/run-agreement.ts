@@ -85,13 +85,21 @@ export function runAgreement(d: MeCycleDetail | null): RunAgreement | null {
 	return comparisonOf(d) ?? stagesAgreement(d);
 }
 
+/** Nothing was measured: every second column says "not measured" (or nothing).
+ *  A table of dashes says less than the one line that says why. */
+export function nothingMeasured(a: RunAgreement | null): boolean {
+	return !!a && a.rows.length > 0 && a.rows.every((r) => /^(—|-|not measured|n\/a|)$/i.test(r.second.trim()));
+}
+
 function headlineOf(rows: AgreementRow[], a: string, b: string): string {
-	const pct = rows.map((r) => ({ r, p: /^[+−]\d+%$/.test(r.gap) ? Number(r.gap.slice(1, -1)) : null })).filter((x) => x.p != null) as Array<{ r: AgreementRow; p: number }>;
+	// Apps write the minus either way: U+2212 (gapOf above) or an ASCII "-"
+	// (MLSys sandbox runs). Accepting only one dropped every negative gap.
+	const pct = rows.map((r) => ({ r, p: /^[+\-−]\d+(\.\d+)?%$/.test(r.gap.trim()) ? Number(r.gap.trim().slice(1, -1)) : null })).filter((x) => x.p != null) as Array<{ r: AgreementRow; p: number }>;
 	if (!pct.length) return `${a} and ${b} side by side`;
 	const close = pct.filter((x) => x.p <= 20).length;
 	const worst = pct.reduce((m, x) => (x.p > m.p ? x : m));
 	const head = `${close} of ${pct.length} numbers within 20% of ${b.toLowerCase()}`;
-	return worst.p > 20 ? `${head}; ${worst.r.metric} was ${worst.p}% ${worst.r.gap.startsWith("+") ? "higher" : "lower"}` : head;
+	return worst.p > 20 ? `${head}; ${worst.r.metric} was ${worst.p}% ${/^[\-−]/.test(worst.r.gap.trim()) ? "lower" : "higher"}` : head;
 }
 
 /** What the run used, in words, or null when nothing says. */

@@ -1,6 +1,6 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 import type { MeRunRow } from "@/api/me";
-import { groupActivity, plainCause, fmtDuration, fmtTypical, progressOf, isOverdue, loopOfRun, workflowStatusLine, nextFireSec, dirIdToSec, fmtAgo, fmtSince, failingSentence } from "./activity";
+import { groupActivity, plainCause, fmtDuration, fmtTypical, progressOf, isOverdue, loopOfRun, workflowStatusLine, nextFireSec, dirIdToSec, fmtAgo, fmtSince, failingSentence, didntRun, runCountWords, plural } from "./activity";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -144,6 +144,29 @@ check("next fire: every 10 min", () => eq(nextFireSec("*/10 * * * *", NOW + 60),
 check("next fire: timezone-dependent schedules give no time", () => {
 	eq(nextFireSec("5 */2 * * *", NOW), null); eq(nextFireSec("7 13 * * *", NOW), null);
 	eq(nextFireSec("@trigger", NOW), null); eq(nextFireSec("*/7 * * * *", NOW), null);
+});
+
+check("runs that didn't run are counted apart and never make a workflow healthy", () => {
+	const rows = [
+		mk("m", "sandbox", "failed", { reason: "sandbox:None failed: no error text" }),
+		mk("m", "sandbox", "succeeded", { reason: "not_measured", duration_s: 4 }),
+		mk("m", "sandbox", "succeeded", { reason: "not measured: daily cap", duration_s: 4 }),
+	];
+	const wf = groupActivity(rows).apps[0].workflows[0];
+	eq(wf.didntRun, 2);
+	eq(runCountWords(wf), "3 runs · 2 didn't run");
+	// The latest run didn't run, the one before it failed: still failing.
+	eq(wf.failing?.count, 1);
+	eq(wf.failing?.cause, "Sandbox failed without an error message");
+	eq(wf.spark, "x__");
+	eq(didntRun({ state: "succeeded", reason: "ran" }), false);
+	eq(didntRun({ state: "failed", reason: "not_measured" }), false);
+	eq(runCountWords({ runs: [rows[0]], didntRun: 0 }), "1 run");
+});
+check("a silent step failure and plurals in words", () => {
+	eq(plainCause("sandbox:None failed: no error text"), "Sandbox failed without an error message");
+	eq(plainCause("gpu_measure failed: no error text"), "Gpu measure failed without an error message");
+	eq([plural(1, "result"), plural(3, "result"), plural(1200, "result")], ["1 result", "3 results", "1,200 results"]);
 });
 
 export function run(): number {

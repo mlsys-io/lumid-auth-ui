@@ -1,6 +1,7 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 import type { MeCycleDetail } from "@/api/me";
-import { runAgreement, runUsage } from "./run-agreement";
+import { runAgreement, runUsage, nothingMeasured } from "./run-agreement";
+import { RUN_GPU_ENERGY, RUN_NOT_MEASURED } from "@/dev/run-page-fixtures";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -42,6 +43,22 @@ check("what the run used", () => {
 	eq(runUsage(detail({ usage: { gpu_s: 414, gpu_type: "RTX 5080", cost_usd: 0.03, metered: "measured" } }))!.words, "6.9 GPU-min on RTX 5080 · $0.03 notional");
 	eq(runUsage(detail({}, { usage: { metered: "reused", saved_cpu_s: 6 } }))!.words, "Free — reused (saved 6 CPU-s)");
 	eq(runUsage(detail({ metrics: { score: 1 } })), null);
+});
+
+check("an ASCII minus gap counts (MLSys writes \"-35%\"): the headline keeps negative gaps", () => {
+	const a = runAgreement(RUN_GPU_ENERGY)!;
+	// 9 rows with a gap: +228% (TTFT p50) is the worst; the -35/-39/-26/-3 rows count
+	// (before the fix only the five "+" rows did).
+	eq(a.headline, "4 of 9 numbers within 20% of measured; Time to the first word, typical request was 228% higher");
+	const lower = runAgreement(detail({}, { comparison: [{ metric: "TTFT p99", simulated: "560 ms", measured: "364 ms", gap: "-35%" }, { metric: "Goodput", simulated: "1", measured: "1", gap: "+0%" }] }))!;
+	eq(lower.headline, "1 of 2 numbers within 20% of measured; TTFT p99 was 35% lower");
+	const dec = runAgreement(detail({}, { comparison: [{ metric: "x", simulated: "1", measured: "1", gap: "-3.5%" }] }))!;
+	eq(dec.headline, "1 of 1 numbers within 20% of measured");
+});
+check("a comparison where nothing was measured is one line, not a table of dashes", () => {
+	eq(nothingMeasured(runAgreement(RUN_NOT_MEASURED)), true);
+	eq(nothingMeasured(runAgreement(RUN_GPU_ENERGY)), false);
+	eq(nothingMeasured(null), false);
 });
 
 export function run(): number {
