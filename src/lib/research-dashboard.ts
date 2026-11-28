@@ -5,15 +5,56 @@
 
 import type { MeExperiment, MeRunRow, MeWorkflowRow } from "@/api/me";
 import { experimentStatus, humanId, versionLabel, type Tone, experimentLabel} from "@/lib/research-map";
-import { fmtMetricValue, humanMetric } from "@/lib/run-answer";
+import { fmtMetricValue, humanMetric, isCountKey, isFlagKey } from "@/lib/run-answer";
 
 const WEEK_S = 7 * 86400;
 
 /** A metric value with its unit, the way the run page writes it. */
 export function metricText(name: string, v: number): string {
 	const h = humanMetric(name);
-	const t = fmtMetricValue(v, h.unit, name);
-	return h.unit && !t.endsWith("%") ? `${t} ${h.unit}` : t;
+	// fmtMetricValue writes the unit itself now; adding it again read
+	// "75.31 J per request J per request" (2026-11-28).
+	return fmtMetricValue(v, h.unit, name);
+}
+
+// ── yes/no metrics ────────────────────────────────────────────────────────
+// "Util 0.85 wins with Meets constraints yes" (2026-11-28 audit): a 0/1 metric
+// is a fact about the version, not a number, so it reads as words.
+
+const YES_NO_NAME = /^(?:(?:calibrated|robust|simulated|measured)_)?(?:meets|passes|passed|is|has|ok)(?:_|$)/;
+
+/** A metric that is a yes/no fact: a flag name (meets_*, passes_*, is_*, ok …),
+ *  or — with no unit and not a count or a share — values that are only 0 and 1
+ *  (at least two of them, so one lucky round number isn't taken for a flag). */
+export function isYesNoMetric(name: string, values: number[] = []): boolean {
+	const k = name.trim().replace(/\./g, "_");
+	if (!k) return false;
+	if (YES_NO_NAME.test(k) || isFlagKey(k)) return true;
+	if (humanMetric(k).unit || /(^|_)(rate|ratio|share|accuracy|precision|recall|score)(_|$)/.test(k)) return false;
+	if (isCountKey(k)) return false;
+	return values.length >= 2 && values.every((v) => v === 0 || v === 1);
+}
+
+const NEGATE: Record<string, string> = { meets: "doesn't meet", passes: "doesn't pass", passed: "didn't pass", is: "isn't", has: "doesn't have" };
+
+/** A yes/no metric in words. `tile` is the short form ("meets constraints" /
+ *  "doesn't meet constraints"); `sentence` is the headline's ("meets every
+ *  constraint"). A mean between 0 and 1 is a share of runs. */
+export function yesNoWords(name: string, v: number): { tile: string; sentence: string } {
+	const label = humanMetric(name).label.replace(/ \((?:estimated|average)\)$/, "");
+	// Lower-case the first letter unless it starts an acronym ("GPU …").
+	const phrase0 = /^[A-Z][a-z]/.test(label) ? label[0].toLowerCase() + label.slice(1) : label;
+	// A flag name says itself ("meets constraints", "same GPU as simulated");
+	// one found by its 0/1 values with no verb ("constraint check") reads as passed.
+	const k = name.trim().replace(/\./g, "_");
+	const phrase = YES_NO_NAME.test(k) || isFlagKey(k) ? phrase0 : `passes ${phrase0}`;
+	const [v0, ...rest] = phrase.split(" ");
+	const no = NEGATE[v0] ? [NEGATE[v0], ...rest].join(" ") : `not ${phrase}`;
+	const every = (p: string) => p.replace(/^(meets|doesn't meet) constraints$/, "$1 every constraint");
+	if (v === 1) return { tile: phrase, sentence: every(phrase) };
+	if (v === 0) return { tile: no, sentence: every(no) };
+	const share = `${phrase} in ${Math.round(v * 100)}% of runs`;
+	return { tile: share, sentence: share };
 }
 
 export interface BestResult {
@@ -25,7 +66,11 @@ export interface BestResult {
 	leader: string;
 	metric: string;
 	value: number;
+	/** The number with its unit — or, for a yes/no metric, the words
+	 *  ("meets constraints"), never "yes". */
 	valueText: string;
+	/** Set for a yes/no metric: the headline's phrase ("meets every constraint"). */
+	yesNo?: string;
 	/** "winning" (criteria met) · "leads" · "can't tell apart yet". */
 	standing: "winning" | "leads" | "can't tell apart yet" | "didn't pass a step";
 	/** The step that stopped the top number (with "didn't pass a step"). */
@@ -47,13 +92,30 @@ export function bestResult(e: MeExperiment): BestResult | null {
 	// after every version failed Robustness).
 	const failed = !!e.best_failed_gate;
 	const standing = failed ? "didn't pass a step" : e.criteria_met ? "winning" : e.not_separable_from?.length ? "can't tell apart yet" : "leads";
+	const means = Object.values(e.variants ?? {}).map((x) => x.mean).filter(Number.isFinite);
+	const yn = isYesNoMetric(metric, means) ? yesNoWords(metric, v.mean) : null;
 	return {
 		// The version's own title, as the panel names it (versionLabel, one label everywhere).
 		select: `exp:${e.id}`, experiment: experimentLabel(e), version: e.best_variant, leader: versionLabel(e, e.best_variant), metric: humanMetric(metric).label,
-		value: v.mean, valueText: metricText(metric, v.mean), standing, n: e.n_results,
+		value: v.mean, valueText: yn ? yn.tile : metricText(metric, v.mean), standing, n: e.n_results,
+		...(yn ? { yesNo: yn.sentence } : {}),
 		higherIsBetter: e.higher_is_better ?? e.metric?.higher_is_better ?? true, updatedAt: e.updated_at,
 		...(failed && e.best_stopped_at ? { stoppedAt: humanId(e.best_stopped_at) } : {}),
 	};
+}
+
+/** A best result as one phrase after its leader: "Sharpe 1.42", or for a
+ *  yes/no metric just the words ("meets constraints"). */
+export function bestResultValue(b: Pick<BestResult, "metric" | "valueText" | "yesNo">): string {
+	return b.yesNo ? b.valueText : `${b.metric} ${b.valueText}`;
+}
+
+/** The Best results tile's two lines under the leader: the metric's name (left
+ *  out for a yes/no metric — the words already say it) and the value, per step
+ *  when the run page's per-step words are known. */
+export function bestTileLines(b: Pick<BestResult, "metric" | "valueText" | "yesNo">, stepWords?: string | null): { metric?: string; value: string } {
+	if (b.yesNo) return { value: b.valueText };
+	return { metric: b.metric, value: stepWords || b.valueText };
 }
 
 /** The experiments worth showing first: settled winners, then leaders with
@@ -102,7 +164,7 @@ export function researchHeadline(input: {
 	});
 	if (fresh) {
 		const verb = fresh.standing === "winning" ? "wins" : "now leads";
-		return { tone: "ok", select: fresh.select, text: tail(`New best on ${fresh.experiment}: ${fresh.leader} ${verb} with ${fresh.metric} ${fresh.valueText}`) };
+		return { tone: "ok", select: fresh.select, text: tail(`New best on ${fresh.experiment}: ${fresh.leader} ${verb}${fresh.yesNo ? `: ${fresh.yesNo}` : ` with ${fresh.metric} ${fresh.valueText}`}`) };
 	}
 	// A failure says where and why (the run feed's cause), not only which.
 	const [f0] = input.failing;

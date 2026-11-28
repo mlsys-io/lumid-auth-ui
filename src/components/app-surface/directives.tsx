@@ -62,6 +62,10 @@ import {
 import { me, ME_BASE } from "@/api/me";
 import apiClient from "@/api/client";
 import { cn, formatCurrency, formatPercentage } from "@/lib/utils";
+import {
+  examplesLast, hiddenToggleLabel, HIDDEN_ROWS_WHY, isNameColumn, nameDisplay, rowNoun, statFigure,
+  studioWhen, tableCountLine, whenFull, whenMs,
+} from "@/lib/surface-table";
 import { bearerHeader } from "@/api/session-bearer";
 import { audienceForDataApp } from "@/api/dataLake";
 import {
@@ -561,7 +565,7 @@ function LumidStat({ body }: { body: Body }) {
     const n = Number(value);
     if (body.format === "pct" && isFinite(n)) display = formatPercentage(n);
     else if (body.format === "currency" && isFinite(n)) display = formatCurrency(n);
-    else display = String(value);
+    else display = statFigure(value);
     if (typeof body.prefix === "string") display = body.prefix + display;
     if (typeof body.suffix === "string") display = display + body.suffix;
   }
@@ -618,11 +622,29 @@ function filteredEmptyText(query: string, body: Record<string, unknown>, hidden 
   // Every row was hidden by a rule. The authored "No strategies yet" alone
   // contradicted the stat above it ("24 your strategies") — say where they went.
   if (hidden > 0) {
-    return `Only test and demo rows so far — ${hidden} hidden (click \u201C${hidden} hidden\u201D to show them).`;
+    return `Only test and demo rows so far — ${hidden} hidden (press \u201C${hiddenToggleLabel(hidden, false)}\u201D to see them).`;
   }
   const authored =
     typeof body.empty === "string" && body.empty.trim() ? body.empty.trim() : null;
   return authored ?? "No rows.";
+}
+
+/** A row's name in words (lib/surface-table `nameDisplay`): its title, or its
+ *  id humanised with the id small beside it, and an "example" badge on a
+ *  seeded demo. */
+function NameCell({ row, value }: { row: Record<string, unknown>; value: unknown }) {
+  const d = nameDisplay(row, value);
+  return (
+    <span className="inline-flex items-baseline gap-1.5 min-w-0">
+      <span className="truncate">{d.label}</span>
+      {d.raw && <span className="font-mono text-nano text-ink-600 truncate">{d.raw}</span>}
+      {d.example && (
+        <span className="shrink-0 rounded border border-ink-200 bg-ink-50 px-1 text-nano text-ink-600" title="A sample that came with the app, not one you made">
+          example
+        </span>
+      )}
+    </span>
+  );
 }
 
 function formatCell(value: unknown, type?: string): React.ReactNode {
@@ -637,21 +659,10 @@ function formatCell(value: unknown, type?: string): React.ReactNode {
   }
   if (type === "badge") return <StatusBadge value={String(value)} />;
   if (type === "datetime") {
-    // Two wire shapes reach here. Numeric epochs (< 1e12 ⇒ seconds), and ISO-8601
-    // strings — Go's time.Time marshals to RFC3339, so every timestamp coming
-    // from a Go service is a string. Only the numeric form was handled, so an
-    // RFC3339 value became NaN and rendered as "—": the Review table's "When"
-    // column looked like missing data when the field was present and correct.
-    if (typeof value === "string") {
-      const ms = Date.parse(value);
-      if (!isFinite(ms)) return "—";
-      // Go's zero time marshals to year 1 — that is "never", not a date.
-      const d = new Date(ms);
-      return d.getUTCFullYear() <= 1 ? "—" : d.toLocaleString();
-    }
-    if (!isFinite(n) || n === 0) return "—";
-    const ms = n < 1e12 ? n * 1000 : n;
-    return new Date(ms).toLocaleString();
+    // Two wire shapes (epoch seconds/ms, RFC3339 strings) — parsed in
+    // lib/surface-table `whenMs`; written the way the rest of Studio writes a time.
+    const ms = whenMs(value);
+    return ms == null ? "—" : studioWhen(ms) || "—";
   }
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
@@ -1329,8 +1340,11 @@ function LumidTable({ body }: { body: Body }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rowArr, query, searchSig, hiddenRows, showHidden]);
 
+  // The column that names a row (first name-like column without a type).
+  const nameKey = cols.find(isNameColumn)?.key ?? "";
   const sortedRows = useMemo(() => {
-    if (!sort) return filteredRows;
+    // Unsorted: the reader's own rows first, seeded examples (`*_demo`) after.
+    if (!sort) return nameKey ? examplesLast(filteredRows, (r) => getPath(r, nameKey)) : filteredRows;
     const { key, dir } = sort;
     const mul = dir === "asc" ? 1 : -1;
     // A column may declare `order:` — the TRUE low→high sequence of a
@@ -1360,7 +1374,7 @@ function LumidTable({ body }: { body: Body }) {
       if (isFinite(an) && isFinite(bn) && av !== "" && bv !== "") return (an - bn) * mul;
       return String(av ?? "").localeCompare(String(bv ?? "")) * mul;
     });
-  }, [filteredRows, sort, orderSig]);
+  }, [filteredRows, sort, orderSig, nameKey]);
 
   if (pending) return <PendingLine token={pending} />;
   if (loading) return <Loading />;
@@ -1370,21 +1384,26 @@ function LumidTable({ body }: { body: Body }) {
   // is null and the widget behaves exactly as before.
   // Always rendered when rules hid something — the count is the honesty: the
   // reader can see that rows exist and choose to look at them.
+  // "36 strategies · Show 30 hidden": the whole count, then a button that
+  // says what it does (it was a bare "30 hidden").
   const hiddenToggle = hiddenRows.length ? (
-    <button
-      type="button"
-      onClick={() => setShowHidden((v) => !v)}
-      className="text-micro text-ink-600 hover:text-ink-600 underline decoration-dotted underline-offset-2 shrink-0"
-      title="Test and demo rows (fixtures, backtest records) are hidden by default — click to show them"
-    >
-      {showHidden
-        ? `hide ${hiddenRows.length} fixture${hiddenRows.length === 1 ? "" : "s"}`
-        : `${hiddenRows.length} hidden`}
-    </button>
+    <span className="inline-flex items-center gap-1.5 text-micro text-ink-600 shrink-0">
+      <span className="tabular-nums">{tableCountLine(rowArr.length, rowNoun(body.path))}</span>
+      <span aria-hidden>·</span>
+      <button
+        type="button"
+        onClick={() => setShowHidden((v) => !v)}
+        aria-pressed={showHidden}
+        className="text-ink-700 hover:text-ink-900 underline decoration-dotted underline-offset-2"
+        title={HIDDEN_ROWS_WHY}
+      >
+        {hiddenToggleLabel(hiddenRows.length, showHidden)}
+      </button>
+    </span>
   ) : null;
 
   const searchBox = searchable ? (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-2">
       <input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
@@ -1502,7 +1521,7 @@ function LumidTable({ body }: { body: Body }) {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {sortedRows.slice(0, 60).map((row, i) => {
             const href = rowHref ? rowHref(row) : "";
-            const title = String(row[titleCol.key] ?? "");
+            const title = isNameColumn(titleCol) ? <NameCell row={row} value={resolveCell(row, titleCol)} /> : String(row[titleCol.key] ?? "");
             return (
               <div key={i} onClick={href ? () => goHref(href) : undefined}
                 className={"rounded-lg border border-ink-200 bg-card p-3 hover:border-ink-300 hover:shadow-sm transition-all" + (href ? " cursor-pointer" : "")}>
@@ -1603,16 +1622,14 @@ function LumidTable({ body }: { body: Body }) {
                   })()}
                   {columns.map((c, ci) => {
                     const cellValue = resolveCell(row, c);
-                    const cell = <>{
-                      href && ci === 0
-                        ? renderHrefCell(href, formatCell(cellValue, c.type))
-                        : formatCell(cellValue, c.type)
-                    }</>;
+                    const shown = c.key === nameKey ? <NameCell row={row} value={cellValue} /> : formatCell(cellValue, c.type);
+                    const cell = <>{href && ci === 0 ? renderHrefCell(href, shown) : shown}</>;
                     // `truncate` silently clips at 260px with no way to read the
                     // rest — fine for an id, lossy for a column whose whole value
                     // is a sentence (a not-presentable backtest's reason). Hover
                     // shows the untruncated text.
-                    const full = cellValue === null || cellValue === undefined || typeof cellValue === "object" ? undefined : String(cellValue);
+                    const full = cellValue === null || cellValue === undefined || typeof cellValue === "object" ? undefined
+                      : c.type === "datetime" ? whenFull(cellValue) : String(cellValue);
                     return <td key={c.key} title={full} className="px-2.5 py-1.5 text-ink-700 align-top max-w-[260px] truncate">{cell}</td>;
                   })}
                   {rowActions.length > 0 && (

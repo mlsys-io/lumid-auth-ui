@@ -1,5 +1,6 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 import type { MeExperimentRow } from "@/api/me";
+import { dodge, fitLabel, gateLine, gateLineWords, gateThreshold, isBatch, newBestIndices, ordinal, placeLabels, targetLineWords, xAxis, yDomain, yTicks, zeroLine } from "./evolution-axis";
 import { buildEvolution, chainHeadline, lastStepPoints, linkValueWords, marginWords, meansByStep, rowStep, seriesFromRows, shortDevice, stepOrder, stepPhrase, versionStepWords } from "./evolution";
 
 type Check = { name: string; run: () => void };
@@ -149,6 +150,110 @@ check("can't tell apart yet comes before dropped; the winner says by how much an
 	eq(marginWords(w, (v) => `${Math.round(v * 1e4) / 1e4} J`), "by 0.003 J (0.8%) · 1 result each");
 	eq(chainHeadline(e, (a) => a.toUpperCase(), (v) => `${Math.round(v * 1e4) / 1e4} J`), "Winning: C12 by 0.003 J (0.8%) · 1 result each — can't tell apart yet from C16");
 	eq(marginWords({ over: "b", gap: 2, pct: 25, n: 3, overN: 1, tie: null }, String), "by 2 (25%) · 3 results vs 1");
+});
+
+// ── the chart's axes (lib/evolution-axis) ────────────────────────────────
+
+// Quant "Strategy search" (2026-11-28): one version early, twelve in one batch.
+const H1 = 3_600_000;
+const batch = [{ id: "v0", points: [{ ts: new Date(Date.UTC(2026, 10, 25)).toISOString(), v: 0.4 }] },
+	...Array.from({ length: 12 }, (_, k) => ({ id: `s${k}`, points: [{ ts: new Date(Date.UTC(2026, 10, 27) + k * 1000).toISOString(), v: k === 5 ? 1.3 : k === 2 ? 0.9 : -3 + k * 0.2 }] }))];
+
+check("a batch: most versions' first results together; spread-out results are not", () => {
+	const e = buildEvolution(batch, {})!;
+	eq(isBatch(e.points), true, "12 of 13 within seconds");
+	eq(isBatch([{ t: 0, arm: "a" }, { t: 1, arm: "b" }, { t: 2, arm: "c" }].map((p) => ({ ...p, t: p.t * 86_400_000 }))), false, "one a day");
+	eq(isBatch([{ t: 5, arm: "a" }, { t: 5, arm: "b" }]), true, "one instant");
+	eq(isBatch([{ t: 1, arm: "a" }, { t: 2, arm: "a" }]), false, "one version");
+	eq(isBatch([{ t: 0, arm: "a" }, { t: 4 * 86_400_000, arm: "b" }, { t: 4 * 86_400_000, arm: "c" }]), false, "two of three together is not a batch");
+	// Later results of the same versions don't make it a batch: FIRST results count.
+	eq(isBatch([{ t: 0, arm: "a" }, { t: 10 * H1, arm: "b" }, { t: 20 * H1, arm: "c" }, { t: 20 * H1 + 1, arm: "a" }, { t: 20 * H1 + 2, arm: "b" }]), false, "first results apart");
+});
+
+check("a batch lays x out in the order tried; the best line steps at the result that moved it", () => {
+	const e = buildEvolution(batch, {})!;
+	const ax = xAxis(e, Date.UTC(2026, 10, 28), () => "day");
+	eq([ax.mode, ax.p0, ax.p1, ax.start, ax.end, ax.showNow], ["order", -0.5, 12.5, "1st", "13th", false]);
+	eq(ax.pointPos, e.points.map((_, i) => i), "one slot per result: dots never stack");
+	ok(ax.caption.includes("in the order tried"), "caption says so");
+	eq(e.best.map((s) => [s.arm, s.i]), [["v0", 0], ["s2", 3], ["s5", 6]]);
+	eq(e.best.map((s) => ax.stepPos(s)), [0, 3, 6]);
+	eq([...newBestIndices(e.best)], [0, 3, 6]);
+});
+
+check("a spread-out experiment keeps a time axis, reaching now only when recent", () => {
+	const e = buildEvolution(raw, { minSamples: 2 })!;
+	const recent = xAxis(e, e.t1 + 86_400_000, () => "D");
+	eq([recent.mode, recent.end, recent.showNow, recent.p1], ["time", "now", true, e.t1 + 86_400_000]);
+	const old = xAxis(e, e.t1 + 30 * 86_400_000, (t) => (t === e.t1 ? "last" : "first"));
+	eq([old.start, old.end, old.showNow, old.caption], ["first", "last", false, ""]);
+});
+
+check("ordinals", () => {
+	eq([1, 2, 3, 4, 11, 12, 13, 21, 22, 23, 101, 111].map(ordinal), ["1st", "2nd", "3rd", "4th", "11th", "12th", "13th", "21st", "22nd", "23rd", "101st", "111th"]);
+});
+
+check("y ticks: the lowest and highest result and 0, with a zero line, when the range crosses it", () => {
+	const pts = [-3, -0.4, 0.9, 1.66].map((mean, i) => ({ arm: `a${i}`, mean, counted: true }));
+	const dom = yDomain(pts);
+	eq([dom.lo, dom.hi], [-3, 1.66]);
+	const t = yTicks(dom);
+	ok(t.some((x) => x.kind === "max" && x.value === 1.66), "max");
+	ok(t.some((x) => x.kind === "min" && x.value === -3), "min");
+	ok(t.some((x) => x.kind === "zero" && x.value === 0), "zero");
+	ok(t.every((x, i) => i === 0 || t[i - 1].value > x.value), "highest first");
+	ok(t.every((x, i) => i === 0 || t[i - 1].value - x.value >= 0.1 * (dom.v1 - dom.v0)), "never crowded");
+	eq(zeroLine(dom), true);
+	const pos = yDomain([2, 3, 5].map((mean, i) => ({ arm: `a${i}`, mean, counted: true })));
+	eq([yTicks(pos).some((x) => x.kind === "zero"), zeroLine(pos)], [false, false]);
+	// A min just under 0 crowds the 0 label away, but the line stays.
+	const near = yDomain([-0.05, 4, 5].map((mean, i) => ({ arm: `a${i}`, mean, counted: true })));
+	eq([yTicks(near).filter((x) => x.kind !== "round").map((x) => x.kind), zeroLine(near)], [["max", "min"], true]);
+	// The target and pass mark are always inside the range.
+	const withGate = yDomain([2, 3].map((mean, i) => ({ arm: `a${i}`, mean, counted: true })), [0, null, 4]);
+	ok(withGate.v0 < 0 && withGate.v1 > 4, "extras in range");
+	eq([withGate.lo, withGate.hi], [2, 3]);
+});
+
+check("a gate's pass mark for one metric, in words", () => {
+	eq(gateThreshold("sharpe_is_phase_mean >= 0.5 and trades >= 30", "trades"), { op: ">=", value: 30 });
+	eq(gateThreshold("dsr_p < 0.05 and oos_sharpe > 0", "oos_sharpe"), { op: ">", value: 0 });
+	eq(gateThreshold("0.5 <= score", "score"), { op: ">=", value: 0.5 });
+	eq(gateThreshold("(score > -1.5) && n >= 3", "score"), { op: ">", value: -1.5 });
+	eq(gateThreshold("sharpe_is_phase_mean >= 0.5", "sharpe"), null, "a longer name is another metric");
+	eq(gateThreshold("a > 1 or b > 2", "a"), null, "an alternative is not a mark");
+	eq(gateThreshold(undefined, "a"), null);
+	const steps = [{ step: "bar_backtest", gate: "sharpe >= 0.5" }, { step: "robustness", gate: "dsr_p < 0.05 and oos_sharpe > 0" }];
+	eq(gateLine(steps, "oos_sharpe", "robustness"), { op: ">", value: 0, step: "robustness" });
+	eq(gateLine(steps, "sharpe", "robustness"), null, "another step's mark judges another number");
+	eq(gateLine(steps, "sharpe", null), { op: ">=", value: 0.5, step: "bar_backtest" });
+	eq(gateLineWords({ op: ">", step: "robustness" }, "0"), "above 0 to pass Robustness");
+	eq(gateLineWords({ op: ">=", step: "bar_backtest" }, "0.5"), "at least 0.5 to pass Bar backtest");
+	eq(targetLineWords("1.5"), "aiming for 1.5");
+});
+
+check("takeover labels name the version, cut to fit, never on top of each other", () => {
+	eq(fitLabel("Lowvol top", 100), { text: "Lowvol top", cut: false });
+	eq(fitLabel("Lowvol top", 30), { text: "Lowv…", cut: true });
+	const box = { left: 40, right: 400, top: 14, bottom: 194 };
+	// The line climbs to the next takeover: the name goes BELOW, with the room to the right edge.
+	const [a, b] = placeLabels([{ x: 100, y: 100, text: "Lowvol top" }, { x: 120, y: 80, text: "Momentum 12-1" }], box);
+	eq([a.text, a.anchor, a.x, a.y], ["Lowvol top", "start", 104, 112]);
+	eq([b.text, b.anchor, b.y], ["Momentum 12-1", "start", 74], "the last one sits above its line");
+	// Lower is better: the line falls to the next one, so the name goes above.
+	eq(placeLabels([{ x: 100, y: 80, text: "A" }, { x: 120, y: 100, text: "B" }], box)[0].y, 74);
+	// Near the right edge: to the mark's left; with no room either side: cut, full name kept.
+	const [c] = placeLabels([{ x: 395, y: 100, text: "Lowvol top" }], box);
+	eq([c.anchor, c.text, c.x], ["end", "Lowvol top", 391]);
+	const [d] = placeLabels([{ x: 60, y: 100, text: "Lowvol top" }], { ...box, right: 90 });
+	eq([d.text, d.cut, d.full, d.anchor], ["Low…", true, "Lowvol top", "start"]);
+	// Two names at one spot: the second moves a line further out.
+	const stack = placeLabels([{ x: 100, y: 100, text: "One" }, { x: 100, y: 101, text: "Two" }], box);
+	ok(Math.abs(stack[0].y - stack[1].y) >= 11, "same spot: moved a line");
+});
+
+check("dots at one spot are nudged apart", () => {
+	eq(dodge([{ x: 10, y: 10 }, { x: 10, y: 10 }, { x: 10, y: 11 }, { x: 50, y: 10 }]), [0, 4, -4, 0]);
 });
 
 export function run(): number {

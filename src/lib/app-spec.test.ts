@@ -91,6 +91,12 @@ check("versions: parse says every problem in words", () => {
 	eq(parseNewVersions("", [], []).problems.length, 1);
 	eq(/valid YAML/.test(parseNewVersions("- {id: [", [], []).problems[0]), true);
 });
+check("versions: a title (the name people read) is kept and written", () => {
+	const r = parseNewVersions("- {id: mom_6_1, title: Six-month momentum, about: x, inputs: {spec: {}}}", [], ["spec"]);
+	eq([r.problems, r.versions[0].title], [[], "Six-month momentum"]);
+	const out = addVersions(EXP, "strategy_search", r.versions);
+	eq(/- id: mom_6_1\n\s+title: Six-month momentum\n\s+about: x/.test(out), true);
+});
 check("versions: added after the last one, comments kept", () => {
 	const out = addVersions(EXP, "strategy_search", [{ id: "mom_6_1", about: "six-month", inputs: { spec: { signal: "lag(ret_105, 21)" } } }]);
 	eq(out.includes("# the funnel"), true);

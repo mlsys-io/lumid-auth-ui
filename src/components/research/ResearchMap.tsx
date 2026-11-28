@@ -21,6 +21,7 @@ import EvolutionChart, { type EvoSeries } from "@/components/research/EvolutionC
 import BestScoreChart from "@/components/research/BestScoreChart";
 import VersionChain from "@/components/research/VersionChain";
 import { buildEvolution, meansByStep, seriesFromRows, type TieBreaker } from "@/lib/evolution";
+import { gateLine } from "@/lib/evolution-axis";
 import ApprovalCard, { readNotNow, writeNotNow } from "@/components/research/ApprovalCard";
 import ResearchDashboard from "@/components/research/ResearchDashboard";
 import { bestResult } from "@/lib/research-dashboard";
@@ -636,6 +637,7 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 		// Comparable versions: Novix's best-so-far story on one axis.
 		<BestScoreChart evo={evolution} labelOf={labelOf} colorOf={colorOf} metricKey={metric} unit={m?.unit ?? ""}
 			higherIsBetter={hib} minSamples={Math.max(1, e.min_samples || 1)} target={target}
+			gate={gateLine(steps, metric, evolution.step)}
 			failedAt={e.best_failed_gate ? humanId(e.best_stopped_at || "") : null} />
 	) : spark ? (
 		// Measured differently: one small chart per version, never ranked. Each

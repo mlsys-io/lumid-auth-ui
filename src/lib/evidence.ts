@@ -238,10 +238,22 @@ export function evidenceOf(input: {
 	// run from its workflow directly, outside the chain): place it under the ONE
 	// step whose declared metrics it reports. Was "not shown", which hid MLSys's
 	// GPU results and left the winner simulator-only (2026-11-28 review).
+	// When several steps declare some of its metrics (MLSys: Simulate and
+	// Sandbox both report goodput, TTFT and meets_*), the metrics only ONE step
+	// declares decide — a direct sandbox run reports energy_j_per_req, which
+	// only Sandbox declares, so it belongs there (2026-11-28: its four GPU rows
+	// read "No runs yet" under Sandbox while the panel showed them).
+	const declaredBy = new Map<string, number[]>();
+	specSteps.forEach((s, i) => { for (const m of s.metrics) declaredBy.set(m.name, [...(declaredBy.get(m.name) ?? []), i]); });
 	const stepByMetric = (r: MeExperimentRow): number => {
 		const keys = new Set(Object.keys(r.metrics || {}));
 		const hits = specSteps.map((s, i) => (s.metrics.some((m) => keys.has(m.name)) ? i : -1)).filter((i) => i >= 0);
-		return hits.length === 1 ? hits[0] : -1;
+		if (hits.length === 1) return hits[0];
+		if (hits.length < 2) return -1;
+		const own = new Map<number, number>();
+		for (const k of keys) { const by = declaredBy.get(k); if (by?.length === 1) own.set(by[0], (own.get(by[0]) ?? 0) + 1); }
+		const ranked = [...own.entries()].sort((a, b) => b[1] - a[1]);
+		return ranked.length && (ranked.length === 1 || ranked[0][1] > ranked[1][1]) ? ranked[0][0] : -1;
 	};
 	const stepOf = (r: MeExperimentRow): number => {
 		const st = r.dims?.stage;

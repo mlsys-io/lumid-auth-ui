@@ -14,7 +14,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { ChevronLeft, BarChart3, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, BarChart3, X } from "lucide-react";
 import { me, type MeRunRow, type MeWorkflowRow } from "@/api/me";
 import AirflowGrid, { type GridCell, type GridState } from "@/components/AirflowGrid";
 import AirflowGantt from "@/components/AirflowGantt";
@@ -23,8 +23,9 @@ import { appTitle } from "@/components/workflow/AppCard";
 import { TONES } from "@/lib/tones";
 import { runStatus, runStatusTitle, RUN_STATUS_LABEL, RUN_STATUS_TONE } from "@/lib/runStatus";
 import { runRowHref } from "@/lib/run-routes";
-import { fmtDuration } from "@/lib/activity";
-import { runRowName, runRowWhen, runRowDetail, appLabels, workflowTitles, workflowFilterOptions, compareSelection, RUN_STATE_FILTERS } from "@/lib/runs-list";
+import { fmtDuration, runListGroups, runGroupDetail, runGroupLabel, removedAppsToggleLabel, onlyRemovedAppsWords, REMOVED_APP, type RunListGroup } from "@/lib/activity";
+import { useInstalledApps } from "@/components/useAppNav";
+import { runRowName, runRowWhen, runRowDetail, runRowFullDetail, appLabels, workflowTitles, workflowFilterOptions, compareSelection, RUN_STATE_FILTERS } from "@/lib/runs-list";
 import { cn } from "@/lib/utils";
 import { jobsSourceNotice } from "@/lib/data-jobs";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -236,6 +237,16 @@ function RunsList({ runs, titles, onClick, onCompare }: {
 	const tickedRows = ticked.map((id) => runs.find((r) => r.run_id === id)).filter((r): r is MeRunRow => !!r);
 	const sel = compareSelection(tickedRows);
 	const apps = useMemo(() => appLabels(runs.map((r) => r.app || ""), appTitle), [runs]);
+	// Runs of apps the user has removed sit behind a toggle (default off);
+	// repeats of one workflow failing the same way collapse into one row.
+	const installed = useInstalledApps();
+	const [showRemoved, setShowRemoved] = useState(false);
+	const [open, setOpen] = useState<string[]>([]);
+	const flip = (k: string) => setOpen((o) => (o.includes(k) ? o.filter((x) => x !== k) : [...o, k]));
+	const { groups, removed } = useMemo(
+		() => runListGroups(runs, { installed, showRemoved, detail: runRowDetail }),
+		[runs, installed, showRemoved],
+	);
 	if (runs.length === 0) {
 		return (
 			<EmptyState
@@ -245,8 +256,68 @@ function RunsList({ runs, titles, onClick, onCompare }: {
 			/>
 		);
 	}
+	const removedToggle = removed > 0 && (
+		<label className="inline-flex items-center gap-2 text-caption text-ink-700 cursor-pointer select-none">
+			<input type="checkbox" checked={showRemoved} onChange={(e) => setShowRemoved(e.target.checked)}
+				className="w-4 h-4 accent-ink-900 cursor-pointer" />
+			{removedAppsToggleLabel(removed)}
+		</label>
+	);
+	if (groups.length === 0) {
+		return (
+			<EmptyState
+				art={<EmptyRuns />}
+				title="Nothing from your installed apps"
+				body={<>{onlyRemovedAppsWords(removed)}<span className="mt-3 flex justify-center">{removedToggle}</span></>}
+			/>
+		);
+	}
+	const appCell = (g: RunListGroup) => {
+		const appName = g.app ? apps.get(g.app) ?? appTitle(g.app) : "";
+		return (
+			<>
+				{appName}
+				{g.removed && <span className="ml-1.5 rounded border border-ink-200 px-1 text-micro text-ink-600 whitespace-nowrap">{REMOVED_APP}</span>}
+			</>
+		);
+	};
+	const runRow = (r: MeRunRow, g: RunListGroup, nested: boolean) => {
+		const name = runRowName(r, titles.get(r.workflow_slug));
+		const when = runRowWhen(r.started_at);
+		const detail = runRowDetail(r);
+		const full = runRowFullDetail(r);
+		const on = ticked.includes(r.run_id);
+		return (
+			<tr
+				key={r.run_id}
+				onClick={() => onClick(r.run_id)}
+				className={cn("border-b border-ink-100 last:border-b-0 hover:bg-ink-50/40 transition-colors cursor-pointer", on && "bg-lagoon-50/60", nested && "bg-ink-50/30")}
+			>
+				<td className="w-9 px-2 py-2" onClick={(e) => e.stopPropagation()}>
+					<input type="checkbox" checked={on} onChange={() => toggle(r.run_id)}
+						aria-label={`Pick ${name}, ${when}, to compare`}
+						className="w-4 h-4 align-middle accent-ink-900 cursor-pointer" />
+				</td>
+				<td className={cn("px-2 py-2 min-w-0", nested && "pl-6")}>
+					<span className="block font-medium text-ink-900 truncate" title={name}>{nested ? when : name}</span>
+					{/* Small screens: the app, start time and detail under the name. */}
+					<span className="block md:hidden text-micro text-ink-600 truncate">
+						{!nested && appCell(g)}<span className="sm:hidden">{!nested && g.app && when ? " · " : ""}{nested ? "" : when}</span>
+					</span>
+					{detail && <span className="block lg:hidden text-micro text-ink-600 truncate" title={full}>{detail}</span>}
+				</td>
+				<td className="hidden md:table-cell px-3 py-2 text-ink-700 whitespace-nowrap">{nested ? "" : appCell(g)}</td>
+				<td className="px-2 sm:px-3 py-2"><StateChip state={r.state} /></td>
+				<td className="hidden sm:table-cell px-3 py-2 text-ink-600 whitespace-nowrap tabular-nums">{when}</td>
+				<td className="hidden sm:table-cell px-3 py-2 text-ink-600 whitespace-nowrap tabular-nums">{fmtDuration(r.duration_s)}</td>
+				{/* The cell shows one line; the tooltip carries all of it. */}
+				<td className="hidden lg:table-cell px-3 py-2 text-ink-600 max-w-[14rem]" title={full}><span className="block truncate">{detail}</span></td>
+			</tr>
+		);
+	};
 	return (
 		<div className="space-y-3">
+			{removedToggle && <div className="flex justify-end">{removedToggle}</div>}
 			<div className="rounded-xl border border-ink-200 bg-card overflow-x-auto shadow-sm">
 				<table className="w-full text-caption table-fixed sm:table-auto">
 					<thead className="bg-ink-50/60 border-b border-ink-200">
@@ -261,37 +332,48 @@ function RunsList({ runs, titles, onClick, onCompare }: {
 						</tr>
 					</thead>
 					<tbody>
-						{runs.map((r) => {
-							const name = runRowName(r, titles.get(r.workflow_slug));
-							const when = runRowWhen(r.started_at);
-							const detail = runRowDetail(r);
-							const appName = r.app ? apps.get(r.app) ?? appTitle(r.app) : "";
-							const on = ticked.includes(r.run_id);
-							return (
+						{groups.map((g) => {
+							if (g.runs.length === 1) return runRow(g.runs[0], g, false);
+							const first = g.runs[0];
+							const name = runRowName(first, titles.get(first.workflow_slug));
+							const label = runGroupLabel(name, g);
+							const isOpen = open.includes(g.key);
+							const full = runRowFullDetail(first);
+							return [
 								<tr
-									key={r.run_id}
-									onClick={() => onClick(r.run_id)}
-									className={cn("border-b border-ink-100 last:border-b-0 hover:bg-ink-50/40 transition-colors cursor-pointer", on && "bg-lagoon-50/60")}
+									key={`group:${g.key}`}
+									onClick={() => flip(g.key)}
+									aria-expanded={isOpen}
+									className="border-b border-ink-100 last:border-b-0 hover:bg-ink-50/40 transition-colors cursor-pointer"
 								>
-									<td className="w-9 px-2 py-2" onClick={(e) => e.stopPropagation()}>
-										<input type="checkbox" checked={on} onChange={() => toggle(r.run_id)}
-											aria-label={`Pick ${name}, ${when}, to compare`}
-											className="w-4 h-4 align-middle accent-ink-900 cursor-pointer" />
+									<td className="w-9 px-2 py-2 text-ink-500">
+										<button type="button" aria-label={`${isOpen ? "Hide" : "Show"} each run: ${label}`} aria-expanded={isOpen}
+											onClick={(e) => { e.stopPropagation(); flip(g.key); }}
+											className="grid h-5 w-5 place-items-center rounded hover:bg-ink-100">
+											<ChevronRight className={cn("h-3.5 w-3.5 transition-transform", isOpen && "rotate-90")} aria-hidden />
+										</button>
 									</td>
 									<td className="px-2 py-2 min-w-0">
-										<span className="block font-medium text-ink-900 truncate" title={name}>{name}</span>
-										{/* Small screens: the app and start time under the name. */}
-										<span className="block md:hidden text-micro text-ink-600 truncate">
-											{appName}<span className="sm:hidden">{appName && when ? " · " : ""}{when}</span>
+										<span className="block font-medium text-ink-900 truncate" title={label}>
+											{name} <span className="font-normal text-ink-600 tabular-nums">· {g.runs.length}×</span>
 										</span>
+										<span className="block md:hidden text-micro text-ink-600 truncate">{appCell(g)}</span>
+										<span className="block lg:hidden text-micro text-ink-600 truncate" title={full}>{runGroupDetail(g)}</span>
 									</td>
-									<td className="hidden md:table-cell px-3 py-2 text-ink-700 whitespace-nowrap">{appName}</td>
-									<td className="px-2 sm:px-3 py-2"><StateChip state={r.state} /></td>
-									<td className="hidden sm:table-cell px-3 py-2 text-ink-600 whitespace-nowrap tabular-nums">{when}</td>
-									<td className="hidden sm:table-cell px-3 py-2 text-ink-600 whitespace-nowrap tabular-nums">{fmtDuration(r.duration_s)}</td>
-									<td className="hidden lg:table-cell px-3 py-2 text-ink-600 max-w-[14rem]" title={detail}><span className="block truncate">{detail}</span></td>
-								</tr>
-							);
+									<td className="hidden md:table-cell px-3 py-2 text-ink-700 whitespace-nowrap">{appCell(g)}</td>
+									<td className="px-2 sm:px-3 py-2"><StateChip state={g.state} /></td>
+									<td className="hidden sm:table-cell px-3 py-2 text-ink-600 whitespace-nowrap tabular-nums">{runRowWhen(first.started_at)}</td>
+									<td className="hidden sm:table-cell px-3 py-2 text-ink-600 whitespace-nowrap tabular-nums" />
+									<td className="hidden lg:table-cell px-3 py-2 text-ink-600 max-w-[14rem]" title={full}><span className="block truncate">{runGroupDetail(g)}</span></td>
+								</tr>,
+								...(isOpen ? [
+									<tr key={`detail:${g.key}`} className="border-b border-ink-100 bg-ink-50/30">
+										<td />
+										<td colSpan={6} className="px-2 pl-6 py-2 text-caption text-ink-700 whitespace-pre-wrap break-words">{full}</td>
+									</tr>,
+									...g.runs.map((r) => runRow(r, g, true)),
+								] : []),
+							];
 						})}
 					</tbody>
 				</table>

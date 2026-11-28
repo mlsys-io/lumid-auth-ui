@@ -167,3 +167,23 @@ export function useAppNav(): AppNavSection[] {
     }))
     .sort((a, b) => a.section.localeCompare(b.section));
 }
+
+/** The installed apps' names — the same /me/apps read the sidebar's "Your Apps"
+ *  uses (all of them, `show: false` included: hidden from the rail is still
+ *  installed). null until it loads, or when it can't be read, so a caller
+ *  never calls an app "removed" on a guess. */
+export function useInstalledApps(enabled = true): ReadonlySet<string> | null {
+  const [names, setNames] = useState<ReadonlySet<string> | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    let live = true;
+    const tick = () =>
+      me.listApps()
+        .then((r) => { if (live) setNames(new Set((r.apps || []).map((a) => a.name))); })
+        .catch(() => { /* unknown, not empty: leave the last answer */ });
+    tick();
+    window.addEventListener(APP_NAV_INVALIDATE, tick);
+    return () => { live = false; window.removeEventListener(APP_NAV_INVALIDATE, tick); };
+  }, [enabled]);
+  return names;
+}

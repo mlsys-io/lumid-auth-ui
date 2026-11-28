@@ -26,6 +26,19 @@ export function runRowDetail(r: MeRunRow): string {
 	return t;
 }
 
+/** The Detail column's tooltip and expanded text: the words in full, then
+ *  the run's own message when it says more than the words (a cut-off cause or
+ *  a code). Never clipped — the cell shows one line, this shows all of it. */
+export function runRowFullDetail(r: MeRunRow): string {
+	const raw = (r.reason || "").trim();
+	const words = runRowDetail(r);
+	if (!raw || raw === words) return words;
+	const norm = (x: string) => x.toLowerCase().replace(/…$/, "").replace(/[\W_]+/g, "");
+	// The words already say everything the message does: show them alone.
+	if (norm(raw) === norm(words)) return words;
+	return `${words}\n\nThe run said: ${raw}`;
+}
+
 /** Each app's name for the App column. Two apps the shell titles alike (an
  *  app and its test copy) are told apart by their ids in words. */
 export function appLabels(apps: string[], title: (app: string) => string): Map<string, string> {
