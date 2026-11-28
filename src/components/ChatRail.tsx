@@ -44,6 +44,7 @@ export default function ChatRail({
 	enabled = true,
 	openKey = WS_CHAT_OPEN_KEY,
 	top,
+	defaultOpen = true,
 }: {
 	/** App slug (or virtual scope key) the conversation is grounded on. */
 	groundApp: string;
@@ -59,9 +60,14 @@ export default function ChatRail({
 	/** Rendered above the chat, in the same column — e.g. <RunningNow />, so
 	 *  live work stays beside the conversation about it. */
 	top?: ReactNode;
+	/** Open state before the person has ever toggled it on this surface. */
+	defaultOpen?: boolean;
 }) {
 	const [chatOpen, setChatOpen] = useState<boolean>(() => {
-		try { return localStorage.getItem(openKey) !== "0"; } catch { return true; }
+		try {
+			const v = localStorage.getItem(openKey);
+			return v === null ? defaultOpen : v !== "0";
+		} catch { return defaultOpen; }
 	});
 	useEffect(() => { try { localStorage.setItem(openKey, chatOpen ? "1" : "0"); } catch { /* ignore */ } }, [openKey, chatOpen]);
 
