@@ -8,22 +8,33 @@
 //
 // One sentence on what changed, then three tiles. Each tile answers one
 // question in words and opens the thing it names; any tile can be hidden from
-// its own ⋯ (remembered per app in this browser). Below 640 px only the
-// sentence shows — the work below needs the room.
+// its own ⋯ (remembered per app in this browser; the ⋯ is always visible on a
+// touch screen, which has no hover). Below 640 px the tiles fold into ONE line
+// under the sentence: "112 GPU-min left · 2 need you · 1 failing".
+//
+// 2026-11-28: Best results names the step of every number ("75.3 J per request
+// on the RTX 5080 · 86.5 simulated" — never their average); This week sums the
+// usage the week's step rows carry ("9 CPU-h · $0.04 notional this week") and
+// keeps the budget line where the app has one.
 
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AlertTriangle, CheckCircle2, CircleDot, Lightbulb, Sparkles } from "lucide-react";
-import { me, type MeExperiment, type MeWorkflowRow } from "@/api/me";
+import { me, type MeExperiment, type MeExperimentRow, type MeWorkflowRow } from "@/api/me";
 import type { Proposal } from "@/lib/research-map";
 import { humanId } from "@/lib/research-map";
-import { bestResults, bestSoFar, dollars, failingWorkflows, researchHeadline, weekSummary, type BestResult } from "@/lib/research-dashboard";
+import { bestResults, bestSoFar, dollars, failingWorkflows, phoneSummary, researchHeadline, weekSummary, type BestResult } from "@/lib/research-dashboard";
 import { useRunsFeed } from "@/components/activity/hooks";
 import { groupActivity } from "@/lib/activity";
 import { cn } from "@/lib/utils";
 import { useAppUsage } from "@/components/research/SpendLine";
 import { instrumentName } from "@/lib/measure";
-import { usageLine } from "@/lib/spend";
+import { budgetLeftWords, budgetMeter, specServices, usageLine, weekSpend, weekSpendWords, type MeUsage } from "@/lib/spend";
+import { useAppGraph } from "@/hooks/useAppGraph";
+import { experimentSteps } from "@/lib/evidence";
+import { lastStepPoints, seriesFromRows, versionStepWords } from "@/lib/evolution";
+import { fmtMetricValue, humanMetric } from "@/lib/run-answer";
+import type { AppSpec } from "@/lib/app-spec";
 
 type TileId = "best" | "needs" | "week";
 const TILE_TITLE: Record<TileId, string> = { best: "Best results", needs: "Needs you", week: "This week" };
@@ -76,6 +87,10 @@ export default function ResearchDashboard({ app, exps, pending, rows, label, onS
 	const headline = researchHeadline({ exps, failing, ideas: pending.length, firstIdea: pending[0] ? `sug:${pending[0].id}` : undefined, seen });
 
 	const tiles = (["best", "needs", "week"] as TileId[]).filter((t) => !hidden.includes(t));
+	const usage = useAppUsage(app);
+	const spec = useAppGraph(app).graph?.spec ?? null;
+	const instruments = useMemo(() => specServices(spec), [spec]);
+	const phone = phoneSummary({ left: budgetLeftWords(budgetMeter(usage, undefined, { instruments })), needs: pending.length, failing: failing.length });
 	return (
 		<div className="space-y-2">
 			{(headline || hidden.length > 0) && (
@@ -96,11 +111,13 @@ export default function ResearchDashboard({ app, exps, pending, rows, label, onS
 					)}
 				</div>
 			)}
+			{/* Phone: the three tiles in one line (they need more room than 390 px). */}
+			<p className="px-0.5 text-caption text-ink-700 sm:hidden" data-testid="research-phone-summary">{phone}</p>
 			{tiles.length > 0 && (
 				<div className={cn("hidden gap-2 sm:grid", tiles.length === 3 ? "sm:grid-cols-3" : tiles.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-1")}>
-					{tiles.includes("best") && <BestTile app={app} best={best} onSelect={onSelect} onHide={() => hide("best")} />}
+					{tiles.includes("best") && <BestTile app={app} best={best} spec={spec} onSelect={onSelect} onHide={() => hide("best")} />}
 					{tiles.includes("needs") && <NeedsTile pending={pending} failing={failing} onSelect={onSelect} onHide={() => hide("needs")} />}
-					{tiles.includes("week") && <WeekTile app={app} rows={rows} onHide={() => hide("week")} />}
+					{tiles.includes("week") && <WeekTile app={app} exps={exps} rows={rows} usage={usage} instruments={instruments} onHide={() => hide("week")} />}
 				</div>
 			)}
 		</div>
@@ -114,7 +131,7 @@ function Tile({ id, onHide, children }: { id: TileId; onHide: () => void; childr
 			<div className="flex items-center">
 				<h3 className="eyebrow">{TILE_TITLE[id]}</h3>
 				<button type="button" aria-label={`${TILE_TITLE[id]}: more`} onClick={() => setMenu((v) => !v)}
-					className="ml-auto -mr-1 inline-flex h-5 w-6 items-center justify-center rounded text-ink-600 opacity-0 hover:bg-ink-100 hover:text-ink-900 focus-visible:opacity-100 group-hover:opacity-100">⋯</button>
+					className="ml-auto -mr-1 inline-flex h-5 w-6 items-center justify-center rounded text-ink-600 opacity-0 hover:bg-ink-100 hover:text-ink-900 focus-visible:opacity-100 group-hover:opacity-100 [@media(hover:none)]:opacity-100">⋯</button>
 				{menu && (
 					<div role="menu" className="absolute right-2 top-7 z-20 rounded-lg border border-ink-200 bg-popover p-1 shadow-e2" onMouseLeave={() => setMenu(false)}>
 						<button type="button" role="menuitem" onClick={() => { setMenu(false); onHide(); }} className="block w-full whitespace-nowrap rounded-md px-2 py-1 text-left text-caption text-ink-800 hover:bg-ink-100">Hide this</button>
@@ -142,21 +159,37 @@ function BestLine({ values, higherIsBetter }: { values: number[]; higherIsBetter
 	);
 }
 
-function BestTile({ app, best, onSelect, onHide }: { app: string; best: BestResult[]; onSelect: (id: string) => void; onHide: () => void }) {
+function BestTile({ app, best, spec, onSelect, onHide }: { app: string; best: BestResult[]; spec: AppSpec | null; onSelect: (id: string) => void; onHide: () => void }) {
 	const top = best[0];
 	const [series, setSeries] = useState<number[] | null>(null);
+	// The leader's number per step, named: "75.3 J per request on the RTX 5080 · 86.5 simulated".
+	const [stepWords, setStepWords] = useState<string | null>(null);
 	useEffect(() => {
-		setSeries(null);
+		setSeries(null); setStepWords(null);
 		if (!top) return;
 		let live = true;
 		const id = top.select.slice(4);
 		me.experiment(app, id).then((d) => {
-			const vid = d.best_variant;
+			const vid = top.version || d.best_variant;
+			const metric = d.metric?.name || d.metric_name || "";
+			const rows = d.results || [];
+			if (metric && vid && rows.length) {
+				const steps = experimentSteps(spec, d);
+				const { unit } = humanMetric(metric);
+				const words = versionStepWords(rows, vid, metric, (v) => fmtMetricValue(v, unit, metric), (v) => fmtMetricValue(v, "", metric), steps);
+				const all = seriesFromRows(rows, metric, steps);
+				const mine = all.series.find((x) => x.id === vid);
+				if (live) {
+					setStepWords(words || null);
+					if (mine) setSeries(lastStepPoints(mine.points, all.steps).points.map((p) => p.v));
+				}
+				return;
+			}
 			const s = d.series?.find((x) => x.variant_id === vid) ?? d.series?.[0];
 			if (live && s) setSeries(s.points.map((p) => p.v));
 		}).catch(() => {});
 		return () => { live = false; };
-	}, [app, top?.select, top]);
+	}, [app, top?.select, top, spec]);
 	return (
 		<Tile id="best" onHide={onHide}>
 			{!top ? (
@@ -167,12 +200,14 @@ function BestTile({ app, best, onSelect, onHide }: { app: string; best: BestResu
 					<div className="flex items-end gap-2">
 						<div className="min-w-0 flex-1">
 							<div className="flex items-baseline gap-1.5">
+								{/* top.leader is versionLabel(e, id) (lib/research-dashboard bestResult): the panel's name for it. */}
 								<span className="truncate text-meta font-semibold text-ink-900">{top.leader}</span>
 								<span className={cn("flex-shrink-0 text-micro", top.standing === "winning" ? "text-gold-700" : "text-ink-600")}>
 									{top.standing === "winning" ? <><CheckCircle2 className="mr-0.5 inline h-3 w-3 -translate-y-px" aria-hidden />wins</> : top.standing === "didn't pass a step" ? `didn't pass ${top.stoppedAt ?? "a step"}` : top.standing}
 								</span>
 							</div>
-							<div className="truncate font-mono text-caption tabular-nums text-ink-800">{top.metric} {top.valueText} <span className="font-sans text-micro text-ink-600">· {top.n} results</span></div>
+							<div className="truncate text-micro text-ink-700">{top.metric}</div>
+							<div className="truncate font-mono text-caption tabular-nums text-ink-800" title={stepWords ?? top.valueText}>{stepWords ?? top.valueText}</div>
 						</div>
 						{series && <BestLine values={series} higherIsBetter={top.higherIsBetter} />}
 					</div>
@@ -216,10 +251,33 @@ function NeedsTile({ pending, failing, onSelect, onHide }: { pending: Proposal[]
 	);
 }
 
-function WeekTile({ app, rows, onHide }: { app: string; rows: Map<string, MeWorkflowRow>; onHide: () => void }) {
-	// Metered compute (device-minutes first), from /me/usage; the old cents
-	// field only knew LLM spend and said "No spend" over real GPU minutes.
-	const spend = usageLine(useAppUsage(app), (n) => instrumentName(n).replace(/^the /, ""));
+/** The ledger rows of the experiments that moved in the last 7 days (at most
+ *  12 reads), for the week's metered usage. null while reading. */
+function useWeekRows(app: string, exps: MeExperiment[]): MeExperimentRow[] | null {
+	const ids = useMemo(() => {
+		const cut = Date.now() - 7 * 86_400_000;
+		return exps.filter((e) => !e.updated_at || Date.parse(e.updated_at) >= cut).sort((a, b) => (b.updated_at ?? "").localeCompare(a.updated_at ?? "")).slice(0, 12).map((e) => e.id).join(",");
+	}, [exps]);
+	const [rows, setRows] = useState<MeExperimentRow[] | null>(null);
+	useEffect(() => {
+		let live = true;
+		const list = ids ? ids.split(",") : [];
+		Promise.allSettled(list.map((id) => me.experiment(app, id)))
+			.then((rs) => { if (live) setRows(rs.flatMap((r) => (r.status === "fulfilled" ? r.value.results || [] : []))); });
+		return () => { live = false; };
+	}, [app, ids]);
+	return rows;
+}
+
+function WeekTile({ app, exps, rows, usage, instruments, onHide }: { app: string; exps: MeExperiment[]; rows: Map<string, MeWorkflowRow>; usage: MeUsage | null; instruments: string[]; onHide: () => void }) {
+	// What the week's step rows used (each row carries its own metered usage),
+	// then the budget line where the app declares one. The old cents field only
+	// knew LLM spend and said "No spend recorded" over rows that carried cost.
+	const weekRows = useWeekRows(app, exps);
+	const week = weekRows ? weekSpendWords(weekSpend(weekRows)) : null;
+	const meter = budgetMeter(usage, undefined, { instruments });
+	const budget = meter ? usageLine(usage, (n) => instrumentName(n).replace(/^the /, ""), { instruments }) : null;
+	const spend = week || budget ? null : usageLine(usage, (n) => instrumentName(n).replace(/^the /, ""), { instruments });
 	const { runs } = useRunsFeed(7);
 	const navigate = useNavigate();
 	const w = weekSummary(app, runs, rows);
@@ -240,7 +298,9 @@ function WeekTile({ app, rows, onHide }: { app: string; rows: Map<string, MeWork
 						))}
 					</div>
 				)}
-				<div className="text-micro text-ink-700">{spend ?? (w.spendCents ? `${dollars(w.spendCents)} spent this month` : "No spend recorded this month")}</div>
+				{week && <div className="text-micro text-ink-800" data-testid="week-spend">{week}</div>}
+				{budget && <div className="text-micro text-ink-700">{budget}</div>}
+				{!week && !budget && <div className="text-micro text-ink-700">{spend ?? (w.spendCents ? `${dollars(w.spendCents)} spent this month` : weekRows === null ? "…" : "No spend recorded this month")}</div>}
 			</button>
 		</Tile>
 	);

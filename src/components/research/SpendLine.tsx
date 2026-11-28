@@ -28,17 +28,19 @@ export function useAppUsage(app: string | undefined): MeUsage | null {
 	return u;
 }
 
-export default function SpendLine({ app, rows, usage, className }: {
+export default function SpendLine({ app, rows, usage, instruments, className }: {
 	app?: string;
 	/** Rows to total when the app declares no budget (an experiment's results). */
 	rows?: MeExperimentRow[] | null;
 	/** Pass a usage you already read; otherwise it is read for `app`. */
 	usage?: MeUsage | null;
+	/** The services this app's spec measures with (budget estimates use only these). */
+	instruments?: string[];
 	className?: string;
 }) {
 	const own = useAppUsage(usage === undefined ? app : undefined);
 	const u = usage === undefined ? own : usage;
-	const meter = budgetMeter(u, (n) => instrumentName(n).replace(/^the /, ""));
+	const meter = budgetMeter(u, (n) => instrumentName(n).replace(/^the /, ""), { instruments });
 	const spend = rows && rows.length ? experimentSpend(rows) : null;
 	const line = spend ? spendWords(spend) : null;
 	if (!meter && !line) return null;

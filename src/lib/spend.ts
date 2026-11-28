@@ -1,4 +1,5 @@
-// spend — what research cost, in words: device-minutes first, notional $ second.
+// spend — what research cost, in words: device-minutes first, then dollars
+// (notional only where they are).
 //
 // Round 10 (2026-11-28), shared by every research app. The platform meters
 // what each run and measurement used (LumidOS sdk/apps/usage.py, identity
@@ -9,6 +10,13 @@
 // metered" instead of a false "$0". Owned hardware has no bill: dollars come
 // from platform rates and are notional, a unit for putting CPU and GPU work
 // on one axis. Every sentence leads with device-minutes.
+//
+// Round 11 (2026-11-28): "notional" applies only to the notional PART. Model
+// calls (pooled-llm measurements, Claude through the proxy) are priced at list
+// price and are real money; identity's /me/usage says which part of its LLM
+// spend is notional (`used.llm.notional_usd`). A row's notional part is what
+// its device time costs at the platform rates; the rest of its cost_usd is a
+// bill. A step that spends real money is priced in dollars first.
 //
 // Pure functions only; every word the UI shows about spend is made here.
 
@@ -36,6 +44,8 @@ export interface Spend {
 	cpu_s: number;
 	gpu_s: number;
 	cost_usd: number;
+	/** The part of cost_usd that is device time at platform rates (no bill). */
+	notional_usd: number;
 	duration_s: number;
 	saved_cpu_s: number;
 	saved_gpu_s: number;
@@ -70,8 +80,44 @@ export function usageOf(blob: unknown): Usage | null {
 	return any ? u : null;
 }
 
+/** identity's default notional rates ($/hour; me_usage.go usageDefaultRates). */
+const DEFAULT_RATES = { cpu_core_hour: 0.02, gpu_hour: { "RTX 5080": 0.25, "RTX 5090": 0.4, "RTX PRO 4000": 0.3, "RTX 6000 Ada": 0.8, H100: 2, H200: 2.5, "*": 0.5 } as Record<string, number> };
+export type Rates = { cpu_core_hour?: number; gpu_hour?: Record<string, number>; notional?: boolean };
+
+/** What device time costs at the platform rates (notional): the GPU rate by
+ *  the longest known name inside the device's, as identity prices it. */
+export function deviceCostUsd(gpu_s: number, cpu_s: number, gpuType = "", rates: Rates = DEFAULT_RATES): number {
+	const table = rates.gpu_hour ?? DEFAULT_RATES.gpu_hour;
+	let rate = table[gpuType];
+	if (rate === undefined) {
+		const low = gpuType.toLowerCase();
+		const hit = Object.keys(table).filter((k) => k !== "*" && low && low.includes(k.toLowerCase())).sort((a, b) => b.length - a.length)[0];
+		rate = hit ? table[hit] : table["*"] ?? 0.5;
+	}
+	return ((cpu_s || 0) / 3600) * (rates.cpu_core_hour ?? DEFAULT_RATES.cpu_core_hour) + ((gpu_s || 0) / 3600) * rate;
+}
+
+/** The notional part of one run's cost: its device time at the platform
+ *  rates, never more than the cost itself. The rest is a bill (model calls). */
+export function notionalPart(u: Usage): number {
+	const cost = u.cost_usd ?? 0;
+	if (cost <= 0) return 0;
+	if (!(u.gpu_s || u.cpu_s)) return 0;
+	return Math.min(cost, deviceCostUsd(u.gpu_s ?? 0, u.cpu_s ?? 0, u.gpu_type ?? ""));
+}
+
+/** Dollars with "notional" on the notional part only:
+ *  "$0.03 notional" · "$1.49" · "$1.52 ($0.03 of it notional)". */
+export function dollarWords(total: number, notional: number): string {
+	if (!(total > 0)) return "$0";
+	const n = Math.max(0, Math.min(total, notional));
+	if (total - n < 0.005) return `${dollars(total)} notional`;
+	if (n < 0.005) return dollars(total);
+	return `${dollars(total)} (${dollars(n)} of it notional)`;
+}
+
 const empty = (): Spend => ({
-	runs: 0, metered: 0, reused: 0, estimated: 0, cpu_s: 0, gpu_s: 0, cost_usd: 0, duration_s: 0,
+	runs: 0, metered: 0, reused: 0, estimated: 0, cpu_s: 0, gpu_s: 0, cost_usd: 0, notional_usd: 0, duration_s: 0,
 	saved_cpu_s: 0, saved_gpu_s: 0, gpu_by_type: {},
 });
 
@@ -90,6 +136,7 @@ export function sumUsage(items: Array<{ usage: Usage | null; duration_s?: number
 		s.cpu_s += u.cpu_s ?? 0;
 		s.gpu_s += u.gpu_s ?? 0;
 		s.cost_usd += u.cost_usd ?? 0;
+		s.notional_usd += notionalPart(u);
 		s.saved_cpu_s += u.saved_cpu_s ?? 0;
 		s.saved_gpu_s += u.saved_gpu_s ?? 0;
 		if (u.gpu_s && u.gpu_s > 0) {
@@ -160,7 +207,7 @@ export function spendWords(s: Spend): string {
 	const parts: string[] = [];
 	if (dev) parts.push(dev);
 	else if (s.reused === s.metered) parts.push("Free — every result was reused");
-	if (s.cost_usd > 0) parts.push(`${dollars(s.cost_usd)} notional`);
+	if (s.cost_usd > 0) parts.push(dollarWords(s.cost_usd, s.notional_usd));
 	const saved = s.saved_gpu_s > 0 ? deviceTime(s.saved_gpu_s).replace(/ (min|s|h)$/, " GPU-$1") : s.saved_cpu_s > 0 ? deviceTime(s.saved_cpu_s).replace(/ (min|s|h)$/, " CPU-$1") : "";
 	if (s.reused && saved) parts.push(`reuse saved ${saved}`);
 	const unmetered = s.runs - s.metered;
@@ -187,10 +234,27 @@ export function usageWords(u: Usage | null): string {
 export interface ComputeBudget { gpu_minutes?: number; cpu_minutes?: number; usd?: number; per?: string; parallel?: number }
 
 /** GET /me/usage?app= (identity). Fields absent when unknown. */
+export interface InstrumentUse { gpu_s?: number; cpu_s?: number; cost_usd?: number; runs?: number }
+/** `used.llm` (identity me_usage_llm.go): attributed model calls. cost_usd is
+ *  INCLUDED in used.cost_usd; notional_usd is the part priced from the
+ *  platform's notional table (self-hosted models), the rest is list price. */
+export interface LlmUse { calls: number; tokens_in: number; tokens_out: number; cost_usd: number; notional_usd?: number }
 export interface MeUsage {
 	app?: string;
 	since?: string | null;
-	used: { gpu_s: number; cpu_s: number; cost_usd: number; runs: number; running?: number; unmetered_runs?: number; by_device?: Record<string, number> };
+	used: {
+		gpu_s: number; cpu_s: number; cost_usd: number; runs: number; running?: number; unmetered_runs?: number; by_device?: Record<string, number>;
+		tokens_in?: number; tokens_out?: number;
+		/** This app's measurements by instrument (all apps when no app was asked). */
+		by_instrument?: Record<string, InstrumentUse>;
+		by_workflow?: Record<string, InstrumentUse>;
+		/** GPU seconds by UTC day. */
+		by_day?: Record<string, number>;
+		llm?: LlmUse;
+	};
+	rates?: Rates;
+	/** The account's daily GPU-measurement cap and today's count (identity, 2026-11-28). Absent on older identity. */
+	limits?: { gpu_measurements_per_day?: number; gpu_measurements_today?: number };
 	saved?: { gpu_s: number; cpu_s: number; reused_runs: number };
 	budget?: ComputeBudget;
 	remaining?: { gpu_s?: number; cpu_s?: number; cost_usd?: number };
@@ -199,9 +263,36 @@ export interface MeUsage {
 
 const perWords = (per?: string) => (per === "day" ? " today" : per === "week" ? " this week" : "");
 
+/** The notional part of an app's dollars: its measurements' device time (when
+ *  the platform's rates are notional) plus the notional part of its LLM spend.
+ *  Pooled-llm measurements and Claude are list price: not notional. */
+export function usageNotionalUsd(u: MeUsage): number {
+	const devNotional = u.rates?.notional === false ? 0 : (() => {
+		const by = u.used.by_instrument;
+		// An instrument that used device time is priced from it; one that
+		// used none (pooled-llm) carries its own list-price bill.
+		if (by) return Object.values(by).reduce((a, x) => a + ((x.gpu_s ?? 0) > 0 || (x.cpu_s ?? 0) > 0 ? x.cost_usd ?? 0 : 0), 0);
+		return Math.max(0, u.used.cost_usd - (u.used.llm?.cost_usd ?? 0));
+	})();
+	return Math.min(u.used.cost_usd, devNotional + (u.used.llm?.notional_usd ?? 0));
+}
+
+/** One run of an instrument in a budget's unit, from THIS app's own history
+ *  (`used.by_instrument`), else the platform estimate — but only for an
+ *  instrument this app's spec uses. Another app's instrument never prices
+ *  this app's runs (MBB was told "2395 more MLSys GPU sandbox runs"). */
+function perRunCosts(u: MeUsage, unit: "GPU-min" | "CPU-min" | "$", instruments?: string[]): Array<{ name: string; v: number }> {
+	const val = (e: InstrumentUse, runs: number) => (unit === "GPU-min" ? (e.gpu_s ?? 0) / 60 : unit === "CPU-min" ? (e.cpu_s ?? 0) / 60 : e.cost_usd ?? 0) / Math.max(1, runs);
+	const own = Object.entries(u.used.by_instrument ?? {}).filter(([name, e]) => name !== "(unnamed)" && (e.runs ?? 0) > 0).map(([name, e]) => ({ name, v: val(e, e.runs ?? 1) }));
+	const ownNames = new Set(own.map((x) => x.name));
+	const est = Object.entries(u.estimates ?? {}).filter(([name]) => !ownNames.has(name) && !!instruments?.includes(name)).map(([name, e]) => ({ name, v: val(e, 1) }));
+	return [...own, ...est].filter((x) => x.v > 0);
+}
+
 /** A budget's state, as a meter: share used and the sentence beside it.
- *  null when the app declares no budget. */
-export function budgetMeter(u: MeUsage | null | undefined, instrumentWords?: (name: string) => string): {
+ *  null when the app declares no budget. `instruments`: the services this
+ *  app's spec measures with (the only estimates "≈ N more runs" may use). */
+export function budgetMeter(u: MeUsage | null | undefined, instrumentWords?: (name: string) => string, opts: { instruments?: string[] } = {}): {
 	used: number; limit: number; unit: "GPU-min" | "CPU-min" | "$"; share: number; words: string; low: boolean; over: boolean;
 } | null {
 	const b = u?.budget;
@@ -214,16 +305,18 @@ export function budgetMeter(u: MeUsage | null | undefined, instrumentWords?: (na
 	const left = Math.max(0, limit - used);
 	const share = limit > 0 ? Math.min(1, used / limit) : 0;
 	const fmt = (x: number) => (unit === "$" ? dollars(x) : `${x < 10 ? Math.round(x * 10) / 10 : Math.round(x)}`);
-	const head = unit === "$" ? `${fmt(used)} of ${fmt(limit)} notional used${perWords(b.per)}` : `${fmt(used)} of ${fmt(limit)} ${unit} used${perWords(b.per)}`;
-	// "about N more <instrument> runs": from the costliest estimate in that unit.
+	let head: string;
+	if (unit === "$") {
+		const notional = usageNotionalUsd(u);
+		const tag = used - notional < 0.005 && used > 0 ? " notional" : "";
+		const part = !tag && notional >= 0.005 ? ` (${dollars(notional)} of it notional)` : "";
+		head = `${fmt(used)} of ${fmt(limit)}${tag} used${perWords(b.per)}${part}`;
+	} else head = `${fmt(used)} of ${fmt(limit)} ${unit} used${perWords(b.per)}`;
+	// "about N more <instrument> runs": from the costliest of THIS app's instruments.
 	let more = "";
-	const ests = Object.entries(u.estimates ?? {});
-	const per = ests
-		.map(([name, e]) => ({ name, v: unit === "GPU-min" ? (e.gpu_s ?? 0) / 60 : unit === "CPU-min" ? (e.cpu_s ?? 0) / 60 : e.cost_usd ?? 0 }))
-		.filter((x) => x.v > 0)
-		.sort((a, b2) => b2.v - a.v)[0];
+	const per = perRunCosts(u, unit, opts.instruments).sort((a, b2) => b2.v - a.v)[0];
 	if (per && left > 0) {
-		const n = Math.floor(left / per.v);
+		const n = Math.floor(left / per.v + 1e-9);
 		const what = instrumentWords ? instrumentWords(per.name) : "";
 		more = ` (about ${n} more ${what ? `${what} ` : ""}${n === 1 ? "run" : "runs"})`;
 	}
@@ -231,25 +324,64 @@ export function budgetMeter(u: MeUsage | null | undefined, instrumentWords?: (na
 	return { used, limit, unit, share, words: head + tail, low: left > 0 && share >= 0.8, over: left <= 0 };
 }
 
-/** What a press will spend, said before it happens, and whether the budget
- *  allows it. `estimate` is one run's usual usage (per instrument). */
+/** The services (instruments) an app's spec measures with — every workflow's,
+ *  or one workflow's feedback steps. */
+export function specServices(spec: { workflows: Array<{ id: string; feedback: Array<{ service?: string }> }> } | null | undefined, workflow?: string): string[] {
+	const wfs = (spec?.workflows ?? []).filter((w) => workflow === undefined || w.id === workflow);
+	return [...new Set(wfs.flatMap((w) => w.feedback.map((f) => f.service ?? "").filter(Boolean)))];
+}
+
+/** What's left of a budget, short: "112 GPU-min left" · "$39.08 left" · "Budget used up". */
+export function budgetLeftWords(m: { used: number; limit: number; unit: "GPU-min" | "CPU-min" | "$" } | null): string | null {
+	if (!m) return null;
+	const left = Math.max(0, m.limit - m.used);
+	if (left <= 0) return "Budget used up";
+	return m.unit === "$" ? `${dollars(left)} left` : `${left < 10 ? Math.round(left * 10) / 10 : Math.round(left)} ${m.unit} left`;
+}
+
+/** A step "spends money" when a version costs at least this through it. */
+export const PAID_USD = 0.01;
+
+/**
+ * What a press will spend, said before it happens, and whether the budget
+ * allows it. `estimate` is one version's usual usage (`estimateThrough`).
+ * Money leads when the step spends it ("about $3 a version · $39.08 left");
+ * otherwise device time does ("about 21 GPU-min · 130 GPU-min left"). A GPU
+ * press also says where the day's GPU measurements stand (`gpuToday`).
+ * `spends`: the press uses a GPU or real money (worth a second look).
+ */
 export function pressWords(input: {
 	runs: number;
-	estimate?: { gpu_s?: number; cpu_s?: number; cost_usd?: number } | null;
+	estimate?: { gpu_s?: number; cpu_s?: number; cost_usd?: number; notional_usd?: number } | null;
 	usage?: MeUsage | null;
 	/** "GPU sandbox" — what the runs go through, in words. */
 	through?: string;
-}): { text: string; blocked: boolean } {
+	/** Says what runs instead of "Run N versions": "Run Screen once". */
+	what?: string;
+	/** GPU measurements in the last 24 h (`gpuMeasurementsToday`) and the daily cap, when known. */
+	gpuToday?: { used: number; limit?: number } | null;
+	/** The services the app's spec measures with (for the budget meter's estimates). */
+	instruments?: string[];
+}): { text: string; blocked: boolean; spends: boolean } {
 	const n = Math.max(0, Math.floor(input.runs));
 	const runs = `${n} ${n === 1 ? "version" : "versions"}`;
-	const head = input.through ? `Run ${runs} through ${input.through}` : `Run ${runs}`;
+	const head = input.what ?? (input.through ? `Run ${runs} through ${input.through}` : `Run ${runs}`);
 	const e = input.estimate;
-	if (!e || !((e.gpu_s ?? 0) > 0 || (e.cpu_s ?? 0) > 0 || (e.cost_usd ?? 0) > 0)) return { text: head, blocked: false };
-	const total: Spend = { ...empty(), gpu_s: (e.gpu_s ?? 0) * n, cpu_s: (e.cpu_s ?? 0) * n, cost_usd: (e.cost_usd ?? 0) * n };
-	if (total.gpu_s > 0) total.gpu_by_type = {};
-	let cost = deviceWords(total);
-	if (!cost && total.cost_usd > 0) cost = `${dollars(total.cost_usd)} notional`;
-	const m = budgetMeter(input.usage);
+	if (!e || !((e.gpu_s ?? 0) > 0 || (e.cpu_s ?? 0) > 0 || (e.cost_usd ?? 0) > 0)) return { text: head, blocked: false, spends: false };
+	const per = { gpu_s: e.gpu_s ?? 0, cpu_s: e.cpu_s ?? 0, cost_usd: e.cost_usd ?? 0 };
+	const perNotional = e.notional_usd ?? notionalPart(per);
+	const total: Spend = { ...empty(), gpu_s: per.gpu_s * n, cpu_s: per.cpu_s * n, cost_usd: per.cost_usd * n, notional_usd: perNotional * n };
+	const m = budgetMeter(input.usage, undefined, { instruments: input.instruments });
+	const realPer = per.cost_usd - perNotional;
+	const leadUsd = per.cost_usd >= PAID_USD && (m?.unit === "$" || (per.gpu_s <= 0 && realPer >= PAID_USD / 2));
+	let cost: string;
+	if (leadUsd) {
+		const each = dollarWords(per.cost_usd, perNotional);
+		cost = n > 1 ? `${each} a version, ${dollars(total.cost_usd)} in all` : each;
+		if (total.gpu_s > 0) cost += ` · ${deviceWords(total)}`;
+	} else {
+		cost = deviceWords(total) || dollarWords(total.cost_usd, total.notional_usd);
+	}
 	let left = "";
 	let blocked = false;
 	if (m) {
@@ -257,20 +389,112 @@ export function pressWords(input: {
 		const remaining = Math.max(0, m.limit - m.used);
 		blocked = need > 0 && need > remaining;
 		const fmtLeft = m.unit === "$" ? dollars(remaining) : `${remaining < 10 ? Math.round(remaining * 10) / 10 : Math.round(remaining)} ${m.unit}`;
-		left = blocked ? ` — only ${fmtLeft} left in the budget` : `, ${fmtLeft} left`;
+		left = blocked ? ` — only ${fmtLeft} left in the budget` : ` · ${fmtLeft} left`;
 	}
-	return { text: `${head}: about ${cost}${left}`, blocked };
+	// The day's GPU measurements: a cap per account, per rolling 24 h.
+	let day = "";
+	const g = input.gpuToday;
+	if (total.gpu_s > 0 && g) {
+		if (g.limit && g.limit > 0) {
+			const free = Math.max(0, g.limit - g.used);
+			if (free === 0) { blocked = true; day = ` — today's ${g.limit} GPU measurements are used; they free up over the next 24 h`; }
+			else if (n > free) day = ` · only ${free} of today's ${g.limit} GPU measurements left; the rest wait`;
+			else day = ` · ${free} of today's ${g.limit} GPU measurements left`;
+		} else {
+			day = ` · ${g.used} GPU ${g.used === 1 ? "measurement" : "measurements"} in the last 24 h (a daily cap applies)`;
+		}
+	}
+	return { text: `${head}: about ${cost}${left}${day}`, blocked, spends: total.gpu_s > 0 || leadUsd };
+}
+
+/**
+ * GPU measurements in the last 24 hours, counted from `GET /me/usage?since=<now−24h>`
+ * (no app: the cap is per account): settled, metered runs of every instrument
+ * that used a GPU. The FALLBACK for an identity without `limits` (see gpuToday).
+ */
+export function gpuMeasurementsToday(u: MeUsage | null | undefined): number | null {
+	if (!u) return null;
+	return Object.values(u.used.by_instrument ?? {}).reduce((a, x) => a + ((x.gpu_s ?? 0) > 0 ? x.runs ?? 0 : 0), 0);
+}
+
+/**
+ * Where the day's GPU measurements stand, for `pressWords({ gpuToday })`:
+ * identity's own `limits` when it sends them (the cap it enforces — per
+ * account, so "N of today's 24 left" is exact and the press blocks at 0), else
+ * the 24-hour count with no cap (said as a count only, never blocking).
+ */
+export function gpuToday(u: MeUsage | null | undefined): { used: number; limit?: number } | null {
+	if (!u) return null;
+	const l = u.limits;
+	if (l && typeof l.gpu_measurements_per_day === "number" && l.gpu_measurements_per_day > 0 && typeof l.gpu_measurements_today === "number")
+		return { used: Math.max(0, l.gpu_measurements_today), limit: l.gpu_measurements_per_day };
+	const n = gpuMeasurementsToday(u);
+	return n == null ? null : { used: n };
+}
+
+/**
+ * What one run of a workflow usually costs: its own history on /me/usage
+ * (`used.by_workflow`), else the sum of the estimates for the services its
+ * feedback steps measure with (this app's history first, then the platform's).
+ * null when nothing says.
+ */
+export function workflowRunEstimate(u: MeUsage | null | undefined, workflow: string, services: string[] = []): { gpu_s: number; cpu_s: number; cost_usd: number } | null {
+	if (!u) return null;
+	const own = u.used.by_workflow?.[workflow];
+	if (own && (own.runs ?? 0) > 0) {
+		const k = own.runs!;
+		return { gpu_s: (own.gpu_s ?? 0) / k, cpu_s: (own.cpu_s ?? 0) / k, cost_usd: (own.cost_usd ?? 0) / k };
+	}
+	const out = { gpu_s: 0, cpu_s: 0, cost_usd: 0 };
+	let any = false;
+	for (const svc of new Set(services)) {
+		const hist = u.used.by_instrument?.[svc];
+		const e = hist && (hist.runs ?? 0) > 0
+			? { gpu_s: (hist.gpu_s ?? 0) / hist.runs!, cpu_s: (hist.cpu_s ?? 0) / hist.runs!, cost_usd: (hist.cost_usd ?? 0) / hist.runs! }
+			: u.estimates?.[svc];
+		if (!e) continue;
+		any = true;
+		out.gpu_s += e.gpu_s ?? 0; out.cpu_s += e.cpu_s ?? 0; out.cost_usd += e.cost_usd ?? 0;
+	}
+	return any ? out : null;
+}
+
+const WEEK_S = 7 * 86400;
+const rowSec = (ts?: string): number => {
+	if (!ts) return NaN;
+	const n = Number(ts);
+	if (Number.isFinite(n)) return n > 1e12 ? n / 1000 : n;
+	const d = Date.parse(ts);
+	return Number.isFinite(d) ? d / 1000 : NaN;
+};
+
+/** What the step rows of the last 7 days used (every experiment's rows). */
+export function weekSpend(rows: MeExperimentRow[], now = Date.now() / 1000): Spend {
+	return sumUsage(rows.filter((r) => { const t = rowSec(r.ts); return Number.isFinite(t) && now - t < WEEK_S && t <= now + 60; })
+		.map((r) => ({ usage: usageOfRow(r), duration_s: num(r.metrics?.duration_s) })));
+}
+
+/** "9 CPU-h · $0.04 notional this week" — null when nothing was metered. */
+export function weekSpendWords(s: Spend): string | null {
+	if (!s.metered) return null;
+	const parts: string[] = [];
+	const dev = deviceWords(s);
+	if (dev) parts.push(dev);
+	if (s.cost_usd >= 0.005) parts.push(dollarWords(s.cost_usd, s.notional_usd));
+	if (!parts.length) return s.reused === s.metered ? "Free this week — every result was reused" : null;
+	return `${parts.join(" · ")} this week`;
 }
 
 /** The app's spend in one line for a summary tile: the budget meter's words
  *  when the app declares a budget, else what was used ("24 GPU-min on
  *  RTX 5080 · 31 CPU-s used · $0.10 notional"), else null (nothing metered). */
-export function usageLine(u: MeUsage | null | undefined, instrumentWords?: (name: string) => string): string | null {
+export function usageLine(u: MeUsage | null | undefined, instrumentWords?: (name: string) => string, opts: { instruments?: string[] } = {}): string | null {
 	if (!u) return null;
-	const m = budgetMeter(u, instrumentWords);
+	const m = budgetMeter(u, instrumentWords, opts);
 	if (m) return `Budget: ${m.words}`;
 	const s: Spend = { ...empty(), gpu_s: u.used.gpu_s || 0, cpu_s: u.used.cpu_s || 0, cost_usd: u.used.cost_usd || 0, gpu_by_type: Object.fromEntries(Object.entries(u.used.by_device ?? {}).filter(([k]) => k !== "CPU")) };
 	const dev = deviceWords(s);
-	if (!dev) return null;
-	return `${dev} used${s.cost_usd > 0 ? ` · ${dollars(s.cost_usd)} notional` : ""}`;
+	const usd = s.cost_usd > 0 ? dollarWords(s.cost_usd, u.used.by_instrument || u.used.llm ? usageNotionalUsd(u) : s.cost_usd) : "";
+	if (!dev && !usd) return null;
+	return dev ? `${dev} used${usd ? ` · ${usd}` : ""}` : `${usd} used`;
 }

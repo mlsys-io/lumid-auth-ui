@@ -8,13 +8,15 @@
 // Generic: reads the experiment's ledger rows and the app's /me/usage.
 // Renders nothing until some result has landed.
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { me, type MeExperiment, type MeExperimentRow } from "@/api/me";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 import type { EvidenceStepSpec } from "@/lib/evidence";
 import { humanId, versionsOf } from "@/lib/research-map";
 import ProgressPerSpend from "./ProgressPerSpend";
-import SpendLine from "./SpendLine";
+import SpendLine, { useAppUsage } from "./SpendLine";
+import { useAppGraph } from "@/hooks/useAppGraph";
+import { specServices } from "@/lib/spend";
 import { DiscardedList } from "./DiscardResults";
 import StepAgreement from "./StepAgreement";
 
@@ -38,17 +40,22 @@ export default function ExperimentSpend({ app, e, steps, rows: given }: {
 	rows?: MeExperimentRow[] | null;
 }) {
 	const own = useExperimentRows(app, e.id);
+	// One /me/usage read for the chart's axis and the budget line; the spec's
+	// instruments are the only estimates the budget's "≈ N more runs" may use.
+	const usage = useAppUsage(app);
+	const spec = useAppGraph(app).graph?.spec ?? null;
+	const instruments = useMemo(() => specServices(spec), [spec]);
 	const rows = given === undefined ? own : given;
 	const labels = new Map(versionsOf(e).map((v) => [v.id, v.label]));
 	const label = (v: string) => labels.get(v) || humanId(v);
 	const metric = e.metric?.name || e.metric_name || "";
 	const hib = !(e.higher_is_better === false || e.metric?.higher_is_better === false);
-	if (!rows || !rows.length) return <SpendLine app={app} className="pt-1" />;
+	if (!rows || !rows.length) return <SpendLine usage={usage} instruments={instruments} className="pt-1" />;
 	return (
 		<div className="space-y-5" data-testid="experiment-spend">
-			{metric && <ProgressPerSpend steps={steps} rows={rows} metric={metric} higherIsBetter={hib} label={label} />}
+			{metric && <ProgressPerSpend steps={steps} rows={rows} metric={metric} higherIsBetter={hib} label={label} usage={usage} />}
 			<StepAgreement steps={steps} rows={rows} label={label} />
-			<SpendLine app={app} rows={rows} />
+			<SpendLine usage={usage} instruments={instruments} rows={rows} />
 			<DiscardedList app={app} experiment={e.id} rows={rows} label={label} />
 		</div>
 	);

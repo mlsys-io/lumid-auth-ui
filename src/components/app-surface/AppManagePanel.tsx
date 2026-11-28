@@ -35,7 +35,23 @@ import {
 	Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 
-type LoopDef = { name?: string; schedule?: string; skills?: unknown[]; steps?: unknown[]; goal?: string; model?: string };
+// A workflow entry in either scheme: legacy `loops:` (name / schedule) or the
+// simple scheme's `workflows:` (id / title / run, steps as a map). Read both —
+// reading only `name` listed MLSys's six workflows as loop-0…loop-5 (2026-11-28).
+export type LoopDef = { name?: string; id?: string; title?: string; schedule?: string; run?: string; skills?: unknown[]; steps?: unknown; goal?: string; model?: string };
+/** The key the scheduler knows a workflow by (run, delete, model). */
+const loopKey = (l: LoopDef) => String(l.name ?? l.id ?? "");
+/** When it runs, in words: a cron as written, "manual" in words. */
+const loopWhen = (l: LoopDef) => {
+	const w = l.schedule || l.run || "";
+	return w === "manual" || w === "@trigger" ? "Only when you press Run" : w || "—";
+};
+/** How many steps: a legacy list, or a simple-scheme chain of workflows. */
+const loopStepCount = (l: LoopDef) => {
+	if (Array.isArray(l.steps)) return l.steps.length;
+	const chain = (l.steps as { workflows?: unknown[] } | undefined)?.workflows;
+	return Array.isArray(chain) ? chain.length : 0;
+};
 
 // Per-workflow runtime model options (loops[].model). "" = the app default;
 // tiers route through the Claude CLI, kvrun-gemma through the kv.run GPU.
@@ -76,6 +92,84 @@ const SCHEDULE_PRESETS: { label: string; value: string }[] = [
 	{ label: "Weekdays at 08:00", value: "0 8 * * 1-5" },
 	{ label: "Weekly (Mon 09:00)", value: "0 9 * * 1" },
 ];
+
+/** The app's name and its Rename button. Wraps at phone width (390 px pushed
+ *  Rename out of the card, 2026-11-28). Exported for the design gallery. */
+export function ManageNameRow({ value, onChange, onSave, dirty, readOnly, saving }: {
+	value: string; onChange: (v: string) => void; onSave: () => void; dirty: boolean; readOnly: boolean; saving: boolean;
+}) {
+	return (
+		<div className="flex flex-wrap gap-2">
+			<input
+				value={value}
+				onChange={(e) => onChange(e.target.value)}
+				disabled={readOnly || saving}
+				className="min-w-0 flex-1 basis-40 px-2.5 py-1.5 text-meta rounded-lg border border-ink-200 bg-card focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400 disabled:bg-ink-50"
+			/>
+			<button
+				onClick={onSave}
+				disabled={!dirty || readOnly || saving}
+				className="px-3 py-1.5 rounded-lg text-meta font-medium bg-ink-900 text-white hover:bg-ink-700 disabled:opacity-40 transition-all"
+			>
+				{saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Rename"}
+			</button>
+		</div>
+	);
+}
+
+/** Manage app → Workflows: one row per workflow in either scheme, named by its
+ *  title (never "loop-0"), with when it runs, its model, Run and Delete.
+ *  Exported for the design gallery. */
+export function ManageWorkflowRows({ loops, readOnly, saving, runningLoop, onModel, onRun, onRemove }: {
+	loops: LoopDef[]; readOnly: boolean; saving: boolean; runningLoop: string | null;
+	onModel: (key: string, model: string) => void; onRun: (key: string) => void; onRemove: (key: string) => void;
+}) {
+	return loops.length === 0 ? (
+		<p className="text-caption text-ink-600">No workflows yet. A workflow is a sequence of skill steps — create one, then press Run.</p>
+	) : (
+		<div className="divide-y divide-ink-100 rounded-lg border border-ink-200">
+			{loops.map((l, i) => (
+				<div key={loopKey(l) || i} className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2">
+					<div className="flex-1 min-w-[10rem]">
+						<div className="text-meta text-ink-800 font-medium truncate" title={loopKey(l)}>{l.title || loopLabel("", loopKey(l)) || `Workflow ${i + 1}`}</div>
+						<div className="text-micro text-ink-600">
+							{loopWhen(l)}
+							{Array.isArray(l.skills) && l.skills.length > 0 && <span className="ml-2 text-ink-600">· {l.skills.length} skill{l.skills.length > 1 ? "s" : ""}</span>}
+							{loopStepCount(l) > 0 && <span className="ml-2 text-ink-600">· {loopStepCount(l)} step{loopStepCount(l) > 1 ? "s" : ""}</span>}
+						</div>
+					</div>
+					<div className="ml-auto flex items-center gap-1.5">
+						<select
+							value={l.model || ""}
+							onChange={(e) => onModel(loopKey(l), e.target.value)}
+							disabled={readOnly || saving || !loopKey(l)}
+							title="Which model this workflow's runtime uses"
+							className="text-micro rounded-lg border border-ink-200 bg-card px-1.5 py-1 text-ink-600 disabled:opacity-40 max-w-[150px] min-w-0"
+						>
+							{WORKFLOW_MODELS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+						</select>
+						<button
+							onClick={() => onRun(loopKey(l))}
+							disabled={!loopKey(l) || runningLoop === loopKey(l)}
+							title="Run now"
+							className="p-1.5 rounded-lg text-ink-600 hover:text-gold-700 hover:bg-gold-50 disabled:opacity-40 transition-colors"
+						>
+							{runningLoop === loopKey(l) ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
+						</button>
+						<button
+							onClick={() => onRemove(loopKey(l))}
+							disabled={!loopKey(l) || readOnly}
+							title="Delete workflow…"
+							className="p-1.5 rounded-lg text-ink-600 hover:text-brick-600 hover:bg-brick-50 disabled:opacity-40 transition-colors"
+						>
+							<Trash2 className="w-4 h-4" />
+						</button>
+					</div>
+				</div>
+			))}
+		</div>
+	);
+}
 
 export default function AppManagePanel() {
 	const { app = "" } = useParams<{ app: string }>();
@@ -122,7 +216,8 @@ export default function AppManagePanel() {
 	const datasets: { id?: string; repo?: string }[] = useMemo(
 		() => (Array.isArray(js?.datasets) ? (js?.datasets as { id?: string; repo?: string }[]) : []), [js]);
 
-	const displayName = String(js?.display_name ?? "");
+	// The app's own name: display_name (a rename), else the spec's title.
+	const displayName = String(js?.display_name ?? js?.title ?? "");
 	const sidebarLabel = String(
 		((js?.ui as Record<string, unknown> | undefined)?.sidebar as Record<string, unknown> | undefined)?.label ?? "");
 
@@ -196,7 +291,7 @@ export default function AppManagePanel() {
 			if (!seq || !Array.isArray(seq.items)) return;
 			for (const it of seq.items) {
 				const node = it as { get?: (k: string) => unknown; set?: (k: string, v: unknown) => void; has?: (k: string) => boolean; delete?: (k: string) => void };
-				if (node.get?.("name") === loopName) {
+				if (node.get?.("name") === loopName || (!node.has?.("name") && node.get?.("id") === loopName)) {
 					if (model) node.set?.("model", model);
 					else if (node.has?.("model")) node.delete?.("model");
 				}
@@ -294,21 +389,7 @@ export default function AppManagePanel() {
 					<Pencil className="w-3.5 h-3.5 text-ink-600" /> Name
 				</div>
 				<p className="text-caption text-ink-600">Shown on the My Agents card and the sidebar. The install id (<code className="text-micro">{app}</code>) doesn&apos;t change.</p>
-				<div className="flex gap-2">
-					<input
-						value={effectiveName}
-						onChange={(e) => setNameDraft(e.target.value)}
-						disabled={readOnly || saving}
-						className="flex-1 px-2.5 py-1.5 text-meta rounded-lg border border-ink-200 bg-card focus:outline-none focus:ring-2 focus:ring-gold-400/20 focus:border-gold-400 disabled:bg-ink-50"
-					/>
-					<button
-						onClick={saveRename}
-						disabled={!renameDirty || readOnly || saving}
-						className="px-3 py-1.5 rounded-lg text-meta font-medium bg-ink-900 text-white hover:bg-ink-700 disabled:opacity-40 transition-all"
-					>
-						{saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Rename"}
-					</button>
-				</div>
+				<ManageNameRow value={effectiveName} onChange={setNameDraft} onSave={saveRename} dirty={renameDirty} readOnly={readOnly} saving={saving} />
 			</section>
 
 			{/* Workflows */}
@@ -323,49 +404,8 @@ export default function AppManagePanel() {
 						<Plus className="w-3 h-3" /> New workflow
 					</button>
 				</div>
-				{loops.length === 0 ? (
-					<p className="text-caption text-ink-600">No workflows yet. A workflow is a sequence of skill steps — create one, then press Run.</p>
-				) : (
-					<div className="divide-y divide-ink-100 rounded-lg border border-ink-200">
-						{loops.map((l, i) => (
-							<div key={i} className="flex items-center gap-3 px-3 py-2">
-								<div className="flex-1 min-w-0">
-									<div className="text-meta text-ink-800 font-medium truncate">{l.name || `loop-${i}`}</div>
-									<div className="text-micro text-ink-600 font-mono">
-										{l.schedule || "—"}
-										{Array.isArray(l.skills) && l.skills.length > 0 && <span className="ml-2 text-ink-600">· {l.skills.length} skill{l.skills.length > 1 ? "s" : ""}</span>}
-										{Array.isArray(l.steps) && l.steps.length > 0 && <span className="ml-2 text-ink-600">· {l.steps.length} step{l.steps.length > 1 ? "s" : ""}</span>}
-									</div>
-								</div>
-								<select
-									value={l.model || ""}
-									onChange={(e) => setLoopModel(l.name || "", e.target.value)}
-									disabled={readOnly || saving || !l.name}
-									title="Which model this workflow's runtime uses"
-									className="text-micro rounded-lg border border-ink-200 bg-card px-1.5 py-1 text-ink-600 disabled:opacity-40 max-w-[140px]"
-								>
-									{WORKFLOW_MODELS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
-								</select>
-								<button
-									onClick={() => runNow(l.name || "")}
-									disabled={!l.name || runningLoop === l.name}
-									title="Run now"
-									className="p-1.5 rounded-lg text-ink-600 hover:text-gold-700 hover:bg-gold-50 disabled:opacity-40 transition-colors"
-								>
-									{runningLoop === l.name ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4" />}
-								</button>
-								<button
-									onClick={() => removeWorkflow(l.name || "")}
-									disabled={!l.name || readOnly}
-									title="Delete workflow…"
-									className="p-1.5 rounded-lg text-ink-600 hover:text-brick-600 hover:bg-brick-50 disabled:opacity-40 transition-colors"
-								>
-									<Trash2 className="w-4 h-4" />
-								</button>
-							</div>
-						))}
-					</div>
-				)}
+				<ManageWorkflowRows loops={loops} readOnly={readOnly} saving={saving} runningLoop={runningLoop}
+					onModel={setLoopModel} onRun={runNow} onRemove={removeWorkflow} />
 			</section>
 
 			{/* Compute modules — small CPU compute lum.id runs for this app (spec `modules:`) */}
@@ -446,7 +486,7 @@ export default function AppManagePanel() {
 			/>
 			<NewWorkflowDialog
 				open={wfFormOpen}
-				existingNames={loops.map((l) => l.name || "")}
+				existingNames={loops.map(loopKey)}
 				suggestedSkills={skillImports.map(importRepoOf)}
 				onClose={() => setWfFormOpen(false)}
 				onCreate={(wf) => { setWfFormOpen(false); void addWorkflow(wf); }}

@@ -6,8 +6,13 @@
 // at the step that counts — the last step of the workflow, the expensive and
 // trusted one, or the furthest step anything reached — may move the best (y).
 // Cheap-step rows add their (small) spend and show as light dots; reused rows
-// add nothing. The x unit is the scarcest one the rows carry: GPU-minutes,
-// else CPU-minutes, else notional dollars, else run time — said on the axis.
+// add nothing. The x unit follows what is metered (2026-11-28): dollars when
+// the work spends real money (cost_usd beyond device time on the rows, or the
+// app's /me/usage shows a bill — an LLM app's cost is Claude dollars, not the
+// CPU-seconds its harness used), else GPU-minutes, else CPU-minutes, else
+// notional dollars, else run time — said on the axis. A row's step is
+// `rowStep` (dims.stage, else the step whose metrics it reports), so a GPU
+// measurement that names no stage still counts at the GPU step.
 //
 // Pure functions only; the words live here.
 
@@ -15,7 +20,8 @@ import type { MeExperimentRow } from "@/api/me";
 import type { EvidenceStepSpec } from "@/lib/evidence";
 import { humanId } from "@/lib/research-map";
 import { fmtMetricValue, humanMetric } from "@/lib/run-answer";
-import { deviceTime, dollars, usageOfRow } from "@/lib/spend";
+import { rowStep } from "@/lib/evolution";
+import { deviceTime, dollars, notionalPart, usageNotionalUsd, usageOfRow, type MeUsage } from "@/lib/spend";
 
 export type SpendUnit = "gpu" | "cpu" | "usd" | "time";
 
@@ -37,6 +43,8 @@ export interface SpendPoint {
 
 export interface ProgressPerSpend {
 	unit: SpendUnit;
+	/** usd only: every dollar on the axis is device time at platform rates. */
+	usdNotional: boolean;
 	unitLabel: string;
 	metric: string;
 	metricLabel: string;
@@ -69,6 +77,8 @@ export function progressPerSpend(input: {
 	rows: MeExperimentRow[];
 	metric: string;
 	higherIsBetter?: boolean;
+	/** The app's /me/usage: a bill there (LLM calls) puts the axis in dollars. */
+	usage?: MeUsage | null;
 }): ProgressPerSpend | null {
 	// Every row adds its spend (a discarded run still used the card); only
 	// rows nobody discarded may move the best.
@@ -76,7 +86,7 @@ export function progressPerSpend(input: {
 	if (!metric || !rows.length) return null;
 	const stepIds = input.steps.length ? input.steps.map((s) => s.step) : [""];
 	const staged = rows.some((r) => !!r.dims?.stage);
-	const stepOf = (r: MeExperimentRow) => (r.dims?.stage ?? (staged ? "" : stepIds[0]));
+	const stepOf = (r: MeExperimentRow) => (staged ? rowStep(r, input.steps) : stepIds[0]);
 	// The counting step: the last declared step that has a row reporting the metric.
 	let ck = -1;
 	for (let k = stepIds.length - 1; k >= 0 && ck < 0; k--)
@@ -86,13 +96,20 @@ export function progressPerSpend(input: {
 	const counting = stepIds[ck];
 
 	const usages = rows.map(usageOfRow);
-	const unit: SpendUnit = usages.some((u) => (u?.gpu_s ?? 0) > 0)
-		? "gpu"
-		: usages.some((u) => (u?.cpu_s ?? 0) > 0)
-			? "cpu"
-			: usages.some((u) => (u?.cost_usd ?? 0) > 0)
-				? "usd"
-				: "time";
+	const usd = usages.reduce((a, u) => a + (u?.cost_usd ?? 0), 0);
+	const usdNotionalSum = usages.reduce((a, u) => a + (u ? notionalPart(u) : 0), 0);
+	const billed = usd - usdNotionalSum >= 0.005
+		|| (usd > 0 && !!input.usage && input.usage.used.cost_usd - usageNotionalUsd(input.usage) >= 0.005);
+	const unit: SpendUnit = billed
+		? "usd"
+		: usages.some((u) => (u?.gpu_s ?? 0) > 0)
+			? "gpu"
+			: usages.some((u) => (u?.cpu_s ?? 0) > 0)
+				? "cpu"
+				: usd > 0
+					? "usd"
+					: "time";
+	const usdNotional = unit === "usd" && !billed;
 	const add = (r: MeExperimentRow, i: number): number => {
 		const u = usages[i];
 		if (unit === "gpu") return (u?.gpu_s ?? 0) / 60;
@@ -119,16 +136,16 @@ export function progressPerSpend(input: {
 		points.push({ x, value, best: best?.value ?? null, step, counts, version: r.variant_id, reused: usages[i]?.metered === "reused", passed, ts: r.ts });
 	}
 	const h = humanMetric(metric);
-	const unitLabel = unit === "gpu" ? "GPU-minutes" : unit === "cpu" ? "CPU-minutes" : unit === "usd" ? "notional $" : "run minutes";
+	const unitLabel = unit === "gpu" ? "GPU-minutes" : unit === "cpu" ? "CPU-minutes" : unit === "usd" ? (usdNotional ? "notional $" : "dollars") : "run minutes";
 	return {
-		unit, unitLabel, metric, metricLabel: h.label, metricUnit: h.unit, higherIsBetter: higher,
+		unit, usdNotional, unitLabel, metric, metricLabel: h.label, metricUnit: h.unit, higherIsBetter: higher,
 		countingStep: counting, countingLabel: counting ? humanId(counting) : "the result", points, total: x, best,
 	};
 }
 
 /** x in the chart's unit, in words: "38 GPU-min" · "$0.40 notional". */
-export function spendAt(p: Pick<ProgressPerSpend, "unit">, x: number): string {
-	if (p.unit === "usd") return `${dollars(x)} notional`;
+export function spendAt(p: Pick<ProgressPerSpend, "unit"> & { usdNotional?: boolean }, x: number): string {
+	if (p.unit === "usd") return p.usdNotional === false ? dollars(x) : `${dollars(x)} notional`;
 	const t = deviceTime(x * 60);
 	if (p.unit === "gpu") return t.replace(/ (min|s|h)$/, " GPU-$1");
 	if (p.unit === "cpu") return t.replace(/ (min|s|h)$/, " CPU-$1");

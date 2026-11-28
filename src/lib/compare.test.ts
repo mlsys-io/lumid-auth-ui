@@ -1,5 +1,5 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
-import { sideStats, compareVerdict, runMetricValues, compareSides, metricBetter, rowIsSame, type SideInput } from "./compare";
+import { sideStats, compareVerdict, runMetricValues, compareSides, metricBetter, noiseTie, rowIsSame, type SideInput } from "./compare";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -112,6 +112,17 @@ check("a tie for the best is said as a tie, against the best of the rest", () =>
 check("rows that read the same everywhere fold", () => {
 	const c = compareSides([{ label: "A", values: { x: [1], y: [1] } }, { label: "B", values: { x: [1], y: [2] } }, { label: "C", values: { x: [1] } }], ["x", "y"]);
 	eq([rowIsSame(c.rows[0]), rowIsSame(c.rows[1])], [true, false]);
+});
+
+check("noise tie: equal, within the noise, one result each and close, or different", () => {
+	const one = (v: number) => sideStats([v]);
+	eq(noiseTie(one(22.4), one(22.4)), "equal");
+	eq(noiseTie(sideStats([10, 12, 11]), sideStats([11, 13, 12])), "noise");
+	eq(noiseTie(sideStats([10, 10.1, 9.9]), sideStats([20, 20.1, 19.9])), null);
+	eq(noiseTie(one(0.366), one(0.369)), "near");              // 0.8% on one GPU measurement each
+	eq(noiseTie(one(22.4), one(21.33)), null);                 // 5%: different
+	eq(noiseTie(sideStats([22.4, 22.4]), sideStats([22.3, 22.3])), null); // deterministic: exact
+	eq(noiseTie(null, one(1)), null);
 });
 
 export function run(): number {

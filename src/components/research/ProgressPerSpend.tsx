@@ -15,6 +15,7 @@ import { useMemo, useRef, useState } from "react";
 import type { MeExperimentRow } from "@/api/me";
 import type { EvidenceStepSpec } from "@/lib/evidence";
 import { progressPerSpend, progressWords, spendAt } from "@/lib/progress-per-spend";
+import type { MeUsage } from "@/lib/spend";
 import { fmtMetricValue } from "@/lib/run-answer";
 import { useMeasuredWidth } from "@/hooks/useMeasuredWidth";
 import { cn } from "@/lib/utils";
@@ -36,14 +37,16 @@ export function roundTicks(lo: number, hi: number): number[] {
 
 const H = 200, PAD_R = 16, PAD_T = 12, PAD_B = 30;
 
-export default function ProgressPerSpend({ steps, rows, metric, higherIsBetter, label }: {
+export default function ProgressPerSpend({ steps, rows, metric, higherIsBetter, label, usage }: {
 	steps: EvidenceStepSpec[];
 	rows: MeExperimentRow[] | null;
 	metric: string;
 	higherIsBetter?: boolean;
 	label: (v: string) => string;
+	/** The app's /me/usage: a bill there (model calls) puts the axis in dollars. */
+	usage?: MeUsage | null;
 }) {
-	const p = useMemo(() => (rows ? progressPerSpend({ steps, rows, metric, higherIsBetter }) : null), [rows, steps, metric, higherIsBetter]);
+	const p = useMemo(() => (rows ? progressPerSpend({ steps, rows, metric, higherIsBetter, usage }) : null), [rows, steps, metric, higherIsBetter, usage]);
 	const wrap = useRef<HTMLDivElement>(null);
 	const W = useMeasuredWidth(wrap, 560);
 	const [hover, setHover] = useState<number | null>(null);
@@ -90,7 +93,7 @@ export default function ProgressPerSpend({ steps, rows, metric, higherIsBetter, 
 					))}
 					{xticks.map((t, i) => (
 						<text key={i} x={x(t)} y={H - 14} textAnchor={i === 0 ? "start" : "middle"} className="fill-ink-600 text-nano tabular-nums">
-							{p.unit === "usd" ? `$${t}` : t}
+							{p.unit === "usd" ? `$${+t.toPrecision(3)}` : +t.toPrecision(3)}
 						</text>
 					))}
 					<text x={W - PAD_R} y={H - 2} textAnchor="end" className="fill-ink-600 text-nano">{p.unitLabel} spent →</text>

@@ -28,6 +28,8 @@ import { fetchCasebook, type CasebookCase } from "@/api/casebook";
 import SchedulePicker from "@/components/workflow/SchedulePicker";
 import { describeSchedule } from "@/lib/schedule";
 import { cn } from "@/lib/utils";
+import { useWorkflowPress } from "@/components/research/PressCost";
+import { loopLabel } from "@/lib/workflow-names";
 
 // Phase B — success-criteria presets. Each maps a human label to the criteria
 // EXPRESSION string the engine evaluates against the run's deltas. "" = custom.
@@ -287,6 +289,10 @@ export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromL
 		? (isExperiment ? "Queue experiments" : "Queue runs")
 		: (isExperiment ? "Run experiment" : "Run now");
 	const LaunchIcon = busy ? Loader2 : tryMode === "fanout" ? Layers : Play;
+	// What this press will spend, before it spends (review #5): said whenever
+	// the runs use a GPU or real money, in the same words as every press.
+	const fanCount = tryMode === "fanout" ? Math.max(1, variantRows.filter((t) => Object.keys(parseOverrides(t)).length > 0).length) : 1;
+	const press = useWorkflowPress(app, loop, fanCount, fanCount > 1 ? `Run ${loopLabel("", loop)} ${fanCount} times` : `Run ${loopLabel("", loop)} once`);
 
 	return createPortal(
 		<div className="fixed inset-0 z-[90] flex items-center justify-center bg-ink-900/30 backdrop-blur-sm animate-in fade-in duration-150" onClick={onClose}>
@@ -473,7 +479,10 @@ export default function NextRunComposer({ app, loop, isExperiment, fromTs, fromL
 				</div>
 
 				{/* footer (fixed) */}
-				<div className="flex items-center gap-2 px-4 py-3 border-t border-ink-100 flex-shrink-0">
+				{press?.spends && (
+					<p className={cn("px-4 pt-2 text-micro border-t border-ink-100", press.blocked ? "text-brick-700" : "text-ink-700")} data-testid="rerun-cost">{press.text}</p>
+				)}
+				<div className={cn("flex items-center gap-2 px-4 py-3 flex-shrink-0", !press?.spends && "border-t border-ink-100")}>
 					<button onClick={launchNow} disabled={busy}
 						className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg bg-gold-700 text-white hover:bg-gold-800 disabled:opacity-50">
 						<LaunchIcon className={cn("w-3.5 h-3.5", busy && "animate-spin")} /> {launchLabel}

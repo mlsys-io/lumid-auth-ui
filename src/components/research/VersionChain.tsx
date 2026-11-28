@@ -2,13 +2,22 @@
 // produced a result: v1 → v2 → v3, each with its state in words. The winner is
 // filled in, dropped versions sit below in a peach row, versions never run are
 // dashed ghosts (Novix's v0…v6 chain with rejected chips below).
+//
+// 2026-11-28: versions the noise can't separate from the best are "tied" (one
+// line above the chips says so, and which secondary metric decides); the
+// winner says by how much and on how many results; a version inside the
+// winner's noise "can't tell apart yet" instead of "dropped". A version with
+// no result at the step the chain is told at shows its number at another step,
+// named ("86.5 simulated"), never an average across steps.
 
-import type { ChainLink } from "@/lib/evolution";
+import { chainHeadline, linkValueWords, marginWords, type ChainLink } from "@/lib/evolution";
 import { cn } from "@/lib/utils";
 
 const CHIP: Record<ChainLink["state"], string> = {
 	winning: "bg-plum-700 border-plum-700 text-white shadow-e2",
 	"best so far": "bg-plum-50 border-plum-300 text-ink-900",
+	tied: "bg-plum-50 border-plum-300 text-ink-900",
+	"can't tell apart yet": "bg-card border-plum-300 text-ink-900",
 	trying: "bg-card border-plum-200 text-ink-900",
 	collecting: "bg-card border-dashed border-plum-300 text-ink-900",
 	dropped: "bg-ember-50 border-ember-200 text-ember-800",
@@ -26,6 +35,7 @@ export default function VersionChain({ chain, labelOf, valueOf, onPick, picked, 
 	onPick?: (arm: string) => void;
 	picked?: string | null;
 }) {
+	const headline = chainHeadline({ chain }, labelOf, valueOf);
 	const main = chain.filter((c) => c.state !== "dropped");
 	const dropped = chain.filter((c) => c.state === "dropped");
 	const chip = (c: ChainLink, i: number) => (
@@ -38,15 +48,21 @@ export default function VersionChain({ chain, labelOf, valueOf, onPick, picked, 
 				<span className="text-caption font-medium truncate">{labelOf(c.arm)}</span>
 			</div>
 			<div className={cn("text-micro tabular-nums", c.state === "winning" ? "text-white/90" : "text-ink-600")}>
-				{c.mean == null ? (progress?.get(c.arm)?.text ?? "no results yet") : `${valueOf(c.mean)} · ${c.n} result${c.n === 1 ? "" : "s"}`}
+				{c.mean == null ? (progress?.get(c.arm)?.text ?? linkValueWords(c, valueOf) ?? "no results yet") : linkValueWords(c, valueOf)}
 			</div>
-			<div className={cn("text-nano font-medium uppercase tracking-wide mt-0.5", c.state === "winning" ? "text-white" : c.state === "dropped" || (c.mean == null && progress?.get(c.arm)?.tag === "stopped") ? "text-ember-700" : c.state === "best so far" ? "text-plum-700" : "text-ink-600")}>
+			<div className={cn("text-nano font-medium uppercase tracking-wide mt-0.5", c.state === "winning" ? "text-white" : c.state === "dropped" || (c.mean == null && progress?.get(c.arm)?.tag === "stopped") ? "text-ember-700" : c.state === "best so far" || c.state === "tied" ? "text-plum-700" : "text-ink-600")}>
 				{c.mean == null && progress?.get(c.arm) ? progress.get(c.arm)!.tag : c.state}
 			</div>
+			{c.margin && (
+				<div className={cn("text-nano tabular-nums normal-case", c.state === "winning" ? "text-white/90" : "text-ink-600")} data-testid="version-margin">
+					{marginWords(c.margin, valueOf)}
+				</div>
+			)}
 		</button>
 	);
 	return (
 		<div className="space-y-2" aria-label="Versions tried, in order">
+			{headline && <p className="text-caption font-medium text-plum-800" data-testid="chain-headline">{headline}</p>}
 			{/* An even grid (the order is in each card's v-number): a wrapping row
 			    with arrows broke v3 onto its own line, under an arrow (2026-11-27). */}
 			<div className="grid grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] gap-1.5">

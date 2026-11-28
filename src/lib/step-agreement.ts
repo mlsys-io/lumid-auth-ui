@@ -14,8 +14,9 @@
 
 import type { MeExperimentRow } from "@/api/me";
 import type { EvidenceStepSpec } from "@/lib/evidence";
+import { rowStep } from "@/lib/evolution";
 import { humanId } from "@/lib/research-map";
-import { fmtMetricValue, humanMetric } from "@/lib/run-answer";
+import { fmtMetricValue, humanMetric, isFindingKey } from "@/lib/run-answer";
 
 /** Bookkeeping and usage numbers are never compared. */
 const NOT_A_RESULT = /^(cost_usd|duration_s|stage_passed|cpu_s|gpu_s|wall_s|saved_cpu_s|saved_gpu_s|n|.*_n)$/;
@@ -46,16 +47,19 @@ export interface StepAgreement {
 }
 
 /** Per version, the mean of each numeric metric at one step. */
-function meansAt(rows: MeExperimentRow[], step: string, firstStep: string): Map<string, Record<string, number>> {
+function meansAt(rows: MeExperimentRow[], step: string, steps: EvidenceStepSpec[]): Map<string, Record<string, number>> {
 	const acc = new Map<string, Record<string, { s: number; n: number }>>();
 	const staged = rows.some((r) => !!r.dims?.stage);
 	for (const r of rows) {
 		if (!r.variant_id || r.dims?.discarded === "1") continue;
-		const at = r.dims?.stage ?? (staged ? "" : firstStep);
+		// A row that names no stage among rows that do sits at the step whose
+		// metrics it reports (MLSys GPU rows → Sandbox), never at none.
+		const at = staged ? rowStep(r, steps) : steps[0].step;
 		if (at !== step) continue;
 		const slot = acc.get(r.variant_id) ?? {};
 		for (const [k, v] of Object.entries(r.metrics ?? {})) {
-			if (typeof v !== "number" || !Number.isFinite(v) || NOT_A_RESULT.test(k)) continue;
+			// Bookkeeping (recorded, holdouts_run, seeds) is no finding to agree on.
+			if (typeof v !== "number" || !Number.isFinite(v) || NOT_A_RESULT.test(k) || !isFindingKey(k)) continue;
 			const c = (slot[k] ??= { s: 0, n: 0 });
 			c.s += v; c.n += 1;
 		}
@@ -101,8 +105,7 @@ export function stepAgreements(input: {
 }): StepAgreement[] {
 	const { steps, rows } = input;
 	if (steps.length < 2) return [];
-	const first = steps[0].step;
-	const at = new Map(steps.map((s) => [s.step, meansAt(rows, s.step, first)]));
+	const at = new Map(steps.map((s) => [s.step, meansAt(rows, s.step, steps)]));
 	const out: StepAgreement[] = [];
 	for (let i = 0; i < steps.length - 1; i++) {
 		for (let j = i + 1; j < steps.length; j++) {
@@ -214,4 +217,27 @@ export function agreementRows(m: MetricAgreement, label: (v: string) => string =
 		expensive: fmtMetricValue(p.expensive, m.unit, m.metric),
 		gap: m.binary ? (p.cheap === p.expensive ? "same" : "flipped") : p.cheap === 0 ? "—" : `${p.expensive >= p.cheap ? "+" : "−"}${Math.round(Math.abs(p.expensive / p.cheap - 1) * 100)}%`,
 	}));
+}
+
+/** How many versions a pair's numbers rest on: "from 2 versions measured at both steps". */
+export function agreementBasis(a: StepAgreement): string {
+	const n = Math.max(0, ...a.metrics.map((m) => m.n));
+	return `from ${n} ${n === 1 ? "version" : "versions"} measured at both steps`;
+}
+
+/**
+ * What a pair of steps shows under its headline — EITHER the readings OR the
+ * ask, never both. Until 3 versions reached both steps the headline asks for
+ * more ("Measure 1 more version …") and no ratio is listed: two pairs would
+ * read as a finding. Pass/fail flips are listed either way (they are facts,
+ * not estimates). `scatter`: a metric has enough versions to plot.
+ */
+export function agreementLines(a: StepAgreement, label: (v: string) => string = humanId): { lines: string[]; asking: boolean } {
+	const asking = !a.metrics.some((m) => !m.binary && m.rho != null);
+	const lines = a.metrics.flatMap((m) => [
+		!asking && m.rho != null ? `${m.label}: ${rankWords(m, a.expensive.label).replace(/^Ranks/, "ranks")}` : "",
+		asking ? "" : biasWords(m, a.cheap.label),
+		flipWords(m, a.cheap.label, a.expensive.label, label),
+	]).filter(Boolean).slice(0, 5);
+	return { lines, asking };
 }

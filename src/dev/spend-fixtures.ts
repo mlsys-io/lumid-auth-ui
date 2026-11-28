@@ -34,7 +34,8 @@ export const SPEND_ROWS: MeExperimentRow[] = [
 
 export const SPEND_USAGE: MeUsage = {
 	app: "mlsys-research",
-	used: { gpu_s: 412 + 168 + 151 + 158 + 149, cpu_s: 120, cost_usd: 0.08, runs: 11, running: 0, unmetered_runs: 0, by_device: { "RTX 5080": 1038, CPU: 120 } },
+	used: { gpu_s: 412 + 168 + 151 + 158 + 149, cpu_s: 120, cost_usd: 0.08, runs: 11, running: 0, unmetered_runs: 0, by_device: { "RTX 5080": 1038, CPU: 120 },
+		by_instrument: { "mlsys-sandbox": { gpu_s: 1038, cpu_s: 70, cost_usd: 0.073, runs: 5 }, "mlsys-simulator": { cpu_s: 50, cost_usd: 0.0003, runs: 6 } } },
 	saved: { gpu_s: 0, cpu_s: 6, reused_runs: 1 },
 	budget: { gpu_minutes: 168, per: "total", parallel: 2 },
 	remaining: { gpu_s: 168 * 60 - 1038 },

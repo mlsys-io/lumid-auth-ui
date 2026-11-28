@@ -143,6 +143,19 @@ check("metrics that differ come before ones that read the same", () => {
 	eq(metricsToCompare([a, b]).map((m) => m.name), ["beta", "alpha"]);
 });
 
+check("a version side is ONE step, the last it reached, and says which", () => {
+	const rows = [
+		{ ts: "1", variant_id: "llm_0_6b", metrics: { estimated_energy_j_per_req: 86.49 }, dims: { stage: "simulate", stage_index: "1" } },
+		{ ts: "2", variant_id: "llm_0_6b", metrics: { estimated_energy_j_per_req: 75.31 }, dims: { measured_on: "NVIDIA GeForce RTX 5080 at office" } },
+	];
+	const e = { ...EXP, results: rows } as unknown as MeExperimentDetail;
+	const side = versionSide(e, "llm_0_6b", 0);
+	eq(side.values.estimated_energy_j_per_req, [75.31]);
+	eq(Object.fromEntries(side.settings).Step, "on the RTX 5080");
+	eq(versionSide(e, "llm_0_6b", 0, { step: "simulate" }).values.estimated_energy_j_per_req, [86.49]);
+	eq(Object.fromEntries(versionSide(e, "llm_0_6b", 0, { step: "simulate" }).settings).Step, "simulated");
+});
+
 export function run(): number {
 	let failed = 0;
 	for (const c of checks) {

@@ -15,7 +15,7 @@ import { useMemo, useRef, useState } from "react";
 import type { MeExperimentRow } from "@/api/me";
 import type { EvidenceStepSpec } from "@/lib/evidence";
 import { fmtMetricValue } from "@/lib/run-answer";
-import { agreementHeadline, agreementRows, biasWords, flipWords, rankWords, stepAgreements, type MetricAgreement, type StepAgreement as Agreement } from "@/lib/step-agreement";
+import { agreementBasis, agreementHeadline, agreementLines, agreementRows, stepAgreements, type MetricAgreement, type StepAgreement as Agreement } from "@/lib/step-agreement";
 import { TONES } from "@/lib/tones";
 import { useMeasuredWidth } from "@/hooks/useMeasuredWidth";
 import { cn } from "@/lib/utils";
@@ -83,19 +83,17 @@ export default function StepAgreement({ steps, rows, sameAs, label }: {
 				const head = agreementHeadline(a);
 				const tone = TONES[head.tone === "ok" ? "ok" : head.tone === "attention" ? "attention" : "idle"];
 				// The scatter and the numbers only from 3 shared versions; below that the
-				// headline already says how many more to measure, so each metric keeps
-				// only its high/low reading (2 pairs say that much) and its flips.
+				// headline asks for more, and no ratio is listed beside the ask —
+				// either the readings or the ask (lib agreementLines). The basis is
+				// always said: "from 2 versions measured at both steps".
 				const ranked = a.metrics.find((m) => !m.binary && m.pairs.length >= 3);
-				const lines = a.metrics.flatMap((m) => [
-					m.rho != null ? `${m.label}: ${rankWords(m, a.expensive.label).replace(/^Ranks/, "ranks")}` : "",
-					biasWords(m, a.cheap.label), flipWords(m, a.cheap.label, a.expensive.label, label),
-				]).filter(Boolean).slice(0, 5);
+				const { lines } = agreementLines(a, label);
 				return (
 					<div key={`${a.cheap.step}>${a.expensive.step}`} className="space-y-2">
 						<div className="eyebrow">Does {a.cheap.label} predict {a.expensive.label}?</div>
 						<p className={cn("flex items-start gap-1.5 text-caption font-medium", tone.text)}>
 							<tone.Icon className={cn("mt-0.5 h-3.5 w-3.5 shrink-0", tone.icon)} aria-hidden />
-							{head.text}
+							<span>{head.text} <span className="font-normal text-ink-600">({agreementBasis(a)})</span></span>
 						</p>
 						{!!lines.length && (
 							<ul className="space-y-0.5 text-micro text-ink-700">
