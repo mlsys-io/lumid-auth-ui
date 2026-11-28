@@ -119,7 +119,15 @@ export function experimentStatus(e: MeExperiment): { tone: Tone; text: string } 
 	if (e.best_failed_gate) {
 		const t = gateTally(e);
 		const where = humanId(e.best_stopped_at || t.furthestStop);
-		return { tone: "attention", text: `No version passed every step — the furthest stopped at ${where}` };
+		// Another version may have passed where the top number failed: say so
+		// rather than "no version passed" (2026-11-28 self-review).
+		const g = e.gate_progress || {};
+		const at = e.best_stopped_at || "";
+		const atIdx = at && e.best_variant && g[e.best_variant] ? g[e.best_variant].index : -1;
+		const passedThere = Object.values(g).filter((p) => p.passed && atIdx >= 0 && p.index >= atIdx).length;
+		return passedThere
+			? { tone: "running", text: `The top result didn't pass ${where} — ${passedThere} other version${passedThere === 1 ? "" : "s"} did` }
+			: { tone: "attention", text: `No version passed every step — the furthest stopped at ${where}` };
 	}
 	if (!e.n_results && e.gate_progress && Object.keys(e.gate_progress).length) {
 		const t = gateTally(e);
@@ -186,7 +194,11 @@ export function experimentStatus(e: MeExperiment): { tone: Tone; text: string } 
  *   untried versions → run them (the cheap steps first)
  *   all stopped → the round is over: add new versions (each is another try)
  */
-export function nextStepWords(e: MeExperiment, steps: string[]): string {
+export function nextStepWords(e: MeExperiment, steps: string[],
+	/** Versions with a ledger row at any step (triedVersions). Without it a
+	 *  version that ran but scored nothing read as "untried" while the Run
+	 *  button beside it said "once more" (2026-11-28 re-audit). */
+	tried: string[] = []): string {
 	const g = e.gate_progress || {};
 	const declared = (e.arms || []).map((a) => a.id);
 	const all = [...new Set([...declared, ...Object.keys(g), ...Object.keys(e.variants || {})])];
@@ -195,7 +207,9 @@ export function nextStepWords(e: MeExperiment, steps: string[]): string {
 	const plural = (n: number, w = "version") => `${n} ${w}${n === 1 ? "" : "s"}`;
 	const done = all.filter((k) => g[k]?.passed && g[k].reached === last);
 	const held = all.filter((k) => g[k]?.passed && g[k].reached !== last);
-	const untried = all.filter((k) => !g[k] && !(e.variants?.[k]?.n));
+	const unscored = all.filter((k) => !g[k] && !(e.variants?.[k]?.n));
+	const untried = unscored.filter((k) => !tried.includes(k));
+	const noScore = unscored.filter((k) => tried.includes(k));
 	const stopped = all.filter((k) => g[k] && !g[k].passed);
 	if (done.length) return `${plural(done.length)} passed every step. Next: compare them, then take the best one further — a forward or real-world test.`;
 	if (held.length) {
@@ -204,6 +218,12 @@ export function nextStepWords(e: MeExperiment, steps: string[]): string {
 		return `Next: ${plural(held.length)} passed ${humanId(at)}${nxt ? ` — run ${held.length === 1 ? "it" : "them"} through ${humanId(nxt)}` : ""}.`;
 	}
 	if (untried.length) return `Next: run the ${plural(untried.length, "untried version")} — the cheap steps first.`;
+	if (noScore.length) {
+		const m = e.metric?.name || e.metric_name;
+		const what = m ? humanMetric(m).label.toLowerCase() : "score";
+		const one = noScore.length === 1;
+		return `Next: ${plural(noScore.length)} ran but recorded no ${what} — open ${one ? "it" : "one"} to see why before running ${one ? "it" : "them"} again.`;
+	}
 	if (stopped.length) return `This round is over: none of the ${plural(stopped.length)} passed every step. Next: add new versions — each one counts as another try.`;
 	return "";
 }
@@ -319,6 +339,14 @@ export function experimentLabel(e: Pick<MeExperiment, "id"> & { title?: string |
 	return (typeof e.title === "string" && e.title.trim()) || humanId(e.id);
 }
 
+/** One label for a version everywhere (panel, table, dashboard, banner): its
+ *  spec `title`, else "Current version" for a current/baseline arm, else the
+ *  humanised id. */
+export function versionLabel(e: MeExperiment, id: string): string {
+	const base = baselineArm(e);
+	return titleOf(e, id) || (id === base && /^(current|baseline)$/i.test(id) ? "Current version" : humanId(id));
+}
+
 function titleOf(e: MeExperiment, id: string): string {
 	const a = (e.arms || []).find((x) => x.id === id) as Record<string, unknown> | undefined;
 	return typeof a?.title === "string" ? a.title.trim() : "";
@@ -353,7 +381,7 @@ export function settingRows(arm: Record<string, unknown> | undefined): Array<[st
 	return out;
 }
 
-export function versionsOf(e: MeExperiment): VersionInfo[] {
+export function versionsOf(e: MeExperiment, tried: string[] = []): VersionInfo[] {
 	const declared = (e.arms || []).map((a) => a.id);
 	const observed = [...new Set([...Object.keys(e.variants || {}), ...Object.keys(e.gate_progress || {})])];
 	const ids = [...declared, ...observed.filter((o) => !declared.includes(o))];
@@ -370,7 +398,7 @@ export function versionsOf(e: MeExperiment): VersionInfo[] {
 		// A gated chain says where the version stands before any ranking does:
 		// "stopped at Robustness" is final; "trying" invited another run.
 		if (gp && !gp.passed) { tag = `stopped at ${humanId(gp.reached)}`; tone = "idle"; }
-		else if (!v || n === 0) { tag = gp ? `passed ${humanId(gp.reached)}` : "not run yet"; tone = gp ? "running" : "idle"; }
+		else if (!v || n === 0) { tag = gp ? `passed ${humanId(gp.reached)}` : tried.includes(id) ? "ran, no score" : "not run yet"; tone = gp ? "running" : "idle"; }
 		else if (topTie.includes(id)) { tag = "tied"; tone = "running"; }
 		else if (e.best_variant === id && e.criteria_met && e.comparable !== false) { tag = "winning"; tone = "ok"; }
 		else if (e.best_variant === id && e.comparable !== false) { tag = "leading"; tone = "ok"; }
@@ -381,7 +409,7 @@ export function versionsOf(e: MeExperiment): VersionInfo[] {
 		return {
 			// A version's own `title` (spec) wins over the humanised id: an id
 			// can't say whether serve_9_2 is 9.2 or mom_6_1 is "6-1".
-			id, label: titleOf(e, id) || (id === base && /^(current|baseline)$/i.test(id) ? "Current version" : humanId(id)),
+			id, label: versionLabel(e, id),
 			tag, tone, n,
 			line: n ? `${n.toLocaleString()} result${n === 1 ? "" : "s"}${avg}` : "no results yet",
 			progress: e.min_samples ? Math.min(1, n / e.min_samples) : null,

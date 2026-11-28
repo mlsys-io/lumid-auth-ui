@@ -19,6 +19,7 @@ import type { Proposal } from "@/lib/research-map";
 import { humanId } from "@/lib/research-map";
 import { bestResults, bestSoFar, dollars, failingWorkflows, researchHeadline, weekSummary, type BestResult } from "@/lib/research-dashboard";
 import { useRunsFeed } from "@/components/activity/hooks";
+import { groupActivity } from "@/lib/activity";
 import { cn } from "@/lib/utils";
 import { useAppUsage } from "@/components/research/SpendLine";
 import { instrumentName } from "@/lib/measure";
@@ -54,7 +55,15 @@ export default function ResearchDashboard({ app, exps, pending, rows, label, onS
 	const showAll = () => { setHidden([]); writeHidden(app, []); };
 
 	const best = useMemo(() => bestResults(exps), [exps]);
-	const failing = useMemo(() => failingWorkflows(rows, label), [rows, label]);
+	// Why each failing workflow failed — the run feed's latest reason, with the
+	// step for a chain (one shared, cached feed; WeekTile reads the same).
+	const { runs } = useRunsFeed(7);
+	const causes = useMemo(() => {
+		const m = new Map<string, string>();
+		if (runs) for (const w of groupActivity(runs, { app }).failing) if (w.failing) m.set(w.loop, w.failing.cause);
+		return m;
+	}, [runs, app]);
+	const failing = useMemo(() => failingWorkflows(rows, label, causes), [rows, label, causes]);
 	// "New" means new since this browser last looked: read the leaders seen at
 	// the previous visit, then remember today's.
 	const [seen] = useState(() => readSeen(app));
@@ -72,7 +81,7 @@ export default function ResearchDashboard({ app, exps, pending, rows, label, onS
 			{(headline || hidden.length > 0) && (
 				<div className="flex items-baseline gap-2 px-0.5">
 					{headline && (
-						<button type="button" onClick={() => headline.select && onSelect(headline.select)} disabled={!headline.select}
+						<button type="button" onClick={() => headline.select && onSelect(headline.select)} disabled={!headline.select} title={headline.text}
 							className={cn("min-w-0 truncate text-left text-body font-medium",
 								headline.tone === "ok" ? "text-gold-800" : headline.tone === "failing" ? "text-brick-700" : "text-ink-900",
 								headline.select && "hover:underline")}>
@@ -174,7 +183,7 @@ function BestTile({ app, best, onSelect, onHide }: { app: string; best: BestResu
 	);
 }
 
-function NeedsTile({ pending, failing, onSelect, onHide }: { pending: Proposal[]; failing: Array<{ label: string; select: string }>; onSelect: (id: string) => void; onHide: () => void }) {
+function NeedsTile({ pending, failing, onSelect, onHide }: { pending: Proposal[]; failing: Array<{ label: string; select: string; cause?: string }>; onSelect: (id: string) => void; onHide: () => void }) {
 	const row = "flex w-full items-center gap-1.5 rounded-md px-1 py-0.5 text-left text-caption hover:bg-ink-50";
 	return (
 		<Tile id="needs" onHide={onHide}>
@@ -191,9 +200,12 @@ function NeedsTile({ pending, failing, onSelect, onHide }: { pending: Proposal[]
 						</button>
 					)}
 					{failing.slice(0, pending.length ? 1 : 2).map((f) => (
-						<button key={f.select} type="button" onClick={() => onSelect(f.select)} className={row}>
-							<AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 text-brick-600" aria-hidden />
-							<span className="min-w-0 truncate text-ink-900">{f.label} <span className="text-brick-700">is failing</span></span>
+						<button key={f.select} type="button" onClick={() => onSelect(f.select)} className={cn(row, f.cause && "items-start")} title={f.cause}>
+							<AlertTriangle className={cn("h-3.5 w-3.5 flex-shrink-0 text-brick-600", f.cause && "mt-0.5")} aria-hidden />
+							<span className="min-w-0">
+								<span className="block truncate text-ink-900">{f.label} <span className="text-brick-700">is failing</span></span>
+								{f.cause && <span className="block truncate text-micro text-brick-700">{f.cause}</span>}
+							</span>
 							<span className="ml-auto text-ink-600">›</span>
 						</button>
 					))}

@@ -46,6 +46,16 @@ check("failing workflows and the week", () => {
 		["ft", { slug: "q:ft", last_run_ok: false, running: true, cost_cents_mtd: 80 } as MeWorkflowRow],
 	]);
 	eq(failingWorkflows(rows, (id) => id.toUpperCase()).map((f) => f.label), ["BT"]);
+	// The cause rides along, and the headline says where and why.
+	const causes = new Map([["bt", "At Dev eval: Not signed in (HTTP 401)"]]);
+	const f = failingWorkflows(rows, (id) => id.toUpperCase(), causes);
+	eq(f[0].cause, "At Dev eval: Not signed in (HTTP 401)");
+	eq(researchHeadline({ exps: [], failing: f, ideas: 0, now: NOW })!.text, "BT is failing — At Dev eval: Not signed in (HTTP 401)");
+	eq(researchHeadline({ exps: [], failing: [f[0], { ...f[0], id: "x", label: "X" }], ideas: 0, now: NOW })!.text,
+		"2 workflows are failing, all the same way: At Dev eval: Not signed in (HTTP 401)");
+	eq(researchHeadline({ exps: [], failing: [f[0], { id: "x", label: "X", select: "wf:x" }], ideas: 0, now: NOW })!.text,
+		"2 workflows are failing · BT — At Dev eval: Not signed in (HTTP 401)");
+	eq(failingWorkflows(rows, (id) => id, new Map([["bt", "No reason recorded"]]))[0].cause, undefined);
 	const runs = [
 		{ run_id: "1", workflow_slug: "q:bt", app: "q", state: "succeeded", started_at: NOW - 3600 },
 		{ run_id: "2", workflow_slug: "q:bt", app: "q", state: "failed", started_at: NOW - 1800 },

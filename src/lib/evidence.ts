@@ -89,6 +89,30 @@ export function ruleInWords(expr: string): string {
 	return out.charAt(0).toUpperCase() + out.slice(1);
 }
 
+/** A long label cut in the MIDDLE, so both the model and the setting stay
+ *  readable: "0.6B · concurrency 12" not "0.6B · concurren…" ×4. */
+export function middleEllipsis(s: string, max = 26): string {
+	if (s.length <= max) return s;
+	const head = Math.ceil((max - 1) / 2), tail = Math.floor((max - 1) / 2);
+	return `${s.slice(0, head).trimEnd()}…${s.slice(s.length - tail).trimStart()}`;
+}
+
+/** Why each version stopped, in words, for the grid's foot: one line per
+ *  version whose newest result at some step didn't pass. */
+export function stopReasons(ev: Evidence, max = 6): string[] {
+	const out: string[] = [];
+	for (const v of ev.versions) {
+		const row = ev.cells.get(v.id);
+		if (!row) continue;
+		for (const s of ev.steps) {
+			const c = row.get(s.step);
+			if (c?.state === "failed") { out.push(`${v.label} — ${s.label}: ${c.reason ?? "didn't pass"}`); break; }
+		}
+		if (out.length >= max) break;
+	}
+	return out;
+}
+
 /** "$3.20" · "<$0.01" · "$0" · "$1,204". */
 export function usd(x: number): string {
 	if (!Number.isFinite(x) || x <= 0) return "$0";
@@ -154,6 +178,8 @@ export interface Evidence {
 	next: EvidenceNext[];
 	/** Results that name a step this workflow doesn't declare (not drawn). */
 	unplaced: number;
+	/** "E 06b c12 with no step" — which results weren't placed, and why. */
+	unplacedNames: string[];
 	/** No result rows were served: the numbers are the state's per-version means. */
 	fromState: boolean;
 	cost_usd: number;
@@ -206,12 +232,22 @@ export function evidenceOf(input: {
 	// metric (else the first). Once any result names a step, unnamed ones aren't guessed.
 	const homeStep = Math.max(0, specSteps.findIndex((s) => !!input.metric && s.metrics.some((m) => m.name === input.metric)));
 	let unplaced = 0;
+	const unplacedNames: string[] = [];
+	// A result that names no step, in an experiment whose others do (a version
+	// run from its workflow directly, outside the chain): place it under the ONE
+	// step whose declared metrics it reports. Was "not shown", which hid MLSys's
+	// GPU results and left the winner simulator-only (2026-11-28 review).
+	const stepByMetric = (r: MeExperimentRow): number => {
+		const keys = new Set(Object.keys(r.metrics || {}));
+		const hits = specSteps.map((s, i) => (s.metrics.some((m) => keys.has(m.name)) ? i : -1)).filter((i) => i >= 0);
+		return hits.length === 1 ? hits[0] : -1;
+	};
 	const stepOf = (r: MeExperimentRow): number => {
 		const st = r.dims?.stage;
 		if (st) return idx.has(st) ? idx.get(st)! : -1;
 		const k = Number(r.dims?.stage_index);
 		if (Number.isInteger(k) && k >= 1 && k <= specSteps.length) return k - 1;
-		return staged ? -1 : homeStep;
+		return staged ? stepByMetric(r) : homeStep;
 	};
 
 	const rowsAt = new Map<string, MeExperimentRow[][]>();
@@ -219,7 +255,13 @@ export function evidenceOf(input: {
 	for (const r of sorted) {
 		if (!r.variant_id) continue;
 		const k = stepOf(r);
-		if (k < 0) { unplaced++; continue; }
+		if (k < 0) {
+			unplaced++;
+			const where = r.dims?.stage ? `at "${humanId(String(r.dims.stage))}"` : "with no step";
+			const name = `${humanId(r.variant_id)} ${where}`;
+			if (!unplacedNames.includes(name)) unplacedNames.push(name);
+			continue;
+		}
 		const slots = rowsAt.get(r.variant_id) ?? specSteps.map(() => []);
 		slots[k].push(r);
 		rowsAt.set(r.variant_id, slots);
@@ -344,7 +386,7 @@ export function evidenceOf(input: {
 		if (ready.length) next.push({ step: steps[k + 1].step, label: steps[k + 1].label, versions: ready.map((v) => v.id), labels: ready.map((v) => v.label), runs: ready.length });
 	}
 
-	return { steps, versions, cells, best, next, unplaced, fromState, cost_usd: steps.reduce((a, s) => a + s.cost_usd, 0) };
+	return { steps, versions, cells, best, next, unplaced, unplacedNames, fromState, cost_usd: steps.reduce((a, s) => a + s.cost_usd, 0) };
 }
 
 // ── what the grid says ──────────────────────────────────────────────────

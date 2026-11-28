@@ -234,6 +234,15 @@ export function plainCause(reason?: string | null): string {
 	const outcome = s.match(/['"]outcome['"]\s*:\s*['"]([^'"]+)['"]/);
 	if (outcome) s = outcome[1];
 
+	// "Stage 2 (dev_eval) failed: <why>" (the chain engine): name the step,
+	// then the cause in the same words — the step was the half people lost
+	// (2026-11-28, consulting student: "Screen is failing" said neither).
+	const stage = s.match(/^Stage \d+ \(([^)]+)\) failed:?\s*([\s\S]*)$/i);
+	if (stage) {
+		const step = sentence(stage[1].replace(/[_-]+/g, " "));
+		return stage[2].trim() ? clip(`At ${step}: ${plainCause(stage[2])}`) : `At ${step}`;
+	}
+
 	// "every arm failed: {...}" — every version of an experiment failed.
 	let prefix = "";
 	const every = s.match(/^every arm failed:\s*(.*)$/i);

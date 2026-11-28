@@ -260,7 +260,9 @@ export default function TopStatusStrip() {
 				// shrink-0 + a cap: the app name keeps its own width. With min-w-0 it
 				// was squeezed below its text and the workflow slot's "Overview"
 				// button was drawn on top of it ("Venue Link Matcher" overprinted).
-				<div className="flex items-center gap-1 flex-shrink-0 max-w-[34%]">
+				// A third of a phone's strip left "Q…" for Quant Research (2026-11-28
+				// re-audit); the right side holds only the chat toggle there.
+				<div className="flex items-center gap-1 flex-shrink-0 max-w-[62%] md:max-w-[34%]">
 					<span id="topstrip-ws-left" className="flex items-center" />
 					<AppSwitcher app={appSlug} />
 					{/* The app's "⋯" menu, right beside its name (portaled by the app page). */}

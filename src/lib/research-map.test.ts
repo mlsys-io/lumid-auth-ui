@@ -250,11 +250,25 @@ check("gated chains: the next move is said in words", () => {
 	const held = { id: "x", arms: [{ id: "a" }, { id: "b" }, { id: "c" }],
 		gate_progress: { a: { reached: "bar_backtest", index: 2, passed: true }, b: { reached: "bar_backtest", index: 2, passed: true }, c: { reached: "bar_backtest", index: 2, passed: false } } } as unknown as MeExperiment;
 	eq(nextStepWords(held, steps), "Next: 2 versions passed Bar backtest — run them through Robustness.");
+	// Ran but scored nothing is not "untried" (the Run button said "once more").
+	const ran = { id: "x", arms: [{ id: "a" }, { id: "b" }], variants: { a: { n: 1, mean: 1 } }, metric: { name: "goodput" } } as unknown as MeExperiment;
+	eq([humanId("profit_gpa"), humanId("oos_sharpe"), humanId("dsr_p")], ["Profit GPA", "OOS sharpe", "DSR p"]);
+	eq(nextStepWords(ran, ["simulate"]), "Next: run the 1 untried version — the cheap steps first.");
+	eq(nextStepWords(ran, ["simulate"], ["a", "b"]), "Next: 1 version ran but recorded no goodput — open it to see why before running it again.");
+	eq(versionsOf(ran, ["b"]).find((v) => v.id === "b")?.tag, "ran, no score");
+	eq(versionsOf(ran).find((v) => v.id === "b")?.tag, "not run yet");
 	const untried = { id: "y", arms: [{ id: "a" }, { id: "b" }] } as unknown as MeExperiment;
 	eq(nextStepWords(untried, steps), "Next: run the 2 untried versions — the cheap steps first.");
 	const done = { id: "z", arms: [{ id: "a" }], gate_progress: { a: { reached: "robustness", index: 3, passed: true } } } as unknown as MeExperiment;
 	eq(nextStepWords(done, steps).startsWith("1 version passed every step."), true);
 	eq(nextStepWords(untried, []), "");
+});
+
+check("gated chains: when another version passed where the top one failed, say so", () => {
+	const e = { id: "fs", metric: { name: "oos_sharpe" }, n_results: 2, best_variant: "q", best_failed_gate: true, best_stopped_at: "robustness",
+		variants: { q: { n: 1, mean: 0.9 }, p: { n: 1, mean: 0.3 } },
+		gate_progress: { q: { reached: "robustness", index: 3, passed: false }, p: { reached: "robustness", index: 3, passed: true } } } as unknown as MeExperiment;
+	eq(experimentStatus(e), { tone: "running", text: "The top result didn't pass Robustness — 1 other version did" });
 });
 
 check("ties: equal top means read 'Tied', not 'leads'", () => {

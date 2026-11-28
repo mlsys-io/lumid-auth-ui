@@ -23,6 +23,10 @@ check("HTTP 500 with a JSON body", () =>
 	eq(plainCause('HTTP 500: {"detail":"internal server error","request_id":"22c5bdde-4d3a"}'), "Server error (HTTP 500)"));
 check("context + HTTP Error 503", () =>
 	eq(plainCause("analyst call failed: HTTP Error 503: Service Unavailable"), "Analyst call failed: service unavailable (HTTP 503)"));
+check("a chain names the step that failed", () => {
+	eq(plainCause("Stage 1 (dev_eval) failed: HTTP Error 401: Unauthorized"), "At Dev eval: Not signed in (HTTP 401)");
+	eq(plainCause("Stage 0 (data_check) failed"), "At Data check");
+});
 check("timeout", () => eq(plainCause("TimeoutError: The read operation timed out"), "Timed out"));
 check("python dict outcome, plurals", () =>
 	eq(plainCause("{'ok': False, 'outcome': '3 case(s), 12 question(s), 1 failure(s)', 'cases': ['Case_001']}"), "3 cases, 12 questions, 1 failure"));

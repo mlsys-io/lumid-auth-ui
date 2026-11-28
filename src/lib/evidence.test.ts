@@ -1,7 +1,7 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 import type { MeExperiment, MeExperimentRow } from "@/api/me";
 import { readAppSpec } from "./app-spec";
-import { versionProgress, bestWords, cellWords, evidenceOf, experimentSteps, gatesFromText, nextWords, ruleInWords, runningVersions, stepFootWords, stepPassWords, usd, type EvidenceStepSpec } from "./evidence";
+import { versionProgress, middleEllipsis, stopReasons, bestWords, cellWords, evidenceOf, experimentSteps, gatesFromText, nextWords, ruleInWords, runningVersions, stepFootWords, stepPassWords, usd, type EvidenceStepSpec } from "./evidence";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -146,10 +146,14 @@ check("no gates, one step, results naming no step: a scoreboard", () => {
 	eq(["small", "large", "tiny"].map((v) => [agg.cells.get(v)!.get("judge")!.state, agg.cells.get(v)!.get("judge")!.value]), [["measured", 0.7], ["measured", 0.9], ["not run", null]]);
 	eq([agg.steps[0].runs, agg.steps[0].n_passed, agg.best?.version, agg.fromState, stepFootWords(agg.steps[0], agg.fromState)], [3, 0, "large", true, "3 results"]);
 });
-check("once results name steps, an unnamed one isn't guessed", () => {
+check("once results name steps, an unnamed one goes only where its metrics say", () => {
+	// `score` is reported by exactly one step (full_run): placed there, not guessed
+	// elsewhere; a result naming a step the workflow lacks stays unplaced.
 	const rows = [...threeRows(), { ts: "2026-11-22T00:00:00Z", variant_id: "a", metrics: { score: 9 } }, row("a", "elsewhere", 4, true, {})];
 	const ev = evidenceOf({ steps: THREE, versions: [{ id: "a" }], rows });
-	eq([ev.unplaced, ev.cells.get("a")!.get("quick_check")!.n], [2, 1]);
+	eq([ev.unplaced, ev.cells.get("a")!.get("quick_check")!.n], [1, 1]);
+	const ambiguous = [...threeRows(), { ts: "2026-11-22T00:00:00Z", variant_id: "a", metrics: { nothing_declared: 1 } }];
+	eq(evidenceOf({ steps: THREE, versions: [{ id: "a" }], rows: ambiguous }).unplaced, 1);
 });
 check("gates from the spec (read defensively) and from its text", () => {
 	const text = `workflows:
@@ -177,6 +181,23 @@ check("words: rules, money, the queue", () => {
 		{ experiment_id: "other", state: "running", variant_id: "d" },
 	];
 	eq([...runningVersions(q, "s")], ["a", "b"]);
+});
+
+check("a result naming no step is placed by the metrics it reports; others are named", () => {
+	const direct: MeExperimentRow = { ts: "2026-11-21T00:00:00Z", variant_id: "e_06b_c12", metrics: { held_out_score: 0.9, p_value: 0.01 }, dims: {} };
+	const odd: MeExperimentRow = { ts: "2026-11-21T00:01:00Z", variant_id: "z", metrics: { other: 1 }, dims: { stage: "elsewhere" } };
+	const ev = evidenceOf({ steps: THREE, versions: [{ id: "a" }], rows: [...threeRows(), direct, odd] });
+	eq(ev.cells.get("e_06b_c12")?.get("stress_test")?.value, 0.9, "placed under the step that reports its metrics");
+	eq(ev.unplaced, 1);
+	eq(ev.unplacedNames, ['Z at "Elsewhere"']);
+});
+
+check("why versions stopped, in words; long labels cut in the middle", () => {
+	const ev = evidenceOf({ steps: THREE, versions: ["a", "b", "c", "d"].map((id) => ({ id })), rows: threeRows() });
+	const why = stopReasons(ev);
+	eq(why.some((t) => t.startsWith("D — Quick check: ")), true);
+	eq(middleEllipsis("0.6B · 80% memory · concurrency 12", 20), "0.6B · 80%…rrency 12");
+	eq(middleEllipsis("short", 20), "short");
 });
 
 export function run(): number {

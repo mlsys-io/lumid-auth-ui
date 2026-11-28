@@ -54,12 +54,19 @@ export function bestResults(exps: MeExperiment[]): BestResult[] {
 		.sort((a, b) => rank(a) - rank(b) || b.n - a.n || (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
 }
 
-export interface FailingWorkflow { id: string; label: string; select: string }
+export interface FailingWorkflow { id: string; label: string; select: string;
+	/** Why its latest run failed, in words (plainCause of the run feed's reason) — with the step, for a chain. */
+	cause?: string }
 
 /** Workflows whose latest run failed (and aren't running again right now). */
-export function failingWorkflows(rows: Map<string, MeWorkflowRow>, label: (id: string) => string): FailingWorkflow[] {
+export function failingWorkflows(rows: Map<string, MeWorkflowRow>, label: (id: string) => string,
+	/** workflow id → why its latest run failed (groupActivity's failing.cause). */
+	causes?: Map<string, string>): FailingWorkflow[] {
 	return [...rows.entries()].filter(([, r]) => r.last_run_ok === false && !r.running)
-		.map(([id]) => ({ id, label: label(id), select: `wf:${id}` }));
+		.map(([id]) => {
+			const cause = causes?.get(id);
+			return { id, label: label(id), select: `wf:${id}`, ...(cause && cause !== "No reason recorded" ? { cause } : {}) };
+		});
 }
 
 export interface Headline { text: string; tone: Tone; select?: string }
@@ -87,8 +94,17 @@ export function researchHeadline(input: {
 		const verb = fresh.standing === "winning" ? "wins" : "now leads";
 		return { tone: "ok", select: fresh.select, text: tail(`New best on ${fresh.experiment}: ${fresh.leader} ${verb} with ${fresh.metric} ${fresh.valueText}`) };
 	}
-	if (input.failing.length === 1) return { tone: "failing", select: input.failing[0].select, text: tail(`${input.failing[0].label} is failing — its latest run didn't finish`) };
-	if (input.failing.length > 1) return { tone: "failing", select: input.failing[0].select, text: tail(`${input.failing.length} workflows are failing: ${input.failing.slice(0, 2).map((f) => f.label).join(", ")}${input.failing.length > 2 ? "…" : ""}`) };
+	// A failure says where and why (the run feed's cause), not only which.
+	const [f0] = input.failing;
+	if (input.failing.length === 1) return { tone: "failing", select: f0.select, text: tail(`${f0.label} is failing — ${f0.cause ?? "its latest run didn't finish"}`) };
+	if (input.failing.length > 1) {
+		const n = input.failing.length;
+		const same = f0.cause && input.failing.every((f) => f.cause === f0.cause);
+		const text = same ? `${n} workflows are failing, all the same way: ${f0.cause}`
+			: f0.cause ? `${n} workflows are failing · ${f0.label} — ${f0.cause}`
+			: `${n} workflows are failing: ${input.failing.slice(0, 2).map((f) => f.label).join(", ")}${n > 2 ? "…" : ""}`;
+		return { tone: "failing", select: f0.select, text: tail(text) };
+	}
 	if (ideas) return { tone: "attention", select: input.firstIdea, text: `${ideas[0].toUpperCase()}${ideas.slice(1)} — open one to decide` };
 	for (const e of input.exps) {
 		const st = experimentStatus(e);

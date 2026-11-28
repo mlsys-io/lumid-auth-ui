@@ -18,6 +18,8 @@ const ACRONYMS: Record<string, string> = {
 	ttft: "TTFT", tpot: "TPOT", e2e: "E2E", kv: "KV", vram: "VRAM", pnl: "PnL", api: "API", llm: "LLM",
 	gpu: "GPU", cpu: "CPU", id: "ID", url: "URL", ofi: "OFI", vpin: "VPIN", rag: "RAG", sla: "SLA", qps: "QPS",
 	kol: "KOL", mbb: "MBB", dag: "DAG",
+	// Quant research (2026-11-28 re-audit: "Oos sharpe", "Dsr p", "Profit gpa").
+	oos: "OOS", dsr: "DSR", roe: "ROE", gpa: "GPA", cagr: "CAGR", ic: "IC", etf: "ETF", ohlc: "OHLC",
 };
 // Longest first: "_tok_s" must win over "_s".
 const UNITS: Array<[RegExp, string]> = [
