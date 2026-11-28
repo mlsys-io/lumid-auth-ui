@@ -43,7 +43,9 @@ export interface SeriesIn {
 }
 
 export interface EvoPoint { t: number; arm: string; mean: number; n: number; counted: boolean }
-export interface StepPoint { t: number; arm: string; value: number }
+/** `i`: the index in `points` of the result that moved the line (for an
+ *  axis laid out in the order tried — lib/evolution-axis). */
+export interface StepPoint { t: number; arm: string; value: number; i?: number }
 export type ChainState = "winning" | "best so far" | "tied" | "can't tell apart yet" | "collecting" | "trying" | "dropped" | "not run yet";
 export interface ChainLink {
 	arm: string; index: number; state: ChainState; mean: number | null; n: number;
@@ -263,16 +265,16 @@ export function buildEvolution(series: SeriesIn[], opts: {
 		}
 		return top;
 	};
-	for (const p of all) {
+	for (const [i, p] of all.entries()) {
 		latest.set(p.arm, p);
 		const b = pick(true), f = pick(false);
 		if (b) {
 			const last = best[best.length - 1];
-			if (!last || last.arm !== b.arm || last.value !== b.mean) best.push({ t: p.t, arm: b.arm, value: b.mean });
+			if (!last || last.arm !== b.arm || last.value !== b.mean) best.push({ t: p.t, arm: b.arm, value: b.mean, i });
 		}
 		if (f) {
 			const last = frontier[frontier.length - 1];
-			if (!last || last.arm !== f.arm || last.value !== f.mean) frontier.push({ t: p.t, arm: f.arm, value: f.mean });
+			if (!last || last.arm !== f.arm || last.value !== f.mean) frontier.push({ t: p.t, arm: f.arm, value: f.mean, i });
 		}
 	}
 	let hero = best.length ? { arm: best[best.length - 1].arm, value: best[best.length - 1].value } : null;
