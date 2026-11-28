@@ -11,7 +11,8 @@
 // runs read the n8n execution payload.
 
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
+import { parseScheduledRunId, runPath } from "@/lib/run-routes";
 import { Activity, ArrowLeft, Play, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { me, MeApiError, type MeRunDetail } from "@/api/me";
@@ -33,7 +34,18 @@ interface StepLogEntry {
 	[k: string]: unknown;
 }
 
+// A scheduled run has a real page (the workflow's run page: the answer, the
+// steps, what it produced). This legacy view only knows visual runs, so a
+// scheduled id here — a cited or bookmarked link — read "No step log captured
+// for this run" under its raw id, with Mark succeeded / Mark failed (2026-11-28).
 export default function StudioRunDetail() {
+	const { run_id = "" } = useParams<{ run_id: string }>();
+	const sched = parseScheduledRunId(run_id);
+	if (sched) return <Navigate replace to={runPath(sched.app, sched.loop, sched.runId)} />;
+	return <LegacyRunDetail />;
+}
+
+function LegacyRunDetail() {
 	const { run_id = "" } = useParams<{ run_id: string }>();
 	const [detail, setDetail] = useState<MeRunDetail | null>(null);
 	const [err, setErr] = useState<string | null>(null);

@@ -142,15 +142,16 @@ export default function RunAnswerCard({ app, loop, runId, detail, listRow, cycle
 
 	if (a.tone === "unknown" && !detail) return null;
 	const warn = a.tone === "not_run" || a.tone === "stopped";
-	const Icon = a.tone === "failed" ? AlertTriangle : a.tone === "ok" ? CheckCircle2 : a.tone === "not_run" ? Ban : a.tone === "stopped" ? PauseCircle : CircleDashed;
+	const Icon = a.tone === "failed" ? AlertTriangle : a.tone === "ok" ? CheckCircle2 : a.tone === "not_run" || a.tone === "cancelled" ? Ban : a.tone === "stopped" ? PauseCircle : CircleDashed;
+	const quiet = a.tone === "cancelled";
 	const expName = experiment ? (experiment.title || humanId(experiment.id)) : null;
 
 	return (
 		<section aria-label="What this run did" data-tone={a.tone}
 			className={cn("rounded-lg border px-3 py-2.5 space-y-2",
-				a.tone === "failed" ? "border-brick-200 bg-brick-50/60" : a.tone === "ok" ? "border-gold-200 bg-gold-50/50" : warn ? "border-ember-200 bg-ember-50/50" : "border-lagoon-200 bg-lagoon-50/50")}>
+				a.tone === "failed" ? "border-brick-200 bg-brick-50/60" : a.tone === "ok" ? "border-gold-200 bg-gold-50/50" : warn ? "border-ember-200 bg-ember-50/50" : quiet ? "border-ink-200 bg-ink-50/60" : "border-lagoon-200 bg-lagoon-50/50")}>
 			<div className="flex items-start gap-2">
-				<Icon className={cn("w-4 h-4 mt-0.5 flex-shrink-0", a.tone === "failed" ? "text-brick-600" : a.tone === "ok" ? "text-gold-600" : warn ? "text-ember-600" : "text-lagoon-600")} aria-hidden />
+				<Icon className={cn("w-4 h-4 mt-0.5 flex-shrink-0", a.tone === "failed" ? "text-brick-600" : a.tone === "ok" ? "text-gold-600" : warn ? "text-ember-600" : quiet ? "text-ink-600" : "text-lagoon-600")} aria-hidden />
 				<div className="min-w-0 flex-1">
 					<div className="text-body font-semibold text-ink-900">
 						{a.tone === "running" ? <><span className="lumen-shine">Running</span><WorkingDots /></> : a.headline}

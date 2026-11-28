@@ -238,6 +238,34 @@ export function stepHeld(st: MeCycleStep): boolean {
 	return (typeof st.error === "string" && st.error.trim().toLowerCase() === "held") || status === "held";
 }
 
+/** A gate's reason in words: "sharpe_is_phase_mean 0.3349 < 0.5, trades 11 < 30"
+ *  → "Sharpe is phase mean 0.3349 < 0.5, trades 11 < 30". Each metric name
+ *  reads as its label; numbers and comparisons stay. */
+export function gateReasonWords(reason: string): string {
+	let first = true;
+	const out = reason.trim().replace(/^filtered:\s*/i, "").replace(/[A-Za-z_][\w.]*/g, (w) => {
+		if (/^(and|or|not|true|false|nan|inf)$/i.test(w)) return w;
+		const label = humanMetric(w).label;
+		const keep = first || /^[A-Z0-9]{2,}\b/.test(label);
+		first = false;
+		return keep ? label : label.charAt(0).toLowerCase() + label.slice(1);
+	});
+	return out;
+}
+
+/** A step its gate stopped: it ran and said no (the chain engine's `filtered`). */
+export function stepFiltered(st: MeCycleStep): boolean {
+	const out = st.output as Record<string, unknown> | undefined;
+	const inner = out?.out as Record<string, unknown> | undefined;
+	const status = (st as { status?: unknown }).status ?? out?.status;
+	return status === "filtered" || /^filtered:/i.test(st.output_summary || "") || (typeof inner?.outcome === "string" && /^filtered:/i.test(inner.outcome));
+}
+
+/** A run its owner stopped by hand: cancelled, not failed — nothing to fix. */
+export function userStopped(reason: unknown): boolean {
+	return typeof reason === "string" && /^\s*(user[_ ]stopped|stopped by (the )?user|cancell?ed by (the )?user|interrupted)\s*$/i.test(reason);
+}
+
 /** "engine_command" → "Ran harvest outbox"; "score_docs" → "Score docs". */
 export function stepLabel(st: MeCycleStep): string {
 	const id = st.step_id || st.skill || "step";
@@ -258,6 +286,11 @@ export function rawStepError(st: MeCycleStep): string | undefined {
 /** One line under the step name: the failure in words, or what it said. */
 export function stepLine(st: MeCycleStep): string {
 	if (stepHeld(st)) return "Held (not run)";
+	if (stepFiltered(st)) {
+		const said = st.output_summary || String(((st.output as Record<string, unknown> | undefined)?.out as Record<string, unknown> | undefined)?.outcome ?? "");
+		const why = gateReasonWords(said);
+		return why ? `Didn't pass its gate: ${why}` : "Didn't pass its gate";
+	}
 	const out = st.output as Record<string, unknown> | undefined;
 	const inner = out?.out as Record<string, unknown> | undefined;
 	const err = st.error || (typeof inner?.error === "string" ? inner.error : undefined);
@@ -274,7 +307,7 @@ export interface RunAnswer {
 	/** `not_run`: the run was refused or could not be measured (a daily cap, no
 	 *  free GPU) — it neither succeeded nor failed. `stopped`: a gate held the
 	 *  later steps back — the run did its job and said no. */
-	tone: "ok" | "failed" | "running" | "unknown" | "not_run" | "stopped";
+	tone: "ok" | "failed" | "running" | "unknown" | "not_run" | "stopped" | "cancelled";
 	/** "Succeeded in 4.2s" / "Failed after 62s" / "Didn't run" / "Stopped after Simulate". */
 	headline: string;
 	/** The finding or the reason, in words ("Meets every performance constraint",
@@ -308,6 +341,11 @@ export function runAnswer(d: MeCycleDetail | null, opts: { ok?: boolean; running
 		const se = Array.isArray(s.step_errors) && s.step_errors.length ? s.step_errors[0] as unknown : undefined;
 		const seRaw = se == null ? undefined : typeof se === "string" ? se : typeof (se as { error?: unknown }).error === "string" ? (se as { error: string }).error : JSON.stringify(se);
 		const raw = err || stepRaw || seRaw;
+		// Stopped by hand: not a failure, and nothing to diagnose (2026-11-28:
+		// "Failed after 2m 46s · Diagnose in chat" over a run its owner stopped).
+		if ([raw, s.outcome, s.reason, s.error].some(userStopped)) {
+			return { tone: "cancelled", headline: dur ? `Cancelled after ${dur}` : "Cancelled", sentence: "Stopped by hand, so there's nothing to fix. Re-run it if you still want the result." };
+		}
 		const outcome = typeof s.outcome === "string" && !QUIET_OUTCOMES.has(s.outcome) ? s.outcome : "";
 		const sentence = raw ? plainCause(raw) : outcome ? plainCause(outcome) : (failedStep && stepLine(failedStep)) || "No reason was recorded";
 		return { tone: "failed", headline: dur ? `Failed after ${dur}` : "Failed", sentence, raw: raw || undefined };
@@ -461,6 +499,20 @@ export function gateStop(d: MeCycleDetail | null, specGate?: string | null): { h
 	const heldStages = stages.filter((st) => st.status === "held");
 	const heldSteps = (d.steps || []).filter(stepHeld);
 	const heldAt = typeof s.held_at === "string" && s.held_at ? s.held_at : null;
+	// A stage whose gate said no (the chain engine's `filtered`; later stages
+	// `skipped`) — the run did its job and stopped the version there. It read
+	// "Succeeded" with a "filtered: sharpe_is_phase_mean 0.3349 < 0.5" step.
+	const filtered = stages.find((st) => st.status === "filtered");
+	const filteredAt = typeof s.filtered_at === "string" && s.filtered_at ? s.filtered_at : filtered ? String(filtered.loop ?? filtered.step ?? "") : "";
+	const filteredStep = (d.steps || []).find(stepFiltered);
+	if (filteredAt || filteredStep) {
+		const at = stageWords(filteredAt || filteredStep?.step_id || "");
+		const why = String((filtered?.reason ?? s.reason ?? filteredStep?.output_summary ?? "") || "");
+		const skipped = stages.filter((st) => st.status === "skipped").map((st) => stageWords(String(st.loop ?? st.step ?? ""))).filter(Boolean);
+		const reason = why ? `Didn't pass its gate: ${gateReasonWords(why)}` : "Didn't pass its gate";
+		const sentence = [reason, skipped.length ? `${skipped.join(", ")} not run` : ""].filter(Boolean).join("; ");
+		return { headline: at ? `Stopped at ${at}` : "Stopped by a gate", sentence, after: at, held: skipped };
+	}
 	if (!heldStages.length && !heldSteps.length && !heldAt) return null;
 	const held = [...new Set([...heldStages.map((st) => String(st.loop ?? st.step ?? "")), ...heldSteps.map((st) => st.step_id)].filter(Boolean))].map(stageWords);
 	const firstHeld = stages.findIndex((st) => st.status === "held");

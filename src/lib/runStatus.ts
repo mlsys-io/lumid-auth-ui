@@ -61,11 +61,13 @@ export function runStatus(raw: string | null | undefined): RunStatusInfo {
 }
 
 /** A cycle row / cycle detail: `ok` true|false plus an optional `running`. */
-export function cycleStatus(c: { ok?: boolean | null; running?: boolean | null; outcome?: "not_run" | "stopped" | null } | null | undefined): RunStatusInfo {
+export function cycleStatus(c: { ok?: boolean | null; running?: boolean | null; outcome?: "not_run" | "stopped" | "cancelled" | null } | null | undefined): RunStatusInfo {
 	if (!c) return { status: "queued", raw: "" };
 	if (c.running) return { status: "running", raw: "running" };
 	// The run's own detail said it didn't run, or a gate stopped it (runAnswer's
 	// tone): that outranks `ok`, which is true for both.
+	// Stopped by hand: cancelled, whatever `ok` says.
+	if (c.outcome === "cancelled") return { status: "cancelled", raw: "stopped by its owner" };
 	if (c.outcome === "not_run" && c.ok !== false) return { status: "not_run", raw: "ok: true · not measured" };
 	if (c.outcome === "stopped" && c.ok !== false) return { status: "stopped", raw: "ok: true · held by a gate" };
 	if (c.ok === true) return { status: "succeeded", raw: "ok: true" };

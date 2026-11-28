@@ -1,7 +1,7 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 // Fixtures are trimmed copies of real lum.id cycles (2026-11-24).
 import type { MeCycleDetail } from "@/api/me";
-import { humanMetric, fmtMetricValue, primaryMetricKey, runMetrics, stepFailed, stepLabel, stepLine, runAnswer, vsUsual, runOutputs, runLimits, measuredOn, measuredLine, runFiles,
+import { gateReasonWords, stepFiltered, userStopped, humanMetric, fmtMetricValue, primaryMetricKey, runMetrics, stepFailed, stepLabel, stepLine, runAnswer, vsUsual, runOutputs, runLimits, measuredOn, measuredLine, runFiles,
 	notRun, retryWords, retryAtSec, runEndSec, gateStop, gateMissing, stepHeld, runGate, gateBasis, gateWords, meetsOp, runExperiment, primaryHigherIsBetter, isMeasuredRun,
 	isFlagKey, isCountKey, beforeAfter, notApplied, sameVersionRuns } from "./run-answer";
 import { RUN_NOT_MEASURED, RUN_GPU_ENERGY, RUN_GATE_STOPPED, RUN_CALIBRATE_TOO_FEW, RUN_PAGE_CONTEXT } from "@/dev/run-page-fixtures";
@@ -274,6 +274,22 @@ check("vs usual reads the same version's runs", () => {
 	const rows = [{ ts: "a", branch_label: "v1" }, { ts: "b", branch_label: "v2" }, { ts: "c" }];
 	eq(sameVersionRuns(rows, "v1").map((r) => r.ts), ["a"]);
 	eq(sameVersionRuns(rows, null).length, 3);
+});
+check("a gate that said no is a stop, not a success", () => {
+	eq(gateReasonWords("filtered: sharpe_is_phase_mean 0.3349 < 0.5, trades 11 < 30"), "Sharpe is phase (average) 0.3349 < 0.5, trades 11 < 30");
+	eq(gateReasonWords("dsr_p 0.15 >= 0.05 and oos_sharpe -0.45 <= 0"), "DSR p 0.15 >= 0.05 and OOS sharpe -0.45 <= 0");
+	const d = { ok: true, summary: { filtered_at: "bar_backtest", reason: "sharpe_is_phase_mean 0.3349 < 0.5, trades 11 < 30",
+		stages: [{ loop: "data_check", status: "done" }, { loop: "bar_backtest", status: "filtered", reason: "sharpe_is_phase_mean 0.3349 < 0.5, trades 11 < 30" }, { loop: "robustness", status: "skipped" }] },
+		steps: [{ step_id: "bar_backtest", output_summary: "filtered: sharpe_is_phase_mean 0.3349 < 0.5, trades 11 < 30" }] } as unknown as MeCycleDetail;
+	const a = runAnswer(d, { ok: true });
+	eq([a.tone, a.headline, a.sentence], ["stopped", "Stopped at Bar backtest", "Didn't pass its gate: Sharpe is phase (average) 0.3349 < 0.5, trades 11 < 30; Robustness not run"]);
+	const st = d.steps![0];
+	eq([stepFiltered(st), stepLine(st)], [true, "Didn't pass its gate: Sharpe is phase (average) 0.3349 < 0.5, trades 11 < 30"]);
+});
+check("a run stopped by hand is cancelled, not failed", () => {
+	eq([userStopped("user_stopped"), userStopped("stopped by user"), userStopped("user stopped the server")], [true, true, false]);
+	const a = runAnswer({ ok: false, summary: { error: "user_stopped" } } as unknown as MeCycleDetail, { ok: false, durationS: 166 });
+	eq([a.tone, a.headline], ["cancelled", "Cancelled after 2m 46s"]);
 });
 check("when the run ended", () => {
 	eq(runEndSec(RUN_NOT_MEASURED), 1795865046.765);

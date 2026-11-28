@@ -1,9 +1,10 @@
 // Hooks behind Activity: the runs feed (load + live SSE), a ticking clock for
 // elapsed times, and "first view this session" for the one entrance animation.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { me, streamRuns, MeApiError, type MeRunRow } from "@/api/me";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
+import { normalizeRun } from "@/lib/activity";
 
 /** One /me/runs page. Since identity v0.5.477 the response carries a
  *  keyset `next_cursor` + `has_more`, so a window can be read past it. */
@@ -122,7 +123,14 @@ export function useRunsFeed(days: number, state = "", workflow = "") {
 		return () => stop();
 	}, []);
 
-	return { runs, err, asOf, reload: load, truncated, jobsSource };
+	// A run stopped by hand is cancelled, not failed (normalizeRun); a Failed
+	// filter then leaves it out.
+	const shown = useMemo(() => {
+		if (!runs) return runs;
+		const n = runs.map(normalizeRun);
+		return state === "failed" ? n.filter((r) => r.state === "failed") : n;
+	}, [runs, state]);
+	return { runs: shown, err, asOf, reload: load, truncated, jobsSource };
 }
 
 /** Seconds since epoch, re-rendered every `ms` while the tab is visible. Off
