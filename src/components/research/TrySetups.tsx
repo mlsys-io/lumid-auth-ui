@@ -5,6 +5,7 @@
 
 import { useMemo, useState } from "react";
 import { X } from "lucide-react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { me } from "@/api/me";
 import type { AppSpec, SpecWorkflow } from "@/lib/app-spec";
@@ -50,7 +51,10 @@ export default function TrySetups({ app, wf, spec, onClose, onCreated }: {
 			toast.error("Couldn't set up the experiment", { description: String((e as Error).message || e) });
 		} finally { setBusy(false); }
 	};
-	return (
+	// A portal: the panel that opens this sheet animates with a transform,
+	// which made it the containing block of this fixed overlay — the sheet was
+	// clipped inside the panel (round 10, 2026-11-28).
+	return createPortal((
 		<div role="dialog" aria-label="Try setups" className="fixed inset-0 z-[7000] flex items-center justify-center bg-ink-900/30 p-4" onClick={onClose}>
 			<div className="w-full max-w-md space-y-3 rounded-xl border border-ink-200 bg-card p-4 shadow-e3 map-panel-in" onClick={(e) => e.stopPropagation()}>
 				<div className="flex items-center gap-2">
@@ -98,5 +102,6 @@ export default function TrySetups({ app, wf, spec, onClose, onCreated }: {
 				</div>
 			</div>
 		</div>
+	), document.body
 	);
 }
