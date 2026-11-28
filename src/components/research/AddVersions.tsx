@@ -10,6 +10,7 @@
 // parseNewVersions (lib/app-spec.ts, tested).
 
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useAppGraph } from "@/hooks/useAppGraph";
@@ -46,7 +47,10 @@ export default function AddVersions({ app, e, onClose }: { app: string; e: MeExp
 		}
 	};
 
-	return (
+	// A portal: the panel that opens this sheet animates with a transform,
+	// which made it the containing block of this fixed overlay — the sheet was
+	// clipped inside the panel (round 10, 2026-11-28).
+	return createPortal((
 		<div role="dialog" aria-label="Add versions" className="fixed inset-0 z-[7000] flex items-center justify-center bg-ink-900/30 p-4" onClick={onClose}>
 			<div className="w-full max-w-xl space-y-3 rounded-xl border border-ink-200 bg-card p-4 shadow-e3 map-panel-in" onClick={(ev) => ev.stopPropagation()}>
 				<div>
@@ -83,5 +87,6 @@ export default function AddVersions({ app, e, onClose }: { app: string; e: MeExp
 				</div>
 			</div>
 		</div>
+	), document.body
 	);
 }
