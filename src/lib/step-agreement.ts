@@ -137,8 +137,12 @@ export function stepAgreements(input: {
 				metrics.push({ metric: name, label: h.label, unit: h.unit, n: pairs.length, rho, topAgrees, ratio, flips, binary, higherIsBetter: higher, pairs });
 			}
 			if (!metrics.length) continue;
-			// The headline metric first: the one with the most pairs, ranked ones before 0/1.
-			metrics.sort((a, b) => Number(a.binary) - Number(b.binary) || b.n - a.n || a.metric.localeCompare(b.metric));
+			// The steps' declared metrics first (in declared order), then the rest;
+			// ranked ones before 0/1. Live MLSys led with Decode / E2E p50 over the
+			// experiment's own goodput and TTFT (2026-11-28).
+			const declaredOrder = [...B.metrics, ...A.metrics].map((m) => m.name);
+			const rank = (m: MetricAgreement) => { const i = declaredOrder.indexOf(m.metric); return i < 0 ? 1e3 : i; };
+			metrics.sort((a, b) => Number(a.binary) - Number(b.binary) || rank(a) - rank(b) || b.n - a.n || a.metric.localeCompare(b.metric));
 			out.push({ cheap: { step: A.step, label: humanId(A.step) }, expensive: { step: B.step, label: humanId(B.step) }, metrics });
 		}
 	}

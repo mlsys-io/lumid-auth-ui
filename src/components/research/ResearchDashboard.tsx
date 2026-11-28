@@ -20,6 +20,9 @@ import { humanId } from "@/lib/research-map";
 import { bestResults, bestSoFar, dollars, failingWorkflows, researchHeadline, weekSummary, type BestResult } from "@/lib/research-dashboard";
 import { useRunsFeed } from "@/components/activity/hooks";
 import { cn } from "@/lib/utils";
+import { useAppUsage } from "@/components/research/SpendLine";
+import { instrumentName } from "@/lib/measure";
+import { usageLine } from "@/lib/spend";
 
 type TileId = "best" | "needs" | "week";
 const TILE_TITLE: Record<TileId, string> = { best: "Best results", needs: "Needs you", week: "This week" };
@@ -202,6 +205,9 @@ function NeedsTile({ pending, failing, onSelect, onHide }: { pending: Proposal[]
 }
 
 function WeekTile({ app, rows, onHide }: { app: string; rows: Map<string, MeWorkflowRow>; onHide: () => void }) {
+	// Metered compute (device-minutes first), from /me/usage; the old cents
+	// field only knew LLM spend and said "No spend" over real GPU minutes.
+	const spend = usageLine(useAppUsage(app), (n) => instrumentName(n).replace(/^the /, ""));
 	const { runs } = useRunsFeed(7);
 	const navigate = useNavigate();
 	const w = weekSummary(app, runs, rows);
@@ -222,7 +228,7 @@ function WeekTile({ app, rows, onHide }: { app: string; rows: Map<string, MeWork
 						))}
 					</div>
 				)}
-				<div className="text-micro text-ink-700">{w.spendCents ? `${dollars(w.spendCents)} spent this month` : "No spend recorded this month"}</div>
+				<div className="text-micro text-ink-700">{spend ?? (w.spendCents ? `${dollars(w.spendCents)} spent this month` : "No spend recorded this month")}</div>
 			</button>
 		</Tile>
 	);

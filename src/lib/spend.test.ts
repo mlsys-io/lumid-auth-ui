@@ -1,6 +1,6 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 import type { MeExperimentRow } from "@/api/me";
-import { budgetMeter, deviceTime, pressWords, spendWords, stepSpend, sumUsage, usageOf, usageOfRow, usageWords, type MeUsage } from "./spend";
+import { budgetMeter, deviceTime, pressWords, usageLine, spendWords, stepSpend, sumUsage, usageOf, usageOfRow, usageWords, type MeUsage } from "./spend";
 import { progressPerSpend, progressWords } from "./progress-per-spend";
 import { agreementHeadline, agreementRows, biasWords, flipWords, rankWords, spearman, stepAgreements } from "./step-agreement";
 
@@ -69,6 +69,13 @@ check("press words say the cost before it happens, and block when over", () => {
 	const tight = { ...usage168, used: { ...usage168.used, gpu_s: 160 * 60 } };
 	eq(pressWords({ runs: 2, estimate: usage168.estimates!["mlsys-sandbox"], usage: tight, through: "GPU sandbox" }).blocked, true);
 	eq(pressWords({ runs: 1 }).text, "Run 1 version");
+});
+
+check("the summary tile's spend line", () => {
+	eq(usageLine(usage168), "Budget: 38 of 168 GPU-min used · 130 GPU-min left (about 18 more runs)");
+	eq(usageLine({ used: { gpu_s: 1462, cpu_s: 44, cost_usd: 0.1, runs: 6, by_device: { "RTX 5080": 1462, CPU: 44 } } }), "24 GPU-min on RTX 5080 · 44 CPU-s used · $0.10 notional");
+	eq(usageLine({ used: { gpu_s: 0, cpu_s: 0, cost_usd: 0, runs: 0 } }), null);
+	eq(usageLine(null), null);
 });
 
 // ── step agreement ───────────────────────────────────────────────────────
