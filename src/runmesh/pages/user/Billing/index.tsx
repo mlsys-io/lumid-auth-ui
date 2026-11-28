@@ -693,7 +693,11 @@ const Pagination: React.FC<PaginationProps> = ({
   );
 };
 
-export const Billing: React.FC = () => {
+// `aside` takes the place of the old "Current plan" card, which advertised a
+// "Pro / month" plan with no price and features nobody had (2026-11-28 sweep):
+// lum.id has no plans. pages/app/billing.tsx fills it with what the account's
+// research actually used (identity /me/usage).
+export const Billing: React.FC<{ aside?: React.ReactNode }> = ({ aside }) => {
   const { user } = useAuthStore();
   const { t, language } = useLanguage();
   const [activeTab, setActiveTab] = useState<'transactions' | 'usage'>('usage');
@@ -702,7 +706,6 @@ export const Billing: React.FC = () => {
   const [usageTasks, setUsageTasks] = useState<NebulaTaskVo[]>([]);
   const [expandedUsageTaskIds, setExpandedUsageTaskIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
   const [userBalance, setUserBalance] = useState<number>(0); // 用户金额
   const [totalItems, setTotalItems] = useState<number>(0); // 后端返回的总数
   const [pagination, setPagination] = useState({
@@ -1222,14 +1225,9 @@ export const Billing: React.FC = () => {
                     ${(user && user.amount !== undefined ? user.amount : userBalance).toFixed(2)}
                     <span className="text-sm font-normal text-slate-400 ml-2">USD</span>
                   </h2>
-                  <p className="text-slate-400 text-sm mt-2">
-                    {t('billing.balance.available', {
-                      hours: Math.floor(
-                        (user && user.amount !== undefined ? user.amount : userBalance) / 0.45,
-                      ),
-                      gpu: 'RTX 4090',
-                    })}
-                  </p>
+                  {/* Was "approx. N hours of RTX 4090 compute": an invented $0.45/h rate for
+                      a card nobody rents here. Say what the balance is for instead. */}
+                  <p className="text-slate-300 text-sm mt-2">{t('billing.balance.available')}</p>
                 </div>
 
                 <div className="w-full mt-6 flex space-x-3">
@@ -1243,81 +1241,18 @@ export const Billing: React.FC = () => {
               </div>
             </div>
 
-            {/* Current Plan */}
-            <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm flex flex-col justify-between">
-              <div>
-                <h3 className="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-4">
-                  {t('billing.plan.current')}
-                </h3>
-                <div className="flex items-baseline mb-2">
-                  <span className="text-3xl font-bold text-slate-900">
-                    {t('billing.plan.name.pro')}
-                  </span>
-                  <span className="text-slate-500 ml-2">{t('billing.plan.perMonth')}</span>
-                </div>
-                <ul className="space-y-3 mt-4">
-                  <li className="flex items-center text-sm text-slate-600">
-                    <Icons.CheckCircle className="w-4 h-4 text-brand-500 mr-2" />
-                    {t('billing.plan.feature.priorityNodes')}
-                  </li>
-                  <li className="flex items-center text-sm text-slate-600">
-                    <Icons.CheckCircle className="w-4 h-4 text-brand-500 mr-2" />
-                    {t('billing.plan.feature.unlimitedWorkflows')}
-                  </li>
-                  <li className="flex items-center text-sm text-slate-600">
-                    <Icons.CheckCircle className="w-4 h-4 text-brand-500 mr-2" />
-                    {t('billing.plan.feature.apiAccess')}
-                  </li>
-                </ul>
-              </div>
-              <button className="w-full mt-4 py-2 border border-slate-200 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition-colors text-sm">
-                {t('billing.plan.change')}
-              </button>
-            </div>
+            {aside}
           </div>
 
           {/* Tabs & Table */}
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            {/* Filters */}
-            <div className="p-4 border-b border-slate-100 flex flex-wrap gap-4 bg-slate-50/50">
-              <div className="flex-1 min-w-[300px]">
-                <div className="relative">
-                  <Icons.Search className="w-4 h-4 absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    placeholder={t('billing.filter.searchPlaceholder')}
-                    value={searchQuery}
-                    onChange={(e) => {
-                      setSearchQuery(e.target.value);
-                      setPagination({ ...pagination, pageNum: 1 });
-                    }}
-                    className="pl-9 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 w-full bg-white"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center space-x-2 border-l border-slate-200 pl-4 min-w-[180px]">
-                <span className="text-xs font-medium text-slate-500 uppercase">
-                  {t('billing.filter.statusLabel')}
-                </span>
-                <select
-                  className="text-sm border-none bg-transparent focus:ring-0 text-slate-700 font-medium cursor-pointer"
-                  value=""
-                  onChange={() => {}}
-                >
-                  <option value="">{t('billing.filter.statusAll')}</option>
-                  <option value="completed">{t('billing.filter.statusCompleted')}</option>
-                  <option value="failed">{t('billing.filter.statusFailed')}</option>
-                </select>
-              </div>
-            </div>
-
+            {/* The search box and status filter that sat here filtered nothing
+                (the status select had a no-op onChange), so they are gone. */}
             <div className="border-b border-slate-100 flex">
               <button
                 onClick={() => {
                   setActiveTab('usage');
                   setPagination({ pageNum: 1, pageSize: pagination.pageSize });
-                  setSearchQuery('');
                 }}
                 className={`px-6 py-4 text-sm font-medium transition-colors border-b-2 flex items-center ${activeTab === 'usage' ? 'border-brand-600 text-brand-600 bg-brand-50/50' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
               >
@@ -1328,7 +1263,6 @@ export const Billing: React.FC = () => {
                 onClick={() => {
                   setActiveTab('transactions');
                   setPagination({ pageNum: 1, pageSize: pagination.pageSize });
-                  setSearchQuery('');
                 }}
                 className={`px-6 py-4 text-sm font-medium transition-colors border-b-2 flex items-center ${activeTab === 'transactions' ? 'border-brand-600 text-brand-600 bg-brand-50/50' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
               >
@@ -1348,7 +1282,17 @@ export const Billing: React.FC = () => {
             {/* Table Content */}
             {!loading && (
               <>
-                {activeTab === 'usage' ? (
+                {activeTab === 'usage' && totalItems === 0 && usageTasks.length === 0 ? (
+                  // Nothing rented: say so plainly. The wide table's own empty row sat
+                  // inside a horizontal scroller and was cut off at 390 px.
+                  <div className="px-6 py-12 text-center">
+                    <Icons.Box className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                    <h3 className="text-sm font-medium text-slate-600 mb-1">
+                      {t('billing.empty.noUsageTitle')}
+                    </h3>
+                    <p className="text-slate-500 text-sm">{t('billing.empty.noUsageDesc')}</p>
+                  </div>
+                ) : activeTab === 'usage' ? (
                   <div className="px-4 py-4">
                     <EnterpriseTable
                       columns={usageTaskColumns}
@@ -1373,14 +1317,14 @@ export const Billing: React.FC = () => {
                       rowExpandable={(record) =>
                         Array.isArray(record.usages) && record.usages.length > 0
                       }
-                      pagination={{
+                      pagination={totalItems > 0 ? {
                         pageNum: pagination.pageNum,
                         pageSize: pagination.pageSize,
                         total: totalItems,
                         pageSizes: [5, 10, 20, 50],
                         onChange: (page) => setPagination((prev) => ({ ...prev, pageNum: page })),
                         onPageSizeChange: (size) => setPagination({ pageNum: 1, pageSize: size }),
-                      }}
+                      } : undefined}
                       empty={{
                         title: t('billing.empty.noUsageTitle'),
                         description: t('billing.empty.noUsageDesc'),
@@ -1390,6 +1334,14 @@ export const Billing: React.FC = () => {
                       height="auto"
                       width="100%"
                     />
+                  </div>
+                ) : totalItems === 0 && usageLogs.length === 0 ? (
+                  <div className="px-6 py-12 text-center">
+                    <Icons.Box className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                    <h3 className="text-sm font-medium text-slate-600 mb-1">
+                      {t('billing.empty.noTransactionsTitle')}
+                    </h3>
+                    <p className="text-slate-500 text-sm">{t('billing.empty.noTransactionsDesc')}</p>
                   </div>
                 ) : (
                   <div>
@@ -1534,8 +1486,8 @@ export const Billing: React.FC = () => {
                       </table>
                     </div>
 
-                    {/* Pagination */}
-                    <Pagination
+                    {/* Pagination — only when there is something to page through. */}
+                    {totalItems > 0 && <Pagination
                       currentPage={pagination.pageNum}
                       totalPages={totalPages}
                       totalItems={totalItems}
@@ -1544,7 +1496,7 @@ export const Billing: React.FC = () => {
                       onPageChange={(page) => setPagination({ ...pagination, pageNum: page })}
                       onPageSizeChange={(size) => setPagination({ pageNum: 1, pageSize: size })}
                       pageSize={pagination.pageSize}
-                    />
+                    />}
                   </div>
                 )}
               </>

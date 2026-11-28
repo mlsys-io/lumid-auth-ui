@@ -287,6 +287,31 @@ export interface InstanceCatalog {
   loading?: boolean; // seed state while this instance's catalog is still in flight
 }
 
+/**
+ * The instances a reader is shown. An instance that did not answer is an
+ * operator's problem: admins see it (marked offline), everyone else simply
+ * doesn't get it — a student was shown "LQT Data offline" in red for a source
+ * they cannot use (2026-11-28 sweep). Still loading counts as shown.
+ */
+export function shownCatalog(cat: InstanceCatalog[], isAdmin: boolean): InstanceCatalog[] {
+  return isAdmin ? cat : cat.filter((c) => !c.error);
+}
+
+/** "3/4 instances · 24 schemas · 296 tables · read-only" (admins), "3 instances · …" otherwise. */
+export function catalogLine(cat: InstanceCatalog[], isAdmin: boolean): string {
+  const shown = shownCatalog(cat, isAdmin);
+  const up = shown.filter((c) => !c.error).length;
+  let schemas = 0;
+  let tables = 0;
+  for (const c of shown) {
+    schemas += c.schemas.length;
+    tables += c.schemas.reduce((n, x) => n + (x.tables ?? 0), 0);
+  }
+  const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  const head = isAdmin ? `${up}/${cat.length} instances` : plural(up, "instance");
+  return `${head} · ${plural(schemas, "schema")} · ${plural(tables, "table")} · read-only`;
+}
+
 // ── Stale-while-revalidate cache (sessionStorage-backed) ─────────────────────
 // Catalog + table SHAPES barely change within a session, but every mount
 // refetched them (blank spinner on every open). Cache per instance / schema:

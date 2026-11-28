@@ -26,6 +26,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { KeyRound, TerminalSquare } from "lucide-react";
+import { EmptyState } from "../../components/ui/empty-state";
+import { sandboxSitesWords } from "../../lib/fleet-view";
 import {
 	PUBLIC_SANDBOX_SITE,
 	SANDBOX_SITES,
@@ -683,9 +686,7 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 
 	return (
 		<TabShell
-			subtitle={`A shell with a home directory that outlives the container.${
-				isAdmin ? " Every site." : " On home."
-			}${gpusFree ? ` ${gpusFree} GPUs free on ${target}.` : ""}${
+			subtitle={`A shell with a home directory that outlives the container. ${sandboxSitesWords(isAdmin, sites)}${gpusFree ? ` ${gpusFree} GPUs free on ${target}.` : ""}${
 				// State the ceiling wherever it is below the site total, because "4 free" and
 				// "at most 1 per sandbox" are both true at home and only the pair is useful.
 				gpuInfo && gpuInfo.max_per_sandbox < gpuInfo.total
@@ -730,14 +731,14 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 						className="ml-auto rounded-md border border-ink-300 bg-card px-3 py-1.5 text-sm text-ink-700 hover:bg-ink-50">
 						{siteDatasets.length ? `Datasets · ${siteDatasets.length}` : "Datasets"}
 					</button>
+					{/* No key yet is a next step, not an error (it was a red "No SSH keys —
+					    add one"): a neutral button that says what to do. */}
 					<button onClick={() => setKeysOpen((v) => !v)}
+						aria-expanded={keysOpen}
 						title="Add or remove the SSH keys that let you into your sandboxes"
-						className={`rounded-md border px-3 py-1.5 text-sm ${
-							keys && keys.length === 0
-								? "border-ember-300 bg-ember-50 text-ember-800 hover:bg-ember-100"
-								: "border-ink-300 bg-card text-ink-700 hover:bg-ink-50"
-						}`}>
-						{keys === null ? "SSH keys" : keys.length === 0 ? "No SSH keys — add one" : `SSH keys · ${keys.length}`}
+						className="inline-flex items-center gap-1.5 rounded-md border border-ink-300 bg-card px-3 py-1.5 text-sm text-ink-700 hover:bg-ink-50">
+						<KeyRound className="h-3.5 w-3.5 text-ink-500" aria-hidden />
+						{keys === null ? "SSH keys" : keys.length === 0 ? "Add an SSH key" : `SSH keys · ${keys.length}`}
 					</button>
 				</div>
 
@@ -1274,6 +1275,22 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 				</p>
 			</div>
 
+			{/* No sandboxes: say what one is and how to get one, instead of a bare
+			    table header cut off at 390 px (2026-11-28 sweep). */}
+			{!rows.length && !boxes.loading ? (
+				<EmptyState
+					icon={TerminalSquare}
+					title="No sandboxes yet"
+					body={<>A sandbox is your own Linux machine on the fleet: a shell with CPUs or a GPU, and a{" "}
+						<code className="rounded bg-card px-1">/home</code> that is kept when you delete it.{" "}
+						{keys && keys.length === 0
+							? "Add an SSH key first — it is how you log in — then press New sandbox."
+							: "Press New sandbox, pick a site and a size, then connect with SSH."}</>}
+					actionLabel={keys && keys.length === 0 ? "Add an SSH key" : "New sandbox"}
+					onAction={keys && keys.length === 0 ? () => setKeysOpen(true) : () => setCreateOpen(true)}
+					size="sm"
+				/>
+			) : (
 			<div className="overflow-x-auto rounded-lg border border-ink-200 bg-card">
 				<table className="w-full text-sm">
 					<thead className="bg-ink-50 text-left text-xs uppercase text-ink-600">
@@ -1375,16 +1392,10 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 								</td>
 							</tr>
 						))}
-						{!rows.length && !boxes.loading && (
-							<tr>
-								<td colSpan={7} className="px-3 py-8 text-center text-sm text-ink-600">
-									No sandboxes yet — create one above.
-								</td>
-							</tr>
-						)}
 					</tbody>
 				</table>
 			</div>
+			)}
 
 			{isAdmin && (
 				<div className="mt-6">

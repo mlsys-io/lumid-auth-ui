@@ -58,7 +58,10 @@ export default function AdminSectionLayout({ title, subtitle, tabs }: Props) {
 				)}
 			</header>
 			{visible && visible.length > 0 && (
-			<div className="mb-6 border-b border-ink-200 flex gap-5 overflow-x-auto">
+			// On a phone the strip WRAPS (and drops the icons) rather than scrolling:
+			// a scrolled strip clipped its last tab (Research Fleet → Storage at
+			// 390 px) with nothing saying there was more.
+			<div className="mb-6 flex flex-wrap gap-x-5 gap-y-1 border-b border-ink-200 sm:flex-nowrap sm:overflow-x-auto">
 				{visible.map((t) => (
 					<NavLink
 						key={t.to}
@@ -73,7 +76,7 @@ export default function AdminSectionLayout({ title, subtitle, tabs }: Props) {
 						}
 					>
 						<span className="inline-flex items-center gap-1.5">
-							{t.icon && <t.icon className="h-3.5 w-3.5" />}
+							{t.icon && <t.icon className="hidden h-3.5 w-3.5 sm:block" />}
 							{t.label}
 						</span>
 					</NavLink>

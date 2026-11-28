@@ -15,7 +15,8 @@
 // "no need to show 'done' in the right top panel", 2026-11-25).
 //
 // Global: every app's runs (the current app's first), lum.id/data jobs, and
-// Research Fleet jobs (GET /me/fleet/jobs) still queued or running.
+// Research Fleet jobs (GET /me/fleet/jobs) still queued or running — each
+// unfinished one confirmed with its own status read (lib/fleet-view.ts).
 // Sources: runs feed + SSE (useRunsFeed), data jobs (15 s poll), the app's
 // queue on app pages (GET /me/apps/:app/queue), machines (GET /me/compute).
 // A source that isn't there is left out, never faked.
@@ -38,6 +39,7 @@ import { cn } from "@/lib/utils";
 import { dataJobs } from "@/api/dataJobs";
 import { jobElapsedS, jobStatusLabel, type Job } from "@/lib/data-jobs";
 import { fleet, type FleetJob } from "@/api/fleet";
+import { railAction, railFleetJobs, railToConfirm, type FleetFresh } from "@/lib/fleet-view";
 import { useWorkflowColors } from "@/hooks/useWorkflowColors";
 
 const FEED_DAYS = 1;
@@ -78,8 +80,17 @@ function useActiveFleetJobs(enabled: boolean): FleetJob[] {
 		const load = async () => {
 			if (document.visibilityState === "hidden") return;
 			try {
-				const r = await fleet.list({ limit: 30 });
-				if (live) setJobs((r.jobs ?? []).filter((j) => !j.terminal && (j.status === "queued" || j.status === "running")));
+				const listed = (await fleet.list({ limit: 30 })).jobs ?? [];
+				// The list's statuses are identity's cache and can sit at "queued" for
+				// hours after a job finished (2026-11-28: eleven GPU sandbox jobs
+				// "Waiting at Office" 2 h after they ran). Ask each unfinished job
+				// itself — the read also writes the status back — and leave out an
+				// old one nobody could confirm (lib/fleet-view.ts).
+				const fresh = new Map<string, FleetFresh>();
+				await Promise.all(railToConfirm(listed).map(async (id) => {
+					try { const s = await fleet.status(id); fresh.set(id, { status: s.status, terminal: s.terminal }); } catch { /* unconfirmed */ }
+				}));
+				if (live) setJobs(railFleetJobs(listed, fresh, Date.now() / 1000));
 			} catch { if (live) setJobs([]); }
 		};
 		load();
@@ -93,12 +104,12 @@ function FleetTile({ job, now }: { job: FleetJob; now: number }) {
 	const started = job.created_at ? Date.parse(job.created_at) / 1000 : now;
 	const elapsed = Math.max(0, now - started);
 	const running = job.status === "running";
-	const site = job.site ? job.site.charAt(0).toUpperCase() + job.site.slice(1) : "";
+	const action = railAction(job);
 	return (
-		<Tile to="/studio/research-fleet" startedAt={started} now={now} live={running}
-			label={`Research Fleet job ${job.name || job.id}: ${job.status}${site ? ` at ${site}` : ""}, ${fmtDuration(elapsed)}`}
+		<Tile to="/studio/research-fleet/jobs" startedAt={started} now={now} live={running}
+			label={`Research Fleet job ${job.name || job.id}: ${action}, ${fmtDuration(elapsed)}`}
 			title={<>{job.name || job.labels?.experiment || job.id.slice(0, 12)}<span className="font-normal text-ink-600"> · fleet job</span></>}
-			action={running ? <><span className="lumen-shine">Running{site ? ` at ${site}` : ""}</span><WorkingDots /></> : <span>Waiting{site ? ` at ${site}` : ""}</span>}
+			action={running ? <><span className="lumen-shine">{action}</span><WorkingDots /></> : <span>{action}</span>}
 			cells={<ProgressCells p={null} elapsed={elapsed} late={false} />}
 		/>
 	);

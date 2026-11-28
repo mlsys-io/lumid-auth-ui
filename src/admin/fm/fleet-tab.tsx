@@ -17,7 +17,10 @@
 // admin uses the merged one. Reversing that gives a non-admin a 403 from nginx
 // that renders exactly like an outage.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { fleet, type FleetJob } from "../../api/fleet";
+import { USER_SANDBOX_SITES } from "../../api/sandboxes";
+import { countOf, fleetAccessNote } from "../../lib/fleet-view";
 import {
 	FM_DEFAULT_COST_PER_HOUR,
 	fanoutForSites,
@@ -80,6 +83,19 @@ export default function FleetTab({ isAdmin }: { isAdmin: boolean }) {
 
 	const [showStale, setShowStale] = useState(false);
 
+	// Where the person's own runs went (identity's records, one small read), so
+	// the note can name the sites their work actually used.
+	const [myJobs, setMyJobs] = useState<FleetJob[] | null>(null);
+	useEffect(() => {
+		if (isAdmin) return;
+		let live = true;
+		fleet.list({ limit: 30 }).then((r) => { if (live) setMyJobs(r.jobs ?? []); }).catch(() => {});
+		return () => { live = false; };
+	}, [isAdmin]);
+	const accessNote = isAdmin
+		? null
+		: fleetAccessNote({ listed: PUBLIC_SITE, hidden: ["office", "cloud", "vast", "nus"], sandboxSites: USER_SANDBOX_SITES, jobs: myJobs });
+
 	const tree = useMemo(() => {
 		const ns = nodes.data?.items ?? [];
 		const ws = workers.data?.items ?? [];
@@ -132,8 +148,8 @@ export default function FleetTab({ isAdmin }: { isAdmin: boolean }) {
 	return (
 		<TabShell
 			subtitle={
-				`${counts.live} live worker(s)${counts.busy ? `, ${counts.busy} busy` : ""}` +
-				`${counts.total > counts.live ? ` · ${counts.total - counts.live} stale row(s) excluded` : ""}` +
+				`${countOf(counts.live, "live worker")}${counts.busy ? `, ${counts.busy} busy` : ""}` +
+				`${counts.total > counts.live ? ` · ${countOf(counts.total - counts.live, "stale row")} excluded` : ""}` +
 				(isAdmin ? " · every federated site" : " · home fleet") +
 				". Refreshes every 30s."
 			}
@@ -143,10 +159,12 @@ export default function FleetTab({ isAdmin }: { isAdmin: boolean }) {
 		>
 			<SiteStrip sites={nodes.data?.sites ?? []} />
 
-			{!isAdmin && (
-				<div className="mb-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-					Showing the <strong>home</strong> fleet. The office, cloud, vast and NUS meshes are
-					restricted to admins.
+			{/* It used to say office was "restricted to admins" while every GPU
+			    measurement the person ran had run there (2026-11-28 sweep). Only the
+			    machine LISTS are admin-only; the note says where their work runs. */}
+			{accessNote && (
+				<div className="mb-3 space-y-0.5 rounded-md border border-ink-200 bg-ink-50 px-3 py-2 text-xs text-ink-700" data-testid="fleet-access-note">
+					{accessNote.map((line, i) => <p key={i}>{line}</p>)}
 				</div>
 			)}
 
@@ -193,7 +211,7 @@ export default function FleetTab({ isAdmin }: { isAdmin: boolean }) {
 								<div className="flex items-center gap-2">
 									<SiteBadge site={site} />
 									<span className="text-xs text-slate-500">
-										{entries.length} node(s) · {siteLive} live worker(s)
+										{countOf(entries.length, "node")} · {countOf(siteLive, "live worker")}
 										{siteGpu ? ` · ${siteGpu}` : ""}
 									</span>
 								</div>

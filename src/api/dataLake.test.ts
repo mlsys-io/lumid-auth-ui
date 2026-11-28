@@ -1,6 +1,6 @@
 // Which session-bearer audience each data-lake instance gets. Run by
 // scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
-import { audienceFor, instanceById, jobRefFor } from "./dataLake";
+import { audienceFor, catalogLine, instanceById, jobRefFor, shownCatalog, type InstanceCatalog } from "./dataLake";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -22,6 +22,17 @@ check("FinData has none until jobs can read it", () => eq(jobRefFor(instanceById
 check("every instance says where it lives", () => {
 	for (const id of ["findata", "lumid-data", "lqt-data"]) if (!instanceById(id)?.where) throw new Error(`${id} has no 'where'`);
 });
+
+
+const CAT: InstanceCatalog[] = [
+  { instance: instanceById("findata")!, schemas: [{ schema: "market", tables: 10 }, { schema: "news", tables: 3 }] },
+  { instance: instanceById("lumid-data")!, schemas: [{ schema: "ukb_demo", tables: 1 }] },
+  { instance: instanceById("lqt-data")!, schemas: [], error: "HTTP 403" },
+];
+check("a source a reader cannot reach is not shown to them", () => eq(shownCatalog(CAT, false).map((c) => c.instance.id).join(","), "findata,lumid-data"));
+check("admins still see it, marked offline", () => eq(shownCatalog(CAT, true).length, 3));
+check("the catalog line counts what the reader sees", () => eq(catalogLine(CAT, false), "2 instances · 3 schemas · 14 tables · read-only"));
+check("admins get the up/total count", () => eq(catalogLine(CAT, true), "2/3 instances · 3 schemas · 14 tables · read-only"));
 
 export function run(): number {
 	let failed = 0;

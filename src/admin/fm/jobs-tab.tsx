@@ -42,6 +42,8 @@ import { me } from "../../api/me";
 import { lumilakeReqIdOfTasks } from "../../lib/fleet-provenance";
 import { runPath } from "../../lib/run-routes";
 import { toCycleId } from "../../lib/cycle-id";
+import { workflowsLine } from "../../lib/fleet-view";
+import { runRowWhen } from "../../lib/runs-list";
 
 /** Who launched a FlowMesh workflow, as far as the platform RECORDED it. */
 type Provenance =
@@ -49,12 +51,9 @@ type Provenance =
 	| { kind: "run"; app: string; loop: string; runTs: number }
 	| { kind: "none"; why: string };
 
-/** Unix seconds -> "Sep 28, 3:50 PM" in the reader's zone. */
+/** Unix seconds -> "28 Sep, 15:50" in the reader's zone (the app's format, lib/runs-list runRowWhen). */
 function runWhen(runTs: number): string {
-	const d = new Date(runTs * 1000);
-	return Number.isNaN(d.getTime())
-		? String(runTs)
-		: d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+	return runRowWhen(runTs) || "—";
 }
 
 /** "Submitted by: <app> › <loop> › run <time>" — a real link, or "not recorded".
@@ -84,7 +83,7 @@ function SubmittedBy({ p }: { p: Provenance }) {
 function when(iso?: string): string {
 	if (!iso) return "—";
 	const t = Date.parse(iso);
-	return Number.isNaN(t) ? "—" : new Date(t).toLocaleString();
+	return Number.isNaN(t) ? "—" : runRowWhen(t / 1000);
 }
 
 
@@ -130,7 +129,7 @@ function Kv({ k, v }: { k: string; v: string }) {
 /** Epoch seconds -> local time, or an em dash. The API mixes null and absent. */
 function stamp(ts?: number | null): string {
 	if (ts == null) return "—";
-	return new Date(ts * 1000).toLocaleString();
+	return runRowWhen(ts) || "—";
 }
 
 /** Elapsed between two epoch-second stamps, rendered in the largest sensible unit. */
@@ -368,7 +367,7 @@ export default function JobsTab({ isAdmin }: { isAdmin: boolean }) {
 
 	return (
 		<TabShell
-			subtitle={`${data?.items.length ?? 0} workflow(s) across the federation`}
+			subtitle={workflowsLine(data?.items.length ?? 0, (data?.sites ?? []).filter((x) => x.ok).map((x) => x.site))}
 			loading={loading}
 			error={error}
 			onRefresh={refresh}

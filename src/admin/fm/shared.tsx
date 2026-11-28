@@ -8,6 +8,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { isSessionExpired } from "../../api/client";
 import type { FmFanout, FmSiteStatus } from "../../api/fm";
+import { answerTime, siteAnswerTitle } from "../../lib/fleet-view";
 
 /**
  * Fetch a merged fan-out, with a manual refresh and an optional poll.
@@ -93,7 +94,7 @@ export function SiteStrip({ sites }: { sites: FmSiteStatus[] }) {
 				{sites.map((s) => (
 					<span
 						key={s.site}
-						title={s.error ? `${s.site}: ${s.error}` : `${s.site}: ${s.count} row(s) in ${s.ms}ms`}
+						title={siteAnswerTitle(s)}
 						className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs ${
 							s.ok
 								? "border-ink-200 bg-card text-ink-700"
@@ -107,7 +108,7 @@ export function SiteStrip({ sites }: { sites: FmSiteStatus[] }) {
 						/>
 						<span className="font-medium">{s.site}</span>
 						<span className="text-ink-600">{s.ok ? s.count : "—"}</span>
-						{s.ok && <span className="text-ink-600">{s.ms}ms</span>}
+						{s.ok && <span className="text-ink-600">· {answerTime(s.ms)}</span>}
 					</span>
 				))}
 			</div>

@@ -22,6 +22,7 @@ import { runImages } from "../../lib/run-images";
 import ResultImages from "./result-images";
 import RunFiles from "./run-files";
 import { runFiles } from "../../lib/run-files";
+import { fleetWhen, runPlace } from "../../lib/fleet-view";
 
 const LIST_LIMIT = 100;
 
@@ -134,7 +135,7 @@ export default function MyRuns() {
 								<tr className={`border-t border-ink-100 align-top ${isOpen ? "bg-ink-50" : ""}`}>
 									<td className="px-3 py-2">
 										<div className="text-meta font-medium text-ink-900">{runLabel(j)}</div>
-										<CopyId id={j.id} />
+										<CopyId id={j.id} place={runPlace(j)} />
 									</td>
 									<td className="px-3 py-2">
 										<span className={`rounded px-1.5 py-0.5 ${TONE[j.status]}`}>{fleetStatusWord(j.status)}</span>
@@ -143,7 +144,7 @@ export default function MyRuns() {
 										{[j.labels?.study, j.labels?.experiment].filter(Boolean).join(" · ") || "—"}
 									</td>
 									<td className="px-3 py-2 text-ink-600">
-										{j.created_at ? new Date(j.created_at).toLocaleString() : "—"}
+										{fleetWhen(j.created_at)}
 									</td>
 									<td className="px-3 py-2 text-right whitespace-nowrap">
 										{/* A failed run has a result too: which step failed, and why. */}
@@ -183,8 +184,9 @@ export default function MyRuns() {
 	);
 }
 
-/** The machine id, small, with a copy button. */
-function CopyId({ id }: { id: string }) {
+/** Where it ran, in words, with a button that copies the machine id (the id
+ *  itself — "home:fm:wfl-…" — is a tooltip, not text to read). */
+function CopyId({ id, place }: { id: string; place: string }) {
 	const [copied, setCopied] = useState(false);
 	const copy = async () => {
 		try {
@@ -197,15 +199,16 @@ function CopyId({ id }: { id: string }) {
 	};
 	return (
 		<div className="mt-0.5 flex items-center gap-1 text-micro text-ink-600">
-			<span className="select-all font-mono">{id}</span>
+			<span>{place}</span>
 			<button
 				type="button"
 				onClick={() => void copy()}
-				className="rounded p-0.5 hover:bg-ink-100 hover:text-ink-800"
-				aria-label={copied ? "Copied" : "Copy run id"}
-				title={copied ? "Copied" : "Copy run id"}
+				className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 hover:bg-ink-100 hover:text-ink-800"
+				aria-label={copied ? "Copied" : `Copy run id ${id}`}
+				title={copied ? "Copied" : id}
 			>
 				{copied ? <Check className="h-3 w-3" /> : <Copy className="h-3 w-3" />}
+				<span>{copied ? "Copied" : "Copy id"}</span>
 			</button>
 		</div>
 	);
