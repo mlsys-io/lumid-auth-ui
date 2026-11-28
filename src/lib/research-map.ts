@@ -375,7 +375,7 @@ function titleOf(e: MeExperiment, id: string): string {
  *  blob; lists join; long text stays whole (the cell truncates, the title shows
  *  it). Meta fields (id, description, about, title, arm) are not settings. */
 /** A setting key in words, unit kept: "half_spread_bps" → "half spread (bps)". */
-function settingName(k: string): string {
+export function settingName(k: string): string {
 	if (k.includes(".")) return k; // a dotted override path is the user's own address for it
 	const m = humanMetric(k);
 	const label = inSentence(m.label);
