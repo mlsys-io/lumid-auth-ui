@@ -250,6 +250,12 @@ check("gated chains: the next move is said in words", () => {
 	const held = { id: "x", arms: [{ id: "a" }, { id: "b" }, { id: "c" }],
 		gate_progress: { a: { reached: "bar_backtest", index: 2, passed: true }, b: { reached: "bar_backtest", index: 2, passed: true }, c: { reached: "bar_backtest", index: 2, passed: false } } } as unknown as MeExperiment;
 	eq(nextStepWords(held, steps), "Next: 2 versions passed Bar backtest — run them through Robustness.");
+	// Ran but scored nothing is not "untried" (the Run button said "once more").
+	const ran = { id: "x", arms: [{ id: "a" }, { id: "b" }], variants: { a: { n: 1, mean: 1 } }, metric: { name: "goodput" } } as unknown as MeExperiment;
+	eq(nextStepWords(ran, ["simulate"]), "Next: run the 1 untried version — the cheap steps first.");
+	eq(nextStepWords(ran, ["simulate"], ["a", "b"]), "Next: 1 version ran but recorded no goodput — open it to see why before running it again.");
+	eq(versionsOf(ran, ["b"]).find((v) => v.id === "b")?.tag, "ran, no score");
+	eq(versionsOf(ran).find((v) => v.id === "b")?.tag, "not run yet");
 	const untried = { id: "y", arms: [{ id: "a" }, { id: "b" }] } as unknown as MeExperiment;
 	eq(nextStepWords(untried, steps), "Next: run the 2 untried versions — the cheap steps first.");
 	const done = { id: "z", arms: [{ id: "a" }], gate_progress: { a: { reached: "robustness", index: 3, passed: true } } } as unknown as MeExperiment;

@@ -122,6 +122,7 @@ const TAG_CLS: Record<string, string> = {
 	leading: "border-gold-300 text-gold-800 bg-gold-50",
 	current: "border-ink-200 text-ink-700 bg-ink-50",
 	"not run yet": "border-dashed border-ink-300 text-ink-600",
+	"ran, no score": "border-dashed border-ember-200 text-ember-700",
 	trying: "border-lagoon-200 text-lagoon-700 bg-lagoon-50",
 	"can't tell apart": "border-ember-200 text-ember-700 bg-ember-50",
 };
@@ -497,7 +498,7 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 	);
 	const addSheet = adding && <AddVersions app={app} e={e} onClose={() => setAdding(false)} />;
 	const series = seriesData?.series ?? null;
-	const versions = versionsOf(e);
+	const versions = versionsOf(e, seriesData?.tried);
 	// Lines in DECLARED version order, so colours follow the version. A series
 	// the server only GUESSED a version for (arm_inferred: runs that named none,
 	// filed under "current") is left off: on kol_alpha it averaged 13M ticks
@@ -550,7 +551,7 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 	const note = comparabilityNote(e);
 	// Each version at each feedback step of its workflow (renders once a result lands).
 	const steps = useMemo(() => experimentSteps(spec, e, specText), [spec, e, specText]);
-	const nextWords = e.shared ? "" : nextStepWords(e, steps.map((x) => x.step));
+	const nextWords = e.shared ? "" : nextStepWords(e, steps.map((x) => x.step), seriesData?.tried);
 	// One read of the ledger rows for the spend and holdout lines.
 	const expRows = useExperimentRows(app, e.id);
 	const progress = useMemo(() => versionProgress(expRows, steps.map((x) => x.step)), [expRows, steps]);
@@ -709,8 +710,8 @@ function VersionPanel({ app, e, version, style, onClose, onBack, onCompare }: {
 	app: string; e: MeExperiment; version: string; style?: React.CSSProperties;
 	onClose: () => void; onBack: () => void; onCompare: () => void;
 }) {
-	const v = versionsOf(e).find((x) => x.id === version);
 	const versionSeries = useSeries(app, e.id);
+	const v = versionsOf(e, versionSeries?.tried).find((x) => x.id === version);
 	const agg = e.variants?.[version];
 	const metric = e.metric?.name || e.metric_name || "";
 	const m = metric ? humanMetric(metric) : null;
