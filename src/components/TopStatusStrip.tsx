@@ -15,6 +15,7 @@
 import { workflowPath } from "@/lib/run-routes";
 import { useEffect, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
+import { cn } from "@/lib/utils";
 import {
 	ChevronRight,
 	Sparkles, Inbox as InboxIcon,
@@ -262,7 +263,9 @@ export default function TopStatusStrip() {
 				// button was drawn on top of it ("Venue Link Matcher" overprinted).
 				// A third of a phone's strip left "Q…" for Quant Research (2026-11-28
 				// re-audit); the right side holds only the chat toggle there.
-				<div className="flex items-center gap-1 flex-shrink-0 max-w-[62%] md:max-w-[34%]">
+				// A workflow page also puts the workflow's name and its Run controls in
+				// the strip: 62% there pushed "Run now" off a phone's edge (2026-11-28).
+				<div className={cn("flex items-center gap-1 flex-shrink-0 md:max-w-[34%]", /\/w\//.test(location.pathname) ? "max-w-[38%]" : "max-w-[62%]")}>
 					<span id="topstrip-ws-left" className="flex items-center" />
 					<AppSwitcher app={appSlug} />
 					{/* The app's "⋯" menu, right beside its name (portaled by the app page). */}

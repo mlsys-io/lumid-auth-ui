@@ -22,7 +22,7 @@ import AskAbout from "@/components/AskAbout";
 import RunAnswerCard from "@/components/workflow/RunAnswerCard";
 import RunTimeline from "@/components/workflow/RunTimeline";
 import { timelineWorthShowing } from "@/lib/run-timeline";
-import { stepFailed, stepHeld, stepLabel, stepLine, humanMetric, runAnswer } from "@/lib/run-answer";
+import { stepFailed, stepHeld, stepFiltered, stepLabel, stepLine, humanMetric, runAnswer } from "@/lib/run-answer";
 import { triageFailure } from "@/lib/failure-triage";
 import StepInspectorPanel from "@/components/workflow/StepInspectorPanel";
 import TrajectoryLogView from "@/components/workflow/TrajectoryLogView";
@@ -330,7 +330,7 @@ export function RunDetail({
 	// run, or that a gate stopped, is not "Succeeded").
 	const info = detail?.running || listRow?.running
 		? runStatus("running")
-		: cycleStatus({ ok: detail?.ok ?? listRow?.ok, running: false, outcome: answer.tone === "not_run" || answer.tone === "stopped" ? answer.tone : null });
+		: cycleStatus({ ok: detail?.ok ?? listRow?.ok, running: false, outcome: answer.tone === "not_run" || answer.tone === "stopped" || answer.tone === "cancelled" ? answer.tone : null });
 	const failed = info.status === "failed";
 	const chatCtaInCard = answer.tone === "failed" && !!triageFailure(answer.raw || answer.sentence, app, loop).cta?.ask;
 	const steps = detail?.steps || [];
@@ -438,7 +438,7 @@ export function RunDetail({
 							{steps.map((st, i) => {
 								const id = stepIdOf(st, i);
 								const open = openStep === id;
-								const sInfo = stepHeld(st) ? runStatus("not_run") : stepFailed(st) ? runStatus("failed") : runStatus("succeeded");
+								const sInfo = stepHeld(st) ? runStatus("not_run") : stepFiltered(st) ? runStatus("gated") : stepFailed(st) ? runStatus("failed") : runStatus("succeeded");
 								const line = stepLine(st);
 								return (
 									<li key={`${id}-${i}`} className={cn("rounded-lg border", open ? "border-gold-300" : "border-ink-200")}>
@@ -450,7 +450,7 @@ export function RunDetail({
 											<span className="text-caption font-medium text-ink-900 flex-shrink-0" title={id}>{stepLabel(st)}</span>
 											<RunStatusChip info={sInfo} className="flex-shrink-0" />
 											{st.duration_s != null && <span className="text-micro text-ink-600 tabular-nums flex-shrink-0">{fmtDur(st.duration_s)}</span>}
-											<span className={cn("text-micro line-clamp-2 min-w-0 text-left", stepFailed(st) ? "text-brick-700" : stepHeld(st) ? "text-ember-700" : "text-ink-600")} title={line}>{line}</span>
+											<span className={cn("text-micro line-clamp-2 min-w-0 text-left", stepFailed(st) ? "text-brick-700" : stepHeld(st) || stepFiltered(st) ? "text-ember-700" : "text-ink-600")} title={line}>{line}</span>
 										</button>
 										{open && (
 											<div className="px-2 pb-2 space-y-1.5">

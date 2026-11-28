@@ -813,7 +813,7 @@ export default function WorkflowObservabilityPanel({
 										title={press?.text ?? "Run this workflow now, as it is configured"} aria-label="Run now"
 										className="inline-flex items-center gap-1.5 h-8 px-2.5 sm:px-3 text-caption font-medium rounded-lg bg-gold-700 text-white hover:bg-gold-800 lumen-press disabled:opacity-50 transition-colors shadow-e1 flex-shrink-0">
 										{busy === "run" ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
-										<span>Run now</span>
+										<span className="hidden sm:inline">Run now</span>
 									</button>
 								</PopoverTrigger>
 								{press?.spends && (

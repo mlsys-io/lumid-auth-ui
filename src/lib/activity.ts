@@ -175,6 +175,14 @@ function summarise(key: string, app: string, loop: string, rowsNewestFirst: MeRu
 	};
 }
 
+/** A run its owner stopped by hand reads as cancelled, not failed: /me/runs
+ *  reports it `failed` with reason "user_stopped", which counted toward
+ *  "34 failed", the failing streak and the Failed filter (2026-11-28). */
+export function normalizeRun<T extends { state: string; reason?: string | null }>(r: T): T {
+	return r.state === "failed" && /^\s*(user[_ ]stopped|stopped by (the )?user|interrupted)\s*$/i.test(r.reason || "")
+		? { ...r, state: "canceled" } : r;
+}
+
 /** Group /me/runs rows into the Activity view. `app` narrows to one app. */
 export function groupActivity(rows: MeRunRow[], opts: { app?: string } = {}): Activity {
 	const byWf = new Map<string, { app: string; loop: string; rows: MeRunRow[] }>();

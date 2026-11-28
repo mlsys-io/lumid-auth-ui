@@ -1,6 +1,6 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 import type { MeRunRow } from "@/api/me";
-import { groupActivity, plainCause, fmtDuration, fmtTypical, progressOf, isOverdue, loopOfRun, workflowStatusLine, nextFireSec, dirIdToSec, fmtAgo, fmtSince, failingSentence, didntRun, runCountWords, plural } from "./activity";
+import { normalizeRun, groupActivity, plainCause, fmtDuration, fmtTypical, progressOf, isOverdue, loopOfRun, workflowStatusLine, nextFireSec, dirIdToSec, fmtAgo, fmtSince, failingSentence, didntRun, runCountWords, plural } from "./activity";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -26,6 +26,10 @@ check("context + HTTP Error 503", () =>
 check("a chain names the step that failed", () => {
 	eq(plainCause("Stage 1 (dev_eval) failed: HTTP Error 401: Unauthorized"), "At Dev eval: Not signed in (HTTP 401)");
 	eq(plainCause("Stage 0 (data_check) failed"), "At Data check");
+});
+check("a run stopped by hand is cancelled", () => {
+	eq(normalizeRun({ state: "failed", reason: "user_stopped" }).state, "canceled");
+	eq(normalizeRun({ state: "failed", reason: "HTTP 500" }).state, "failed");
 });
 check("timeout", () => eq(plainCause("TimeoutError: The read operation timed out"), "Timed out"));
 check("python dict outcome, plurals", () =>

@@ -4,6 +4,7 @@
 
 import type { MeRunStepEvent } from "@/api/me";
 import { fmtDuration, plainCause } from "@/lib/activity";
+import { gateReasonWords } from "@/lib/run-answer";
 
 export const STAGES = ["observe", "hypothesize", "act", "analyze", "learn"] as const;
 const STAGE_LABEL: Record<string, string> = {
@@ -68,7 +69,7 @@ export function buildTimeline(events: MeRunStepEvent[], opts: { app?: string; ru
 			running,
 			offset: start != null && e.started_at != null ? fmtOffset(e.started_at - start) : "",
 			duration: d != null && d >= 0 ? fmtDuration(d) : "",
-			summary: held ? "held (not run)" : e.ok === false ? plainCause(e.summary || "") : (e.summary || ""),
+			summary: held ? "held (not run)" : e.ok === false ? plainCause(e.summary || "") : /^filtered:/i.test(e.summary || "") ? `didn't pass its gate: ${gateReasonWords(e.summary || "")}` : (e.summary || ""),
 		};
 	});
 	// Groups follow the run's own order; consecutive steps of one stage share
