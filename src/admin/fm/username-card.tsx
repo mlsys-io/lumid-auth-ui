@@ -1,5 +1,6 @@
 // "Your username" on the Sandboxes page: ONE login name for every cluster (lum.id identity), chosen and changed
-// here. Words from lib/username.ts; the server decides (shape, reserved, taken).
+// here. Words from lib/username.ts; the server decides (shape, reserved, taken). An existing machine login is
+// claimed through ClaimLogin (username-claim.tsx).
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { UserRound } from "lucide-react";
@@ -9,6 +10,7 @@ import { renameState, verifyState, type SiteRenameState } from "../../lib/userna
 import { TONES } from "../../lib/tones";
 import { USERNAME_RULE, renameNote, usernameProblem } from "../../lib/username";
 import { Button } from "../../components/ui/button";
+import ClaimLogin from "./username-claim";
 
 export default function UsernameCard({ sites = ["home", "office"] }: { sites?: string[] }) {
 	const [info, setInfo] = useState<UsernameInfo | null>(null);
@@ -90,6 +92,13 @@ export default function UsernameCard({ sites = ["home", "office"] }: { sites?: s
 						);
 					})}
 				</ul>
+			)}
+			{!editing && (
+				<ClaimLogin onVerified={(login) => {
+					// The claim bound the name on lum.id: refresh the card, then move each site to it, as Save does.
+					getMyUsername().then(setInfo).catch(() => { /* keep the card as it was */ });
+					void applyEverywhere(login);
+				}} />
 			)}
 			{editing && (
 				<div className="mt-3 space-y-2">
