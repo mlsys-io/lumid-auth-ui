@@ -21,7 +21,7 @@ import { experimentLoop, humanId } from "@/lib/research-map";
 import { fmtMetricValue, humanMetric } from "@/lib/run-answer";
 
 /** A feedback step as the grid needs it. */
-export interface EvidenceStepSpec { step: string; gate?: string; metrics: Array<Pick<FeedbackMetric, "name"> & Partial<Omit<FeedbackMetric, "name">>> }
+export interface EvidenceStepSpec { step: string; gate?: string; service?: string; metrics: Array<Pick<FeedbackMetric, "name"> & Partial<Omit<FeedbackMetric, "name">>> }
 
 /** A feedback step's gate, if it declares one. (`gate` is newer than
  *  FeedbackStep's type, so it is read defensively.) */
@@ -60,7 +60,8 @@ export function experimentSteps(spec: AppSpec | null | undefined, e: MeExperimen
 	const fromText = specText ? gatesFromText(specText)[loop] ?? {} : {};
 	return wf.feedback.map((f) => {
 		const gate = gateOf(f) ?? fromText[f.step];
-		return { step: f.step, metrics: f.metrics, ...(gate ? { gate } : {}) };
+		// `service` rides along: the press prices a step with no rows yet from its instrument (lib/run-through).
+		return { step: f.step, metrics: f.metrics, ...(gate ? { gate } : {}), ...(f.service ? { service: f.service } : {}) };
 	});
 }
 

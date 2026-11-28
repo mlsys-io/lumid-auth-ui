@@ -10,7 +10,7 @@
 // shown in Compute (ComputePanel). An app whose runs need a subject this
 // button cannot know (dispatch.ask) hands the request to the chat instead.
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Play } from "lucide-react";
 import { me, waitForIntent, type MeExperiment } from "@/api/me";
 import { askOrStash } from "@/components/chat/askBus";
@@ -22,7 +22,8 @@ import { loopLabel } from "@/lib/workflow-names";
 import { useAppGraph } from "@/hooks/useAppGraph";
 import { experimentSteps } from "@/lib/evidence";
 import { estimateThrough, throughChoices } from "@/lib/run-through";
-import { pressWords } from "@/lib/spend";
+import { pressWords, specServices } from "@/lib/spend";
+import { useGpuToday } from "@/components/research/PressCost";
 import { useAppUsage } from "@/components/research/SpendLine";
 import { useExperimentRows } from "@/components/research/ExperimentSpend";
 
@@ -100,7 +101,12 @@ export default function RunVersions({ app, e, onQueued, only, tried }: { app: st
 	const [pick, setPick] = useState<number | null>(null);
 	const choice = choices.length ? choices[Math.min(pick ?? preferred, choices.length - 1)] : null;
 	const usage = useAppUsage(app);
-	const press = choice ? pressWords({ runs: ids.length, estimate: estimateThrough(rows, steps, choice.until), usage, through: choice.through }) : null;
+	// A step with no rows yet is priced from its instrument; a GPU press says
+	// where the day's GPU measurements stand (identity's limits, else a 24 h count).
+	const estimate = choice ? estimateThrough(rows, steps, choice.until, { usage }) : null;
+	const gpuToday = useGpuToday(!!estimate && estimate.gpu_s > 0);
+	const instruments = useMemo(() => specServices(graph?.spec), [graph?.spec]);
+	const press = choice ? pressWords({ runs: ids.length, estimate, usage, through: choice.through, instruments, gpuToday }) : null;
 	// Shared experiments are measured centrally (sharedLine): nothing to run here.
 	if (!loop || !ids.length || e.shared || e.status && /concluded|done|archived|closed/i.test(e.status)) return null;
 	// A finished gated round asks for new versions (Add versions), not the same

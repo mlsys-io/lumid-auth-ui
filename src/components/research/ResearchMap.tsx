@@ -20,7 +20,7 @@ import { me, type MeExperiment, type MeExperimentDetail } from "@/api/me";
 import EvolutionChart, { type EvoSeries } from "@/components/research/EvolutionChart";
 import BestScoreChart from "@/components/research/BestScoreChart";
 import VersionChain from "@/components/research/VersionChain";
-import { buildEvolution } from "@/lib/evolution";
+import { buildEvolution, meansByStep, seriesFromRows, type TieBreaker } from "@/lib/evolution";
 import ApprovalCard, { readNotNow, writeNotNow } from "@/components/research/ApprovalCard";
 import ResearchDashboard from "@/components/research/ResearchDashboard";
 import { bestResult } from "@/lib/research-dashboard";
@@ -524,15 +524,41 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 	const hib = !(e.higher_is_better === false || e.metric?.higher_is_better === false);
 	const labelOf = (arm: string) => versions.find((v) => v.id === arm)?.label ?? humanId(arm);
 	const colorOf = (arm: string) => Math.max(0, versions.findIndex((v) => v.id === arm));
+	// Each version at each feedback step of its workflow (renders once a result lands).
+	const steps = useMemo(() => experimentSteps(spec, e, specText), [spec, e, specText]);
+	// One read of the ledger rows for the spend and holdout lines — and for the
+	// evolution: ONE number per version per step (2026-11-28). The served series
+	// averages a version's simulator and GPU results (0.6B "80.9" = 86.49 and
+	// 75.31); the rows keep them apart, and the story is told at the last step.
+	const expRows = useExperimentRows(app, e.id);
+	const byStep = useMemo(() => (expRows?.length && metric ? seriesFromRows(expRows.filter(own), metric, steps) : null), [expRows, metric, steps]); // eslint-disable-line react-hooks/exhaustive-deps
+	const evoIn: EvoSeries[] = byStep?.series.length
+		? byStep.series.map((s) => ({ id: s.id, label: labelOf(s.id), points: s.points }))
+			.sort((a, b) => { const i = versions.findIndex((v) => v.id === a.id), j = versions.findIndex((v) => v.id === b.id); return (i < 0 ? 99 : i) - (j < 0 ? 99 : j); })
+		: evo;
+	// A tie at the story's step is decided by that step's next declared metric.
+	const tieBreakers = useMemo((): TieBreaker[] => {
+		if (!byStep || !expRows || !metric) return [];
+		const at = byStep.steps[byStep.steps.length - 1];
+		const st = steps.find((x) => x.step === at);
+		return (st?.metrics ?? []).filter((x) => x.name !== metric && (x.better === "higher" || x.better === "lower")).map((x) => {
+			const means = meansByStep(expRows, x.name, steps);
+			const values: Record<string, number> = {};
+			for (const [v, per] of means) { const c = per.get(at); if (c) values[v] = c.mean; }
+			const h = humanMetric(x.name);
+			return { name: x.name, label: h.label, unit: h.unit, higherIsBetter: x.better !== "lower", values };
+		});
+	}, [byStep, expRows, metric, steps]);
 	const evolution = useMemo(() => buildEvolution(
-		evo.map((x) => ({ id: x.id, points: x.points })),
+		evoIn.map((x) => ({ id: x.id, points: x.points })),
 		{
-			runningMean: !!seriesData?.runningMean, minSamples: e.min_samples, higherIsBetter: hib,
+			runningMean: byStep?.series.length ? false : !!seriesData?.runningMean, minSamples: e.min_samples, higherIsBetter: hib,
 			declaredArms: versions.map((v) => v.id),
 			decided: !!e.criteria_met && e.comparable !== false, winner: e.best_variant,
+			steps: byStep?.steps, stepLabels: byStep?.stepLabels, tieBreakers,
 		},
 	// eslint-disable-next-line react-hooks/exhaustive-deps
-	), [series, seriesData?.runningMean, e.id, e.min_samples, hib, e.criteria_met, e.best_variant, e.comparable]);
+	), [series, byStep, tieBreakers, seriesData?.runningMean, e.id, e.min_samples, hib, e.criteria_met, e.best_variant, e.comparable]);
 	// Esc closes the panel wherever focus is (the map keeps focus after a click).
 	useEffect(() => {
 		if (!panel) return;
@@ -549,11 +575,7 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 	const spark = !(evolution && metric && e.comparable !== false) && evo.some((x) => x.points.length > 1) && !!metric;
 	const tagOf = (id: string) => { const v = versions.find((x) => x.id === id); return v ? { text: v.tag, className: TAG_CLS[v.tag] ?? TAG_CLS.current } : null; };
 	const note = comparabilityNote(e);
-	// Each version at each feedback step of its workflow (renders once a result lands).
-	const steps = useMemo(() => experimentSteps(spec, e, specText), [spec, e, specText]);
 	const nextWords = e.shared ? "" : nextStepWords(e, steps.map((x) => x.step), seriesData?.tried);
-	// One read of the ledger rows for the spend and holdout lines.
-	const expRows = useExperimentRows(app, e.id);
 	const progress = useMemo(() => versionProgress(expRows, steps.map((x) => x.step)), [expRows, steps]);
 	const grid = (
 		<>
@@ -618,7 +640,7 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 	) : spark ? (
 		// Measured differently: one small chart per version, never ranked. Each
 		// row names its version and state, so no separate version list follows.
-		<EvolutionChart series={evo} metricKey={metric!} unit={m?.unit ?? ""} higherIsBetter={hib} tagOf={tagOf}
+		<EvolutionChart series={evoIn} steps={byStep?.steps} stepLabels={byStep?.stepLabels} metricKey={metric!} unit={m?.unit ?? ""} higherIsBetter={hib} tagOf={tagOf}
 			comparable={false} unlabelledRuns={unlabelledRuns} alreadyMeans={!!seriesData?.runningMean} />
 	) : null;
 	// The versions in the order they were tried, each with its state — unless
