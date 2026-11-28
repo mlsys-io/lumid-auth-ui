@@ -16,8 +16,17 @@ export type Tone = "ok" | "running" | "failing" | "attention" | "idle";
 
 /** "kol_alpha" → "KOL alpha", "musk_llm_scored" → "Musk LLM scored". */
 export function humanId(id: string): string {
-	const { label } = humanMetric(id);
-	return label;
+	// A decimal written in an id reads as one: "0_<digits>" (util_0_95 → 0.95,
+	// v_0_5) or "<digit>_<digits><size>" (llm_1_7b → 1.7b) — not "LLM 1 7b"
+	// (MLSys Research, 2026-11-28). Anything else stays apart: mom_6_1 is
+	// 6-1 momentum and run_2026_11_28 a date.
+	// humanMetric reads "." as a path separator, so the point travels as a
+	// private-use placeholder and is restored after.
+	const P = "\uE000";
+	const decimals = id
+		.replace(/(^|_)0_(\d+)(?![0-9])/g, `$10${P}$2`)
+		.replace(/(^|_)(\d)_(\d+[kmbt])(?![a-z0-9])/gi, `$1$2${P}$3`);
+	return humanMetric(decimals).label.split(P).join(".");
 }
 
 export interface Proposal {
@@ -120,15 +129,26 @@ export function experimentLoop(e: MeExperiment): string {
 	return (hinted && e.loops?.includes(hinted) ? hinted : e.loops?.[0]) || "";
 }
 
+/** Versions with a ledger row at any step (the detail's `results`). A version a
+ *  gate stopped at its first step never records the experiment's metric, so
+ *  `variants` alone called it untried and the panel kept offering to run it
+ *  (Quant Research, 2026-11-28). */
+export function triedVersions(rows: Array<{ variant_id?: string }> | null | undefined): string[] {
+	const out = new Set<string>();
+	for (const r of rows || []) if (r?.variant_id) out.add(String(r.variant_id));
+	return [...out];
+}
+
 /** The versions a "Run" button should start: the untried ones, or — when
  *  every version has run — all of them once more. */
-export function versionsToRun(e: MeExperiment): { ids: string[]; untried: boolean } {
+export function versionsToRun(e: MeExperiment, tried?: Iterable<string>): { ids: string[]; untried: boolean } {
 	// A shared experiment is measured once, centrally, for every install
 	// (sharedLine: "nothing you need to run") — offering "Run each version once
 	// more" beside that sentence contradicted it (2026-11-28).
 	if (e.shared) return { ids: [], untried: false };
 	const declared = (e.arms || []).map((a) => String(a.id));
 	const ran = new Set(Object.keys(e.variants || {}).filter((k) => (e.variants?.[k]?.n ?? 0) > 0));
+	for (const t of tried || []) ran.add(t);
 	const untried = declared.filter((id) => !ran.has(id));
 	return untried.length ? { ids: untried, untried: true } : { ids: declared, untried: false };
 }
