@@ -42,6 +42,7 @@ check("headline in words", () => {
 	eq(pairedHeadline(s, (v) => v.toUpperCase()), { text: "1 of 2 versions are a real gain at Quick; best A, +3.0", tone: "ok" });
 	const none = pairedSteps({ steps, rows: [row("b", "quick", { paired_delta: -1, paired_ci_low: -2, paired_ci_high: -0.1 })], stepLabel: () => "Quick" })[0];
 	eq(pairedHeadline(none, (v) => v).text, "Every version measured at Quick is worse than the baseline");
+	eq(pairedHeadline(none, (v) => v, "the current harness").text, "Every version measured at Quick is worse than the current harness");
 });
 
 check("nothing paired renders nothing", () => {

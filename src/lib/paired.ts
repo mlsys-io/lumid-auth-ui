@@ -108,7 +108,7 @@ export function pairedWords(r: PairedResult, against = "the baseline"): string {
 }
 
 /** The step headline: how many versions are real gains, and the best of them. */
-export function pairedHeadline(s: PairedStep, label: (v: string) => string): { text: string; tone: "ok" | "attention" | "idle" } {
+export function pairedHeadline(s: PairedStep, label: (v: string) => string, against = "the baseline"): { text: string; tone: "ok" | "attention" | "idle" } {
 	const gains = s.results.filter((r) => r.verdict === "gain");
 	const losses = s.results.filter((r) => r.verdict === "loss");
 	const n = s.results.length;
@@ -116,6 +116,6 @@ export function pairedHeadline(s: PairedStep, label: (v: string) => string): { t
 		const best = gains[0];
 		return { text: `${gains.length} of ${n} ${n === 1 ? "version is" : "versions are"} a real gain at ${s.label}; best ${label(best.version)}, ${signed(best.delta)}`, tone: "ok" };
 	}
-	if (losses.length === n) return { text: `Every version measured at ${s.label} is worse than the baseline`, tone: "attention" };
+	if (losses.length === n) return { text: `Every version measured at ${s.label} is worse than ${against}`, tone: "attention" };
 	return { text: `No version at ${s.label} is a clear gain yet${losses.length ? ` (${losses.length} worse)` : ""}`, tone: "idle" };
 }

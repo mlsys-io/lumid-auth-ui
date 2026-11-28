@@ -69,7 +69,7 @@ export default function PairedDelta({ steps, rows, baseline, label, stepLabel }:
 	return (
 		<section className="space-y-5" aria-label="Compared on the same items" data-testid="paired-delta">
 			{all.map((s) => {
-				const head = pairedHeadline(s, label);
+				const head = pairedHeadline(s, label, against);
 				const tone = TONES[head.tone];
 				return (
 					<div key={s.step} className="space-y-2">
