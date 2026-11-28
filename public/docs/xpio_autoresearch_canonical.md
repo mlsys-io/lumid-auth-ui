@@ -226,7 +226,10 @@ chain and a single workflow alike; identity refuses a `gate` that is not a non-e
   mean (or the minimum) across those starts, not on one of them. Round 10 found both kinds: a weekly
   quant strategy's in-sample Sharpe ran 0.27–0.78 across its rebalance weekdays (the "pass" at 0.78
   was timing luck; quant-research gates on the phase mean since 0.8.5), and a simulator shortlist
-  scored on one 12-request trace with one arrival seed (MLSys re-scores it on 2–3 seeds, free).
+  scored on one frozen workload (MLSys re-scores it on 2–3 resampled prompt mixes — fresh,
+  never-seen workloads). **Check that the thing you spread actually varies:** a spread over a knob
+  that does nothing (a seed the replay ignores) reads as perfect robustness. The same goes for a
+  bootstrap over too few independent units — three settlement events can't carry an interval.
 - **Stage rows.** When the run is a version of an experiment (the dispatch named the version; the
   experiment is the one it named, else the one the workflow is attached to), every step that ran ok
   appends **one** row to that experiment's ledger:
