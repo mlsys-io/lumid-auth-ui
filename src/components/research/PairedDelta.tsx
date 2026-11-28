@@ -55,7 +55,8 @@ function Forest({ s, label, against }: { s: PairedStep; label: (v: string) => st
 
 export default function PairedDelta({ steps, rows, baseline, label, stepLabel }: {
 	steps: EvidenceStepSpec[];
-	rows: MeExperimentRow[] | null;
+	/** null / undefined while the ledger loads: renders nothing. */
+	rows: MeExperimentRow[] | null | undefined;
 	/** The version everything is compared against (the experiment's baseline). */
 	baseline?: string | null;
 	/** A version id in words. */
