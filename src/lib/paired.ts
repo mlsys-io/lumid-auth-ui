@@ -10,6 +10,8 @@
 //   paired_wins / paired_losses / paired_ties   items better / worse / unchanged
 //   paired_n         items paired; paired_cases: clusters (optional)
 //   trials           versions tried at this step so far (optional)
+//   paired_ci_withheld  1 when the step had too few clusters for an interval
+//                    (LumidOS sdk.apps.paired, min_clusters): say so, never a bare number
 //
 // This turns those rows into one verdict per version per step, in words:
 //   "Better on 9, worse on 3, same on 41: +2.4 (interval +0.6 to +4.1). A real gain."
@@ -32,6 +34,8 @@ export interface PairedResult {
 	ties: number | null;
 	n: number | null;
 	trials: number | null;
+	/** The step withheld its interval: too few groups of items to compute one. */
+	withheld: boolean;
 	verdict: PairedVerdict;
 	ts: string;
 }
@@ -80,7 +84,8 @@ export function pairedSteps(input: {
 			results.push({
 				version: r.variant_id!, step, delta: m.paired_delta as number, low, high,
 				wins: num(m.paired_wins), losses: num(m.paired_losses), ties: num(m.paired_ties),
-				n: num(m.paired_n), trials: num(m.trials), verdict: verdictOf(low, high), ts: String(r.ts ?? ""),
+				n: num(m.paired_n), trials: num(m.trials), withheld: num(m.paired_ci_withheld) === 1,
+				verdict: verdictOf(low, high), ts: String(r.ts ?? ""),
 			});
 		}
 		if (!results.length) continue;
@@ -103,7 +108,8 @@ export function pairedWords(r: PairedResult, against = "the baseline"): string {
 		: "";
 	const verdict = r.verdict === "gain" ? `A real gain over ${against}.`
 		: r.verdict === "loss" ? `Worse than ${against}.`
-			: r.low != null ? `Not distinguishable from ${against} yet.` : "";
+			: r.low != null ? `Not distinguishable from ${against} yet.`
+				: r.withheld ? "No interval yet: too few cases to tell. Measure it on the full set." : "";
 	return `${counts}${signed(r.delta)}${interval}. ${verdict}`.replace(/\.\s*\.$/, ".").trim();
 }
 

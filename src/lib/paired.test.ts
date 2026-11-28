@@ -45,6 +45,12 @@ check("headline in words", () => {
 	eq(pairedHeadline(none, (v) => v, "the current harness").text, "Every version measured at Quick is worse than the current harness");
 });
 
+check("a withheld interval is said in words, never a bare number", () => {
+	const s = pairedSteps({ steps, rows: [row("a", "quick", { paired_delta: 4, paired_wins: 3, paired_losses: 0, paired_ties: 9, paired_ci_withheld: 1 })] })[0];
+	eq([s.results[0].withheld, s.results[0].verdict], [true, "unclear"]);
+	eq(pairedWords(s.results[0]), "Better on 3, worse on 0, same on 9: +4.0. No interval yet: too few cases to tell. Measure it on the full set.");
+});
+
 check("nothing paired renders nothing", () => {
 	eq(pairedSteps({ steps, rows: [row("a", "quick", { score: 1 })] }), []);
 });
