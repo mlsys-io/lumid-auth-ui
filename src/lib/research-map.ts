@@ -123,6 +123,10 @@ export function experimentLoop(e: MeExperiment): string {
 /** The versions a "Run" button should start: the untried ones, or — when
  *  every version has run — all of them once more. */
 export function versionsToRun(e: MeExperiment): { ids: string[]; untried: boolean } {
+	// A shared experiment is measured once, centrally, for every install
+	// (sharedLine: "nothing you need to run") — offering "Run each version once
+	// more" beside that sentence contradicted it (2026-11-28).
+	if (e.shared) return { ids: [], untried: false };
 	const declared = (e.arms || []).map((a) => String(a.id));
 	const ran = new Set(Object.keys(e.variants || {}).filter((k) => (e.variants?.[k]?.n ?? 0) > 0));
 	const untried = declared.filter((id) => !ran.has(id));

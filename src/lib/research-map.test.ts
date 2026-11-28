@@ -123,6 +123,8 @@ check("runs started by hand, no version run: say so, not 'records no results'", 
 check("which versions a Run button starts, and from which workflow", () => {
 	eq(versionsToRun(fresh), { ids: ["a", "b"], untried: true });
 	eq(versionsToRun(kol), { ids: ["current", "musk_v1", "musk_llm_scored"], untried: false });
+	// Measured centrally for everyone: nothing for this install to run.
+	eq(versionsToRun({ ...kol, shared: true } as MeExperiment), { ids: [], untried: false });
 	eq(versionsToRun({ ...kol, variants: { current: { n: 3, mean: 1 } } } as unknown as MeExperiment), { ids: ["musk_v1", "musk_llm_scored"], untried: true });
 	eq(experimentLoop({ ...kol, dispatch: { loop: "kol_poll" }, loops: ["kol_strategy", "kol_poll"] } as unknown as MeExperiment), "kol_poll");
 	eq(experimentLoop({ ...kol, dispatch: { loop: "other" }, loops: ["kol_strategy"] } as unknown as MeExperiment), "kol_strategy");
