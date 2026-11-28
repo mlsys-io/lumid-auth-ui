@@ -39,6 +39,8 @@ import {
 } from "@/lib/refinements";
 import { parse as parseYaml } from "yaml";
 import { resolveSpecPath } from "@/lib/manifestPaths";
+import { clippedSummary, installFacts, installLines } from "@/lib/marketplace-words";
+import { createPortal } from "react-dom";
 
 // ── Hidden-for-users catalog entries ──────────────────────────────
 // Product decision 2026-09-28: Quant Research is the SINGLE quant path for
@@ -262,7 +264,9 @@ export default function MarketplaceBrowse() {
 	// Anonymous public browse (/explore, served by PublicShell) has no session,
 	// so an install/subscribe mutation would 401. Bounce to login instead of
 	// firing the authed call + surfacing an error toast.
-	const isPublic = typeof window !== "undefined" && window.location.pathname.startsWith("/explore");
+	// A signed-in visitor on /explore is not anonymous (2026-11-28 sweep, #13):
+	// they install and open like anywhere else.
+	const isPublic = !user && typeof window !== "undefined" && window.location.pathname.startsWith("/explore");
 	const requireLogin = () => navigate(`/auth/login?return_to=${encodeURIComponent(window.location.pathname)}`);
 	const guardedAction = (a: PendingAction) => { if (isPublic) { requireLogin(); return; } setAction(a); };
 
@@ -556,7 +560,10 @@ function RepoGrid({
 // Per-kind helper copy under the card body — says what the primary action
 // actually DOES, since it differs per kind.
 const KIND_HELPER: Record<KindAction, string> = {
-	"install":   "Installs into My Agents · runs on its schedule · first run is automatic",
+	// Install stages the app and runs nothing (only `run:` schedules fire, and
+	// most workflows are manual). What it uses and spends is in Details, read
+	// from its spec — the card has no spec to say it from.
+	"install":   "Installs into My Agents · Details says what it runs and spends",
 	"add-skill": "Plugs into an agent you own — pick which one",
 	"subscribe": "Syncs its knowledge into yours — re-sync anytime",
 	"view":      "", // per-kind line chosen below
@@ -630,10 +637,13 @@ function RepoCardView({
 				</button>
 			</div>
 
-			{/* Summary */}
-			<p className="text-meta text-ink-700 mt-3 flex-1 line-clamp-3">
-				{repo.summary || "No description provided."}
-			</p>
+			{/* Summary — the clamp sits on an inner block: a clamped flex-1 <p>
+			    stretched to the row's height showed lines 4–5 under the "…". */}
+			<div className="mt-3 flex-1">
+				<p className="text-meta text-ink-700 line-clamp-3">
+					{clippedSummary(repo.summary) || "No description provided."}
+				</p>
+			</div>
 
 			{/* Meta chips */}
 			<AppMetaChips kind={repo.kind} version={repo.version} stars={repo.stars} />
@@ -924,13 +934,28 @@ function AppDetailDrawer({
 	const friendlyName = (s: string) => s.replace(/^[^/]+\//, "");
 	const hasHierarchy = act === "install" && (skillImports.length > 0 || memoryAgents.length > 0 || datasetDecls.length > 0 || !!app.fork_of);
 
-	return (
+	// The description: the spec's own summary once it has loaded, else the
+	// index's. Both can arrive cut at 512 characters mid-word ("(cryp"), so
+	// either is marked with "…" at a whole word; clamped with "More" when long.
+	const specSummary = typeof repoDoc?.summary === "string" ? repoDoc.summary.trim() : "";
+	const description = clippedSummary(specSummary || app.summary);
+	const [descOpen, setDescOpen] = useState(false);
+	const longDescription = description.length > 280;
+	// What installing it runs and spends — from the spec, never guessed.
+	const facts = installFacts(repoDoc);
+	const titleId = `app-detail-${app.name}`;
+
+	// Portaled to <body>: rendered in place, the fixed backdrop sat inside the
+	// page's rise animation (a transform makes `fixed` relative to that box),
+	// so at 1440 px it covered only the content column and the dialog body
+	// was a ~300 px scroll box (2026-11-28 sweep, #6).
+	return createPortal(
 		<div
 			ref={backdropRef}
 			onClick={(e) => { if (e.target === backdropRef.current) onClose(); }}
-			className="fixed inset-0 z-50 flex items-start justify-end bg-ink-950/15 backdrop-blur-[2px]"
+			className="fixed inset-0 z-50 flex items-stretch justify-end bg-ink-950/15 backdrop-blur-[2px]"
 		>
-			<div className="relative h-full w-full max-w-md bg-card shadow-2xl flex flex-col">
+			<div role="dialog" aria-modal="true" aria-labelledby={titleId} className="relative h-dvh max-h-screen w-full max-w-md bg-card shadow-2xl flex flex-col">
 				{/* Kind accent bar */}
 				<div className={`h-0.5 w-full ${km.bg} opacity-60`} />
 
@@ -940,21 +965,30 @@ function AppDetailDrawer({
 						{km.glyph}
 					</div>
 					<div className="flex-1 min-w-0">
-						<h2 className="font-semibold text-ink-900 text-read leading-tight">{title}</h2>
+						<h2 id={titleId} className="font-semibold text-ink-900 text-read leading-tight">{title}</h2>
 						<p className="text-micro text-ink-600 mt-0.5 font-mono">
 							{app.name}{app.version ? ` · v${app.version}` : ""}
 							{app.visibility === "private" ? " · private" : ""}
 							{app.fork_of ? " · customized copy" : ""}
 						</p>
 					</div>
-					<button onClick={onClose} className="p-1.5 rounded-lg text-ink-600 hover:text-ink-700 hover:bg-ink-100 transition-colors">
+					<button onClick={onClose} aria-label="Close" title="Close" className="p-1.5 rounded-lg text-ink-600 hover:text-ink-700 hover:bg-ink-100 transition-colors">
 						<X className="w-4 h-4" />
 					</button>
 				</div>
 
 				{/* Body */}
-				<div className="flex-1 overflow-y-auto p-5 space-y-4">
-					{app.summary && <p className="text-meta text-ink-600 leading-relaxed">{app.summary}</p>}
+				<div className="flex-1 min-h-0 overflow-y-auto p-5 space-y-4">
+					{description && (
+						<div>
+							<p className={cn("text-meta text-ink-600 leading-relaxed", longDescription && !descOpen && "line-clamp-5")}>{description}</p>
+							{longDescription && (
+								<button type="button" onClick={() => setDescOpen((v) => !v)} aria-expanded={descOpen} className="mt-1 text-caption font-medium text-gold-700 hover:underline">
+									{descOpen ? "Less" : "More"}
+								</button>
+							)}
+						</div>
+					)}
 
 					<Link to={repoHref} onClick={onClose} className="inline-flex items-center gap-1 text-caption text-gold-700 hover:underline">
 						Browse files &amp; pull requests →
@@ -1131,7 +1165,9 @@ function AppDetailDrawer({
 							<button onClick={() => onInstall(sidebar)} disabled={isInstalling} className={`w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${isInstalling ? "bg-ink-100 text-ink-600 cursor-not-allowed" : "bg-ink-900 text-white hover:bg-ink-700 active:scale-[0.98]"}`}>
 								{isInstalling ? <><Loader2 className="w-4 h-4 animate-spin" /> Installing…</> : <><Plus className="w-4 h-4" /> Install {title}</>}
 							</button>
-							<p className="mt-2 text-center text-micro text-ink-600">Appears in My Agents — first run starts automatically.</p>
+							<div className="mt-2 space-y-0.5 text-center text-micro text-ink-600" data-install-words>
+								{installLines(facts).map((l) => <p key={l}>{l}</p>)}
+							</div>
 						</>
 					))}
 					{act === "add-skill" && (
@@ -1151,7 +1187,8 @@ function AppDetailDrawer({
 					)}
 				</div>
 			</div>
-		</div>
+		</div>,
+		document.body,
 	);
 }
 

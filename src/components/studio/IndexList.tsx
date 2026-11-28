@@ -41,6 +41,8 @@ export interface IndexRow {
 	title: string;
 	/** One-line metadata (e.g. "healthy · 5m ago"). Kept terse. */
 	meta?: string;
+	/** Let the metadata wrap to two lines (a verdict sentence) instead of truncating. */
+	metaLines?: 1 | 2;
 	icon?: LucideIcon;
 	tone?: ToneKey;
 	/** Short status word shown right-aligned, colored by tone. */
@@ -96,7 +98,7 @@ function Row({ row }: { row: IndexRow }) {
 			)}
 			<div className="min-w-0 flex-1">
 				<div className="text-body text-foreground truncate">{row.title}</div>
-				{row.meta && <div className="text-caption text-muted-foreground truncate">{row.meta}</div>}
+				{row.meta && <div className={`text-caption text-muted-foreground ${row.metaLines === 2 ? 'line-clamp-2' : 'truncate'}`} title={row.metaLines === 2 ? row.meta : undefined}>{row.meta}</div>}
 			</div>
 			{row.statusLabel && (
 				<span className={`text-micro shrink-0 ${tone ? tone.text : 'text-muted-foreground'}`} title={row.statusTitle}>

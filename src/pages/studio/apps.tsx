@@ -205,7 +205,7 @@ function PendingAppCard({ app, onRetry, onDismiss }: {
 			<div className="min-w-0 flex-1">
 				<div className="text-body font-medium text-ink-900 truncate">{label}</div>
 				<div className={cn("text-caption truncate", failed ? "text-brick-600" : "text-ink-600")}>
-					{failed ? (app.error || "install failed") : "Setting up — first run starts automatically (~30s)"}
+					{failed ? (app.error || "install failed") : "Setting up — about 30 s"}
 				</div>
 			</div>
 			{failed && (

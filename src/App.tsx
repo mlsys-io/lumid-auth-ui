@@ -85,6 +85,7 @@ const StudioClaudeSessions = lazy(() => import("./pages/studio/claude-sessions")
 // illustrated against the demo intents. Stages 1-2 concrete, 3 open.
 const StudioDocs       = lazy(() => import("./pages/studio/docs"));
 const StudioMarketplace = lazy(() => import("./pages/studio/library"));
+const ExploreMarketplace = lazy(() => import("./pages/explore"));
 const StudioLibraryTabs = lazy(() => import("./pages/studio/library-tabs"));
 const StudioNotFound    = lazy(() => import("./pages/studio/not-found"));
 const StudioData        = lazy(() => import("./pages/studio/data"));
@@ -648,7 +649,7 @@ export default function App() {
               xp.io SPA. Browse + read-only repo pages without login; install/
               subscribe bounce through the authed studio (login prompt). */}
           <Route path="/explore" element={<PublicShell />}>
-            <Route index element={<StudioMarketplace />} />
+            <Route index element={<ExploreMarketplace />} />
             <Route path="r/:owner/:name" element={<StudioRepo />} />
           </Route>
 

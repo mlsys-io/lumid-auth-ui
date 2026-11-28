@@ -12,7 +12,7 @@
 import { setRailTopVisible } from "@/lib/rail-top";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { PanelRightClose, MessageSquare } from "lucide-react";
+import { PanelRightClose, MessageSquare, X } from "lucide-react";
 import { StudioChat } from "@/components/StudioChat";
 import { usePortalTarget } from "@/hooks/usePortalTarget";
 import { useIsNarrow } from "@/hooks/useIsNarrow";
@@ -203,6 +203,18 @@ export default function ChatRail({
 								resizing && "bg-ink-300",
 							)}
 						/>
+					)}
+					{/* On a phone the rail takes over the whole app, so it carries its own
+					    obvious way back — the top-strip toggle alone was a 16px icon
+					    (2026-11-28 sweep, #9). */}
+					{isNarrow && (
+						<div className="flex items-center justify-between gap-2 px-3 pt-2 pb-1 border-b border-border flex-shrink-0">
+							<span className="text-meta font-medium text-ink-900">Chat</span>
+							<button type="button" onClick={() => setNarrowChatOpen(false)} aria-label="Close chat"
+								className="inline-flex items-center gap-1 h-8 px-2.5 rounded-lg border border-border bg-card text-meta text-ink-700 hover:text-ink-900 hover:bg-muted transition-colors">
+								<X className="w-4 h-4" aria-hidden /> Close
+							</button>
+						</div>
 					)}
 					<div className="flex-1 min-h-0 flex flex-col px-3 py-3">
 						{/* A hairline between the panel above (Running) and the chat,

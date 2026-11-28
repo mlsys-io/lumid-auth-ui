@@ -16,6 +16,8 @@ import { type ToneKey } from "@/lib/tones";
 import { cn } from "@/lib/utils";
 import { plural } from "@/lib/activity";
 import { EmptyStudies } from "@/components/illustrations/scenes";
+import { experimentLabel } from "@/lib/research-map";
+import { studyVerdict } from "@/lib/study-verdict";
 
 type Row = MeExperiment & { app: string };
 
@@ -45,15 +47,22 @@ export default function StudioExperiments() {
 	const idCounts = new Map<string, number>();
 	for (const e of filtered) idCounts.set(e.id, (idCounts.get(e.id) ?? 0) + 1);
 	const indexRows: IndexRow[] = filtered.map((e) => {
-		const tone: ToneKey = e.criteria_met ? "ok" : e.n_results > 0 ? "running" : "idle";
-		const statusLabel = e.criteria_met ? (e.verdict || "decided") : e.n_results > 0 ? plural(e.n_results, "result") : "pending";
+		// A decided experiment leads with its name and says the verdict in
+		// words (studyVerdict) — the raw server verdict ("llm_0_6b_c12 by +0.3pp
+		// estimated_energy_j_per_tok vs …") pushed the name off the row and named
+		// winners by zero (2026-11-28 sweep, #5).
+		const verdict = studyVerdict(e);
+		const tone: ToneKey = verdict ? verdict.tone : e.n_results > 0 ? "running" : "idle";
+		const statusLabel = verdict ? verdict.status : e.n_results > 0 ? plural(e.n_results, "result") : "pending";
 		const ambiguous = (idCounts.get(e.id) ?? 0) > 1;
+		const name = experimentLabel(e);
 		return {
 			id: `${e.app}:${e.id}`,
-			title: ambiguous ? `${e.id} · ${appTitle(e.app)}` : e.id,
+			title: ambiguous ? `${name} · ${appTitle(e.app)}` : name,
 			icon: FlaskConical,
 			tone, statusLabel,
-			meta: e.hypothesis,
+			meta: verdict ? verdict.text : e.hypothesis,
+			metaLines: verdict ? 2 : 1,
 			section: appTitle(e.app),
 			ask: askExperiment(e.app, `${e.app}:${e.id}`, e.id),
 		} as IndexRow;

@@ -67,6 +67,7 @@ function sessionRowsToMessages(rows: CycleLogRow[]): Message[] {
 	return out;
 }
 import { ChatHero } from './chat/ChatEmptyState';
+import { DockedGreeting } from './chat/DockedGreeting';
 import { StudioWorkflowPanel } from './StudioWorkflowPanel';
 import { StrandMark } from '@/components/illustrations/StrandMark';
 // Parse an AI turn's raw output into something readable: tenant cycles emit
@@ -2250,6 +2251,10 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 								</button>
 							))}
 						</div>
+					) : (groundApp || routeApp) ? (
+						// Docked and empty: a short greeting with example asks (each
+						// pre-fills the composer) and what approving a suggestion spends.
+						<DockedGreeting scope={groundApp || routeApp || ''} title={appTitle(groundApp || routeApp || '')} />
 					) : null
 				) : (
 					<div className="space-y-3.5">
