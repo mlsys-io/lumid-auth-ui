@@ -5,12 +5,15 @@ they are the same on every machine you log into.
 
 > Updated **2026-11-28**: homes moved off the machines' system disks and capped at 500 GiB, one shared
 > dataset folder and one shared model folder per cluster, and a model/dataset mirror at every site.
+> Later the same day: `/mnt/datasets`, `/mnt/models` and `/mnt/images` became read-only at the top,
+> each with a **`shared/`** folder that anyone can write to — see [Shared folders](#shared-folders).
 
 | Kind | Path (every cluster) | For | Limit |
 |---|---|---|---|
 | **Home** | `/home/<you>` | code, configs, notebooks, results you keep | **500 GiB** per person per machine, hard |
-| **Datasets** | `/mnt/datasets` | big data, anything shared (read-write) | the cluster's big store |
-| **Models** | `/mnt/models` | shared model weights (read-only) | — |
+| **Datasets** | `/mnt/datasets` · write in `/mnt/datasets/shared` | big data, anything shared | the cluster's big store |
+| **Models** | `/mnt/models` · write in `/mnt/models/shared` | shared model weights | 20 TB for `shared/` (NUS) |
+| **Image files** | `/mnt/images` · write in `/mnt/images/shared` | image tarballs, disk/VM images, other big binaries | 20 TB for `shared/` (NUS) |
 | **Model/dataset downloads** | `HF_ENDPOINT` (already set) | Hugging Face downloads go through the site mirror | — |
 | **Model cache** | `/huggingface` | this machine's own cache | 100 GB (office) |
 | **Local disk** | `/scratch` (sandbox) | build output, temporary data | 50 GiB per person per machine |
@@ -24,7 +27,7 @@ Same path on every machine you log into.
 
 **Capped at 500 GiB per person per machine — a hard limit.** At the cap, writes fail with
 "Disk quota exceeded" until you delete files or move big data to `/mnt/datasets`. Check your usage
-with `quota -s`. In force on the office and home machines since 2026-11-28; NUS follows when the home moves there finish.
+with `quota -s`. In force on every cluster since 2026-11-28 (office, home and NUS).
 
 | Where you are | Your home is stored on | Notes |
 |---|---|---|
@@ -106,8 +109,28 @@ Large datasets and anything shared belong here, not in your home or on a local d
 | **NUS** | storage-head `/data/data` (disk array, over InfiniBand) | ~48 TB free | **`/mnt/datasets`** on s0 and h0 (also at `/data/data` on s0). Models in `/data/huggingface`. |
 | **Home** | n5-max pool `tank` (10 Gb/s) | ~76 TB free | **`/mnt/datasets`** on n5-max, luyaobox9 and luyaomini–luyaomini5. |
 
-The same path on every cluster: make a folder per project; anyone can read it, only the owner can
-delete it. **Not backed up.** In sandboxes, published datasets appear read-only at `/datasets`.
+The same path on every cluster. New data goes in **`/mnt/datasets/shared/<project>`** (see below);
+folders that already sit at the top of `/mnt/datasets` stay where they are and stay writable by their
+owners. **Not backed up.** In sandboxes, published datasets appear read-only at `/datasets`.
+
+---
+
+## Shared folders
+
+`/mnt/datasets`, `/mnt/models` and `/mnt/images` each have a curated, **read-only top** and one
+**writable `shared/` folder**. The same three paths exist on every machine of every cluster.
+
+| Path | You can |
+|---|---|
+| `/mnt/datasets`, `/mnt/models`, `/mnt/images` | read everything; not create files at the top |
+| `/mnt/datasets/shared`, `/mnt/models/shared`, `/mnt/images/shared` | create files and folders; everyone can read them |
+
+- **Only the owner can delete or rename** what they put in `shared/` (the folder is sticky, like `/tmp`).
+- Make one folder per project, for example `/mnt/models/shared/<project>/`, and put a short `README`
+  in it saying whose it is and when it can be deleted.
+- A `shared/` folder is per cluster: something written at NUS is not visible at the office or at home.
+- **Not backed up**, and it counts against the cluster's big store, not your home quota.
+- Want something promoted to the curated top (a model everyone uses, a canonical dataset)? Ask Yao.
 
 **Tables: query them, do not copy them.** FinData and Lumid Data answer queries in place — see
 [Sandboxes §5](/studio/docs/sandboxes#5-data--query-it-do-not-copy-it) and
@@ -124,5 +147,7 @@ delete it. **Not backed up.** In sandboxes, published datasets appear read-only 
 4. Push the images you rely on to a **public** Harbor project and use the `harbor.lum.id` name.
 5. Put large datasets in `/mnt/datasets` (every cluster) and keep your
    home under 500 GiB.
+
+Share models, datasets and image files with others through the `shared/` folders.
 
 Questions, missing files, a model to add to the shared store, or an image to restore: ask Yao.
