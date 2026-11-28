@@ -70,6 +70,8 @@ export function progressPerSpend(input: {
 	metric: string;
 	higherIsBetter?: boolean;
 }): ProgressPerSpend | null {
+	// Every row adds its spend (a discarded run still used the card); only
+	// rows nobody discarded may move the best.
 	const { rows, metric } = input;
 	if (!metric || !rows.length) return null;
 	const stepIds = input.steps.length ? input.steps.map((s) => s.step) : [""];
@@ -109,7 +111,7 @@ export function progressPerSpend(input: {
 		x += add(r, i);
 		const step = stepOf(r);
 		const v = r.metrics?.[metric];
-		const value = typeof v === "number" && Number.isFinite(v) ? v : null;
+		const value = typeof v === "number" && Number.isFinite(v) && r.dims?.discarded !== "1" ? v : null;
 		const counts = step === counting;
 		const passed = passedOf(r);
 		if (counts && value != null && passed && (!best || (higher ? value > best.value : value < best.value)))

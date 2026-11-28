@@ -102,6 +102,7 @@ export function sumUsage(items: Array<{ usage: Usage | null; duration_s?: number
 
 /** Spend over ledger rows — optionally one feedback step's (`dims.stage`). */
 export function stepSpend(rows: MeExperimentRow[], step?: string): Spend {
+	// Discarded results still used what they used: spend counts every row.
 	const pick = step === undefined ? rows : rows.filter((r) => (r.dims?.stage ?? "") === step);
 	return sumUsage(pick.map((r) => ({ usage: usageOfRow(r), duration_s: num(r.metrics?.duration_s) })));
 }

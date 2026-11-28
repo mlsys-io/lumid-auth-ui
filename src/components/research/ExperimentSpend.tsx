@@ -15,6 +15,7 @@ import type { EvidenceStepSpec } from "@/lib/evidence";
 import { humanId, versionsOf } from "@/lib/research-map";
 import ProgressPerSpend from "./ProgressPerSpend";
 import SpendLine from "./SpendLine";
+import { DiscardedList } from "./DiscardResults";
 import StepAgreement from "./StepAgreement";
 
 export function useExperimentRows(app: string, id: string): MeExperimentRow[] | null {
@@ -48,6 +49,7 @@ export default function ExperimentSpend({ app, e, steps, rows: given }: {
 			{metric && <ProgressPerSpend steps={steps} rows={rows} metric={metric} higherIsBetter={hib} label={label} />}
 			<StepAgreement steps={steps} rows={rows} label={label} />
 			<SpendLine app={app} rows={rows} />
+			<DiscardedList app={app} experiment={e.id} rows={rows} label={label} />
 		</div>
 	);
 }
