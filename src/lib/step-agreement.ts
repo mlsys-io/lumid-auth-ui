@@ -50,7 +50,7 @@ function meansAt(rows: MeExperimentRow[], step: string, firstStep: string): Map<
 	const acc = new Map<string, Record<string, { s: number; n: number }>>();
 	const staged = rows.some((r) => !!r.dims?.stage);
 	for (const r of rows) {
-		if (!r.variant_id) continue;
+		if (!r.variant_id || r.dims?.discarded === "1") continue;
 		const at = r.dims?.stage ?? (staged ? "" : firstStep);
 		if (at !== step) continue;
 		const slot = acc.get(r.variant_id) ?? {};

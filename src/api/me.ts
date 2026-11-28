@@ -657,6 +657,9 @@ export const me = {
   measureInstruments: () => call<{ instruments: import("@/lib/measure").MeasureInstrument[] }>("GET", "/measure/instruments"),
   // Usage metering (round 10): what this user's measurements used, against the
   // app's spec compute.budget (identity /me/usage). Device-seconds; $ notional.
+  // Discard / restore an experiment's results (tombstones; nothing is deleted).
+  discardResults: (app: string, experiment: string, body: { action: "discard" | "restore"; reason?: string; matches: import("@/lib/discard").DiscardMatch[] }) =>
+    call<{ intent_id: string; status: string; matches: number }>("POST", `/apps/${encodeURIComponent(app)}/experiments/${encodeURIComponent(experiment)}/discard`, body),
   usage: (app?: string) =>
     call<import("@/lib/spend").MeUsage>("GET", `/usage${app ? `?app=${encodeURIComponent(app)}` : ""}`),
   // Offer lifecycle rides the run-feedback verb: POST /me/runs/:run_id/feedback

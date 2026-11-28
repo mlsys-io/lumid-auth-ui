@@ -19,6 +19,8 @@ import { runAnswer, runMetrics, primaryMetricKey, vsUsual, fmtMetricValue, runLi
 import MetricReveal from "@/components/workflow/MetricReveal";
 import { triageFailure } from "@/lib/failure-triage";
 import { runAgreement, runUsage } from "@/lib/run-agreement";
+import { runDiscardTarget } from "@/lib/discard";
+import { DiscardRun } from "@/components/research/DiscardResults";
 import { cn } from "@/lib/utils";
 import { WorkingDots } from "@/components/activity/ActivityView";
 
@@ -165,6 +167,7 @@ export default function RunAnswerCard({ app, loop, runId, detail, listRow, cycle
 					})}
 				</dl>
 			)}
+			{a.tone !== "running" && (() => { const tgt = runDiscardTarget(detail); return tgt ? <DiscardRun app={app} target={tgt} /> : null; })()}
 			{/* The key number against the last runs: draws in, then the delta pops. */}
 			{reveal && <MetricReveal {...reveal} />}
 
