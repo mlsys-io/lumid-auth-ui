@@ -2,7 +2,7 @@
 // Fixtures are trimmed copies of real lum.id experiments (2026-11-24).
 import type { MeExperiment } from "@/api/me";
 import { appPages, pageHref } from "./app-pages";
-import { humanId, experimentStatus, versionsOf, nextStepWords, tiedAtTop, criteriaInWords, buildResearchTree, pathTo, mapSummary, comparabilityNote, suggestionParent, experimentLoop, versionsToRun, triedVersions, settingRows, experimentLabel, proposalCheck, shortStatus, batchProgress, type Proposal } from "./research-map";
+import { humanId, inSentence, experimentStatus, versionsOf, nextStepWords, tiedAtTop, criteriaInWords, buildResearchTree, pathTo, mapSummary, comparabilityNote, suggestionParent, experimentLoop, versionsToRun, triedVersions, settingRows, experimentLabel, proposalCheck, shortStatus, batchProgress, type Proposal } from "./research-map";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -45,7 +45,7 @@ check("status: never ran / starved / unfed", () => {
 	// Never ran, or waits to be dispatched: not started, not failing.
 	eq(experimentStatus({ ...fresh, starved: true, starved_reason: "no run of screen has been recorded yet" } as MeExperiment), { tone: "idle", text: "Not started yet — none of its versions has run" });
 	// Rows from earlier steps, none carrying the metric yet: under way, not "not started".
-	eq(experimentStatus({ ...fresh, starved: true, starved_reason: "no run of screen has been recorded yet", n_rows_total: 16, metric: { name: "oos_sharpe" } } as MeExperiment), { tone: "running", text: "Under way — 16 results so far, none with oos sharpe yet" });
+	eq(experimentStatus({ ...fresh, starved: true, starved_reason: "no run of screen has been recorded yet", n_rows_total: 16, metric: { name: "oos_sharpe" } } as MeExperiment), { tone: "running", text: "Under way — 16 results so far, none with OOS sharpe yet" });
 	eq(experimentStatus({ ...fresh, n_rows_total: 1 } as MeExperiment).text, "Under way — 1 result so far, none with the experiment's own number yet");
 	eq(experimentStatus({ ...fresh, starved: true, starved_reason: "it runs only when dispatched, and nothing has dispatched it yet" } as MeExperiment).tone, "idle");
 	eq(experimentStatus({ ...fresh, unfed: true } as MeExperiment).text, "Can't start — no workflow runs it");
@@ -253,6 +253,7 @@ check("gated chains: the next move is said in words", () => {
 	// Ran but scored nothing is not "untried" (the Run button said "once more").
 	const ran = { id: "x", arms: [{ id: "a" }, { id: "b" }], variants: { a: { n: 1, mean: 1 } }, metric: { name: "goodput" } } as unknown as MeExperiment;
 	eq([humanId("profit_gpa"), humanId("oos_sharpe"), humanId("dsr_p")], ["Profit GPA", "OOS sharpe", "DSR p"]);
+	eq([inSentence("OOS sharpe"), inSentence("Goodput"), inSentence("PnL"), inSentence("TTFT p99")], ["OOS sharpe", "goodput", "PnL", "TTFT p99"]);
 	eq(nextStepWords(ran, ["simulate"]), "Next: run the 1 untried version — the cheap steps first.");
 	eq(nextStepWords(ran, ["simulate"], ["a", "b"]), "Next: 1 version ran but recorded no goodput — open it to see why before running it again.");
 	eq(versionsOf(ran, ["b"]).find((v) => v.id === "b")?.tag, "ran, no score");

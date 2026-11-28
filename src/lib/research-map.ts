@@ -15,6 +15,13 @@ import { humanMetric, fmtMetricValue } from "@/lib/run-answer";
 export type Tone = "ok" | "running" | "failing" | "attention" | "idle";
 
 /** "kol_alpha" → "KOL alpha", "musk_llm_scored" → "Musk LLM scored". */
+/** A metric label inside a sentence: "Goodput" → "goodput", but an acronym
+ *  keeps its capitals ("OOS sharpe", not "oos sharpe" — 2026-11-28 re-audit). */
+export function inSentence(label: string): string {
+	const first = label.split(" ")[0];
+	return /^[A-Z0-9]{2,}$/.test(first) || /[A-Z].*[A-Z]/.test(first) ? label : label.charAt(0).toLowerCase() + label.slice(1);
+}
+
 export function humanId(id: string): string {
 	// A decimal written in an id reads as one: "0_<digits>" (util_0_95 → 0.95,
 	// v_0_5) or "<digit>_<digits><size>" (llm_1_7b → 1.7b) — not "LLM 1 7b"
@@ -150,7 +157,7 @@ export function experimentStatus(e: MeExperiment): { tone: Tone; text: string } 
 		const rows = e.n_rows_total ?? 0;
 		if (rows > 0) {
 			const m = e.metric?.name || e.metric_name;
-			const what = m ? `${humanMetric(m).label.toLowerCase()}` : "the experiment's own number";
+			const what = m ? `${inSentence(humanMetric(m).label)}` : "the experiment's own number";
 			return { tone: "running", text: `Under way — ${rows} result${rows === 1 ? "" : "s"} so far, none with ${what} yet` };
 		}
 		// `starved` covers three cases (identity markStarved/markUndispatched):
@@ -220,7 +227,7 @@ export function nextStepWords(e: MeExperiment, steps: string[],
 	if (untried.length) return `Next: run the ${plural(untried.length, "untried version")} — the cheap steps first.`;
 	if (noScore.length) {
 		const m = e.metric?.name || e.metric_name;
-		const what = m ? humanMetric(m).label.toLowerCase() : "score";
+		const what = m ? inSentence(humanMetric(m).label) : "score";
 		const one = noScore.length === 1;
 		return `Next: ${plural(noScore.length)} ran but recorded no ${what} — open ${one ? "it" : "one"} to see why before running ${one ? "it" : "them"} again.`;
 	}
@@ -360,7 +367,7 @@ function titleOf(e: MeExperiment, id: string): string {
 function settingName(k: string): string {
 	if (k.includes(".")) return k; // a dotted override path is the user's own address for it
 	const m = humanMetric(k);
-	const label = m.label.charAt(0).toLowerCase() + m.label.slice(1);
+	const label = inSentence(m.label);
 	return m.unit ? `${label} (${m.unit})` : label;
 }
 
