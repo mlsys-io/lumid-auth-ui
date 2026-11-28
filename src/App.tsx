@@ -3,7 +3,7 @@ import { Suspense, useEffect } from "react";
 // chunk its pod does not have. lazyWithReload retries, then reloads once.
 import { lazyWithReload as lazy } from "@/lib/lazy-with-reload";
 import { legacyCycleTarget, legacyWorkflowSlugTarget } from "@/lib/run-routes";
-import { Boxes, ListChecks, TerminalSquare} from "lucide-react";
+import { Boxes, HardDrive, ListChecks, TerminalSquare } from "lucide-react";
 import { useStudioSurface } from "@/hooks/useStudioSurface";
 import { Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -236,6 +236,9 @@ const FmFleetRoute = lazy(() =>
 // home is readable by every signed-in user.
 const FmSandboxesRoute = lazy(() =>
   import("./admin/fm/routes").then((m) => ({ default: m.SandboxesRoute })),
+);
+const FmStorageRoute = lazy(() =>
+  import("./admin/fm/routes").then((m) => ({ default: m.StorageRoute })),
 );
 const FmJobsRoute = lazy(() =>
   import("./admin/fm/routes").then((m) => ({ default: m.JobsRoute })),
@@ -768,6 +771,8 @@ export default function App() {
                     // sandbox-control scopes everything to the caller (own
                     // namespace, own quota, own keys, own home).
                     { to: "/studio/research-fleet/sandboxes", label: "Sandboxes", icon: TerminalSquare },
+                    // Shared folders per cluster (everyone) + your own home / scratch / sandbox-home usage.
+                    { to: "/studio/research-fleet/storage", label: "Storage", icon: HardDrive },
                     // Billing is NOT a tab here. It is account/finance, not fleet
                     // operations, and it was the only super_admin entry in a strip
                     // whose other tabs are admin+ — so for most admins it rendered a
@@ -780,6 +785,7 @@ export default function App() {
               <Route index element={<FmFleetRoute />} />
               <Route path="jobs" element={<FmJobsRoute />} />
               <Route path="sandboxes" element={<FmSandboxesRoute />} />
+              <Route path="storage" element={<FmStorageRoute />} />
               {/* Absorbed into Fleet (vast) and Jobs (ssh, submit) on 2026-09-11.
                   Kept as redirects — these were linked from the tab strip and are
                   in people's history. */}

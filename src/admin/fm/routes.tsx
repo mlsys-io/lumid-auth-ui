@@ -9,6 +9,7 @@ import { useAuth } from "../../hooks/useAuth";
 import FleetTab from "./fleet-tab";
 import JobsTab from "./jobs-tab";
 import SandboxesTab from "./sandboxes-tab";
+import StorageTab from "./storage-tab";
 
 function useIsAdmin(): boolean {
 	const { user } = useAuth();
@@ -35,3 +36,9 @@ export function SandboxesRoute() {
 // SshRoute is gone: SSH is a view inside Jobs now, not a route. jobs-tab renders
 // <SshTab isAdmin embedded /> — hardcoded true because Jobs is itself admin-only,
 // so there is no non-admin caller to scope down for.
+
+// Not gated, like Sandboxes: everyone sees each site's shared folders and their OWN usage; admins also see
+// everyone's (sandbox-control decides what each caller gets — the prop only picks which sites to ask).
+export function StorageRoute() {
+	return <StorageTab isAdmin={useIsAdmin()} />;
+}
