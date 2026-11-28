@@ -32,6 +32,7 @@ import { me, type MeWorkflowRow, type MeAppCard } from "@/api/me";
 import { takePendingCustomize } from "@/lib/just-installed";
 import apiClient from "@/api/client";
 import { iconFor, APP_NAV_INVALIDATE } from "@/components/useAppNav";
+import { updateWords } from "@/lib/app-update";
 import { setStudioSelection } from "@/components/StudioContext";
 import { usePortalTarget } from "@/hooks/usePortalTarget";
 import { useAuth } from "@/hooks/useAuth";
@@ -946,8 +947,26 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 	const shareAction = async (kind: "pull" | "publish", path: string, okMsg: string) => {
 		setShareBusy(kind);
 		try {
+			const before = kind === "pull" ? await me.appConfig(app).catch(() => null) : null;
 			await apiClient.post(`/api/v1/me/apps/${encodeURIComponent(app)}/${path}`, {});
 			toast.success(okMsg);
+			if (kind === "pull") {
+				// The merge lands on the scheduler ~10-60 s later: wait for the install
+				// to change, then refresh everything that reads it and say what changed.
+				let after: Awaited<ReturnType<typeof me.appConfig>> | null = null;
+				const t0 = Date.now();
+				while (Date.now() - t0 < 90_000) {
+					await new Promise((r) => setTimeout(r, 3_000));
+					after = await me.appConfig(app).catch(() => null);
+					if (after?.sha && after.sha !== before?.sha) break;
+				}
+				const w = updateWords(before, after, !(after?.sha && after.sha !== before?.sha));
+				if (w.changed) {
+					window.dispatchEvent(new CustomEvent("studio:data", { detail: { scopes: ["apps", "workflows", "loops", "experiments"] } }));
+					window.dispatchEvent(new Event(APP_NAV_INVALIDATE));
+					toast.success(w.text);
+				} else toast(w.text);
+			}
 		} catch (e) {
 			/* eslint-disable @typescript-eslint/no-explicit-any */
 			const msg = (e as any)?.response?.data?.message || (e instanceof Error ? e.message : String(e));
