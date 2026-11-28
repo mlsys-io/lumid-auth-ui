@@ -218,6 +218,33 @@ export interface VersionInfo {
 	description?: string;
 }
 
+/** An experiment by name: its own `title` (spec) when it declares one, else the
+ *  humanised id — an id can't say whether serve_9_2 is 9.2 (round 10). */
+export function experimentLabel(e: Pick<MeExperiment, "id"> & { title?: string | null }): string {
+	return (typeof e.title === "string" && e.title.trim()) || humanId(e.id);
+}
+
+function titleOf(e: MeExperiment, id: string): string {
+	const a = (e.arms || []).find((x) => x.id === id) as Record<string, unknown> | undefined;
+	return typeof a?.title === "string" ? a.title.trim() : "";
+}
+
+/** "What it changes", one row per setting: an object input (a strategy spec,
+ *  serving overrides) becomes one "key: value" row per field instead of a JSON
+ *  blob; lists join; long text stays whole (the cell truncates, the title shows
+ *  it). Meta fields (id, description, about, title, arm) are not settings. */
+export function settingRows(arm: Record<string, unknown> | undefined): Array<[string, string]> {
+	const out: Array<[string, string]> = [];
+	const show = (v: unknown): string => (Array.isArray(v) ? v.map(show).join(", ") : v && typeof v === "object" ? JSON.stringify(v) : String(v));
+	for (const [k, v] of Object.entries(arm || {})) {
+		if (["id", "description", "about", "title", "arm", "label"].includes(k)) continue;
+		if (v && typeof v === "object" && !Array.isArray(v)) {
+			for (const [k2, v2] of Object.entries(v as Record<string, unknown>)) out.push([`${humanId(k)} · ${k2}`, show(v2)]);
+		} else out.push([humanId(k), show(v)]);
+	}
+	return out;
+}
+
 export function versionsOf(e: MeExperiment): VersionInfo[] {
 	const declared = (e.arms || []).map((a) => a.id);
 	const observed = Object.keys(e.variants || {});
@@ -238,7 +265,9 @@ export function versionsOf(e: MeExperiment): VersionInfo[] {
 		const avg = v && n ? ` · avg ${fmtMetricValue(v.mean, unit, metric)}` : "";
 		const desc = (e.arms || []).find((a) => a.id === id)?.description;
 		return {
-			id, label: id === base && /^(current|baseline)$/i.test(id) ? "Current version" : humanId(id),
+			// A version's own `title` (spec) wins over the humanised id: an id
+			// can't say whether serve_9_2 is 9.2 or mom_6_1 is "6-1".
+			id, label: titleOf(e, id) || (id === base && /^(current|baseline)$/i.test(id) ? "Current version" : humanId(id)),
 			tag, tone, n,
 			line: n ? `${n.toLocaleString()} result${n === 1 ? "" : "s"}${avg}` : "no results yet",
 			progress: e.min_samples ? Math.min(1, n / e.min_samples) : null,

@@ -27,7 +27,7 @@ import type { AppSpec, FeedbackStep, SpecNode, SpecWorkflow } from "@/lib/app-sp
 import { addNode, removeNode, renameNode, setFeedback, setWorkflowNode, addWorkflows } from "@/lib/app-spec";
 import { compareVerdict, runMetricValues, sideStats, type SideStats } from "@/lib/compare";
 import { workflowStatusLine, fmtAgo, fmtDuration, dirIdToSec } from "@/lib/activity";
-import { humanId, versionsOf } from "@/lib/research-map";
+import { humanId, versionsOf, experimentLabel} from "@/lib/research-map";
 import { humanMetric, fmtMetricValue, measuredLine } from "@/lib/run-answer";
 import { instrumentChoices, instrumentName, measuredBy } from "@/lib/measure";
 import { useInstruments } from "@/hooks/useInstruments";
@@ -345,7 +345,7 @@ function OverviewView({ app, wf, spec, row, cycles, variants, exps, onSelect, on
 					<h3 className="eyebrow">Under it</h3>
 					{exps.map((e) => (
 						<button key={e.id} type="button" onClick={() => onSelect(`exp:${e.id}`)} className="flex w-full items-center gap-2 rounded-md px-1.5 py-1 text-left text-caption hover:bg-ink-50">
-							<span className="h-2 w-2 rounded-full bg-plum-500" /><span className="text-ink-900">{humanId(e.id)}</span>
+							<span className="h-2 w-2 rounded-full bg-plum-500" /><span className="text-ink-900">{experimentLabel(e)}</span>
 							<span className="ml-auto text-micro text-ink-600">{versionsOf(e).length} versions</span>
 						</button>
 					))}

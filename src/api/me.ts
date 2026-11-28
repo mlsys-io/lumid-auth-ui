@@ -1290,6 +1290,8 @@ export interface MeStudyDefinition {
 }
 
 export interface MeExperiment {
+  /** The spec's own name for it (a `title:`), when it declares one. */
+  title?: string | null;
   id: string; hypothesis: string; kind: "explore" | "arms" | "regression";
   /** Measured once centrally for every install (the spec's `shared: true`):
    *  identity serves the operator's state, so these runs are not this user's own. */

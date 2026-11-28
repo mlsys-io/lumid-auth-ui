@@ -16,8 +16,7 @@ import type { MeExperiment, MeWorkflowRow } from "@/api/me";
 import type { SpecNode, SpecWorkflow } from "@/lib/app-spec";
 import {
 	buildResearchTree, DOT_SIZE, experimentStatus, humanId, rowStatus, versionsOf, OTHER_NODE,
-	type MapNode, type Proposal, type Tone,
-} from "@/lib/research-map";
+	type MapNode, type Proposal, type Tone, experimentLabel} from "@/lib/research-map";
 import { bestResult } from "@/lib/research-dashboard";
 import { useRunsFeed } from "@/components/activity/hooks";
 import { fmtAgo } from "@/lib/activity";
@@ -103,13 +102,13 @@ export default function ResearchTable({ app, exps, pending, workflows, groups, r
 				const g = groupById.get(n.ref);
 				// "Other workflows" holds the housekeeping ones, which the tree doesn't draw.
 				const held = n.ref === OTHER_NODE ? workflows.filter((w) => w.helper && !(w.parent && wfById.has(w.parent))).length : children.length;
-				row = { node: n, depth, name: n.ref === OTHER_NODE ? "Other workflows" : g?.title || humanId(n.ref), sub: n.ref === OTHER_NODE ? "housekeeping" : "node", status: { text: `holds ${held}`, tone: "idle" }, match: [], kids: children };
+				row = { node: n, depth, name: n.ref === OTHER_NODE ? "Other workflows" : g?.title || humanId(n.ref), sub: n.ref === OTHER_NODE ? "housekeeping" : "node", status: { text: n.ref === OTHER_NODE ? `${held} helper workflow${held === 1 ? "" : "s"}` : `${held} workflow${held === 1 ? "" : "s"}`, tone: "idle" }, match: [], kids: children };
 			} else if (n.kind === "experiment") {
 				const e = expById.get(n.ref);
 				const st = e ? experimentStatus(e) : { text: "", tone: "idle" as Tone };
 				const b = e ? bestResult(e) : null;
 				const match: Filter[] = [st.tone === "ok" ? "winning" : st.tone === "failing" ? "failing" : st.tone === "running" ? "running" : !e?.n_results ? "idle" : "all"];
-				row = { node: n, depth, name: e ? humanId(e.id) : n.ref, sub: "experiment", status: st, best: b ? `${b.leader}: ${b.metric} ${b.valueText}` : undefined, when: e?.updated_at ? fmtAgo(Date.parse(e.updated_at) / 1000) : undefined, match, kids: children };
+				row = { node: n, depth, name: e ? experimentLabel(e) : n.ref, sub: "experiment", status: st, best: b ? `${b.leader}: ${b.metric} ${b.valueText}` : undefined, when: e?.updated_at ? fmtAgo(Date.parse(e.updated_at) / 1000) : undefined, match, kids: children };
 			} else if (n.kind === "version") {
 				const [, expId, vid] = n.id.split(":");
 				const e = expById.get(expId);

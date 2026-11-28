@@ -15,7 +15,7 @@ import { Play } from "lucide-react";
 import { me, waitForIntent, type MeExperiment } from "@/api/me";
 import { askOrStash } from "@/components/chat/askBus";
 import { Button } from "@/components/ui/button";
-import { batchProgress, experimentLoop, humanId, versionsToRun, type BatchProgress } from "@/lib/research-map";
+import { batchProgress, experimentLoop, humanId, versionsToRun, type BatchProgress, experimentLabel} from "@/lib/research-map";
 import type { QueueRow } from "@/lib/compute";
 import { cn } from "@/lib/utils";
 import { loopLabel } from "@/lib/workflow-names";
@@ -111,7 +111,7 @@ export default function RunVersions({ app, e, onQueued, only, tried }: { app: st
 		setOver(false);
 		if (e.dispatch?.ask) {
 			askOrStash({
-				prompt: `Run ${untried ? "the untried versions" : "each version once more"} of the "${humanId(e.id)}" experiment (${ids.join(", ")}) `
+				prompt: `Run ${untried ? "the untried versions" : "each version once more"} of the "${experimentLabel(e)}" experiment (${ids.join(", ")}) `
 					+ `on ${app} with dispatch_experiment_arm. ${e.dispatch.ask} Ask me for anything you don't know, then queue them.`,
 				context: { page: "research", app, loop },
 			});
@@ -152,7 +152,7 @@ export default function RunVersions({ app, e, onQueued, only, tried }: { app: st
 	return (
 		<div className="min-w-0 space-y-1">
 			<div className="flex items-center gap-2">
-				<Button size="sm" variant="accent" onClick={go} disabled={busy || running || (!!sent && "chat" in sent) || !!press?.blocked}>
+				<Button size="sm" variant={untried || only ? "accent" : "secondary"} onClick={go} disabled={busy || running || (!!sent && "chat" in sent) || !!press?.blocked}>
 					<Play className="w-3.5 h-3.5" /> {busy ? "Queuing…" : running ? "Running…" : over ? "Run again" : label}
 				</Button>
 				{/* One dot per queued run: hollow waiting, breathing running, gold done, brick failed. */}

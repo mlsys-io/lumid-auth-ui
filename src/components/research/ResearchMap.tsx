@@ -13,7 +13,7 @@
 
 import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowRight, ChevronDown, FlaskConical, MessagesSquare, Plus, Sparkles, X } from "lucide-react";
+import { ArrowRight, ChevronDown, FlaskConical, Maximize2, MessagesSquare, Minimize2, Plus, Sparkles, X } from "lucide-react";
 import { openNewWorkflow, useNewWorkflowParam, useNewWorkflowRequests } from "@/components/research/new-workflow";
 import apiClient from "@/api/client";
 import { me, type MeExperiment, type MeExperimentDetail } from "@/api/me";
@@ -37,7 +37,7 @@ import EvidenceGrid from "@/components/research/EvidenceGrid";
 import AddVersions from "@/components/research/AddVersions";
 import ExperimentSpend, { useExperimentRows } from "@/components/research/ExperimentSpend";
 import HoldoutLine from "@/components/research/HoldoutLine";
-import { versionProgress, experimentSteps } from "@/lib/evidence";
+import { cellWords, evidenceOf, versionProgress, experimentSteps } from "@/lib/evidence";
 import YourCall from "@/components/research/YourCall";
 import WorkflowPanel, { NodePanel, CompareView, wfLabel, type CompareSide, type PanelView } from "@/components/research/WorkflowPanel";
 import TrySetups from "@/components/research/TrySetups";
@@ -48,8 +48,7 @@ import { fmtAgo } from "@/lib/activity";
 import {
 	buildResearchTree, comparabilityNote, criteriaInWords, experimentStatus, humanId, mapSummary, pathTo, versionsOf, OTHER_NODE, DOT_SIZE,
 	type MapEdge, type MapNode, type Proposal, type Tone, type VersionInfo,
-	shortStatus, rowStatus, triedVersions, experimentLoop,
-} from "@/lib/research-map";
+	shortStatus, rowStatus, triedVersions, experimentLoop, settingRows, experimentLabel} from "@/lib/research-map";
 import { humanMetric, fmtMetricValue } from "@/lib/run-answer";
 import { workflowPath } from "@/lib/run-routes";
 import { loopLabel } from "@/lib/workflow-names";
@@ -154,7 +153,7 @@ function ExperimentCard3D({ e, selected }: { e: MeExperiment; selected: boolean 
 		<div className={cn(cardBase(selected), "border-ink-200")} style={{ width: 230 }}>
 			<div className="flex items-center gap-1.5">
 				<FlaskConical className="w-3.5 h-3.5 text-ink-500 flex-shrink-0" aria-hidden />
-				<div className="text-caption font-semibold text-ink-900 truncate">{humanId(e.id)}</div>
+				<div className="text-caption font-semibold text-ink-900 truncate">{experimentLabel(e)}</div>
 			</div>
 			<div className={cn("flex items-start gap-1.5 text-micro font-medium leading-snug mt-0.5", TONE_TEXT[st.tone])}>
 				<span className={cn(dot(st.tone), "mt-1")} /> <span className="line-clamp-2">{st.text}</span>
@@ -308,7 +307,7 @@ function MapCanvas({ fresh, app, exps, proposals, workflows, groups, rows, marks
 		if (n.kind === "app") return `${appTitle(app)}: ${mainCount} workflow${mainCount === 1 ? "" : "s"}${running ? ", running now" : ""}`;
 		if (n.kind === "workflow") { const w = wfById.get(n.ref); return `${w ? wfLabel(w) : n.ref}${w?.parent ? " (variant)" : ""}: ${rowStatus(rows.get(n.ref)).text}`; }
 		if (n.kind === "node") return `${nodeTitle(n.ref)}: holds ${childCount(n.id)}`;
-		if (n.kind === "experiment") { const e = expById.get(n.ref); return e ? `${humanId(e.id)}: ${experimentStatus(e).text}` : n.ref; }
+		if (n.kind === "experiment") { const e = expById.get(n.ref); return e ? `${experimentLabel(e)}: ${experimentStatus(e).text}` : n.ref; }
 		if (n.kind === "version") { const v = versionOf(n.id); return v ? `${v.label}: ${v.tag}${v.tag !== "not run yet" ? `, ${v.line}` : ""}` : n.ref; }
 		return `Suggested: ${humanId(n.ref)}`;
 		// eslint-disable-next-line react-hooks/exhaustive-deps
@@ -322,7 +321,7 @@ function MapCanvas({ fresh, app, exps, proposals, workflows, groups, rows, marks
 			return (
 				<div className={cn("min-w-[9rem] rounded-lg border bg-card px-2.5 py-1.5 shadow-e1", st.selected ? "border-plum-400" : "border-ink-200")}>
 					<div className="text-caption font-medium text-ink-900">{n.kind === "node" ? nodeTitle(n.ref) : w ? wfLabel(w) : n.ref}</div>
-					<div className="text-micro text-ink-600">{n.kind === "node" ? `holds ${childCount(n.id)}` : rowStatus(rows.get(n.ref)).text}</div>
+					<div className="text-micro text-ink-600">{n.kind === "node" ? `${childCount(n.id)} workflow${childCount(n.id) === 1 ? "" : "s"}` : rowStatus(rows.get(n.ref)).text}</div>
 				</div>
 			);
 		}
@@ -391,7 +390,7 @@ function MapCanvas({ fresh, app, exps, proposals, workflows, groups, rows, marks
 			const st = e ? shortStatus(e) : null;
 			const vs = e ? versionsOf(e) : [];
 			const sw = branchOf.get(n.id);
-			return <Dot size={DOT_SIZE.experiment} className={cn(sw?.bar ?? "bg-plum-400", st?.tone === "failing" && "!ring-brick-500")} ringClass={sw?.ring} label={e ? humanId(e.id) : n.ref} labelClass="text-micro font-medium text-ink-900"
+			return <Dot size={DOT_SIZE.experiment} className={cn(sw?.bar ?? "bg-plum-400", st?.tone === "failing" && "!ring-brick-500")} ringClass={sw?.ring} label={e ? experimentLabel(e) : n.ref} labelClass="text-micro font-medium text-ink-900"
 				sub={st ? `${st.text} · ${vs.length} setup${vs.length === 1 ? "" : "s"}` : undefined} mark={mark} ping={!!e && !!fresh?.has(e.id)} />;
 		}
 		if (n.kind === "version") {
@@ -571,7 +570,7 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 					<span className="ml-auto" />
 					{/* The same frame as a workflow's panel: its verbs beside its name. */}
 					<button type="button" aria-label="Ask about it" title="Ask the chat where it stands and what to do next"
-						onClick={() => window.dispatchEvent(new CustomEvent("studio:ask", { detail: { prompt: `Where does the ${humanId(e.id)} experiment stand, and what should I do next?`, context: { app, loop } } }))}
+						onClick={() => window.dispatchEvent(new CustomEvent("studio:ask", { detail: { prompt: `Where does the ${experimentLabel(e)} experiment stand, and what should I do next?`, context: { app, loop } } }))}
 						className="inline-flex h-6 w-6 items-center justify-center rounded-md text-ink-700 hover:bg-ink-100 hover:text-ink-900"><MessagesSquare className="h-3.5 w-3.5" /></button>
 					{loop && <Link to={workflowPath(app, loop, { tab: "experiments" })} aria-label={`Open ${loopLabel("", loop)}`} title={`Open ${loopLabel("", loop)}`}
 						className="inline-flex h-6 w-6 items-center justify-center rounded-md text-ink-700 hover:bg-ink-100 hover:text-ink-900"><ArrowRight className="h-3.5 w-3.5" /></Link>}
@@ -582,7 +581,7 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 				</div>
 			)}
 			<div>
-				<div className={cn("font-semibold text-ink-900", panel ? "text-title leading-snug" : "text-body")}>{humanId(e.id)}</div>
+				<div className={cn("font-semibold text-ink-900", panel ? "text-title leading-snug" : "text-body")}>{experimentLabel(e)}</div>
 				{q && <div title={q} className={cn("text-ink-700", panel ? "mt-0.5 line-clamp-2 text-caption" : "text-meta")}>{q}</div>}
 			</div>
 			<div className={cn("flex items-start gap-1.5 font-medium leading-snug", panel ? "text-caption" : "text-meta", TONE_TEXT[st.tone])}>
@@ -591,7 +590,17 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 			{sharedLine(e) && <p className={cn("text-plum-700", panel ? "text-caption" : "text-micro")}>{sharedLine(e)}</p>}
 		</>
 	);
-	const chart = series === null ? (
+	// Every version at the same number: a flat line ranks nothing (MLSys: 14
+	// designs at 22.4 tok/s). Say so instead; the grid's tie-breaker decides.
+	const tiedAt = (() => {
+		const means = (evolution?.chain ?? []).map((c) => c.mean).filter((x): x is number => x != null);
+		if (means.length < 2) return null;
+		const shown = means.map((x) => fmtMetricValue(x, m?.unit ?? "", metric || ""));
+		return shown.every((x) => x === shown[0]) ? shown[0] : null;
+	})();
+	const chart = tiedAt ? (
+		<p className="rounded-lg bg-muted/50 px-2.5 py-2 text-caption text-ink-700">Every version scores {m?.label ? `${m.label} ` : ""}{tiedAt} so far — nothing to chart yet; the next metric decides (see each step).</p>
+	) : series === null ? (
 		<div className="h-24 lumen-skeleton rounded-lg" role="status" aria-label="Loading how it evolved" />
 	) : evolution && metric && e.comparable !== false ? (
 		// Comparable versions: Novix's best-so-far story on one axis.
@@ -639,7 +648,7 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 				</Button>
 			)}
 			<Button size="sm" variant="ghost"
-				onClick={() => window.dispatchEvent(new CustomEvent("studio:ask", { detail: { prompt: `Where does the ${humanId(e.id)} experiment stand, and what should I do next?`, context: { app, loop } } }))}>
+				onClick={() => window.dispatchEvent(new CustomEvent("studio:ask", { detail: { prompt: `Where does the ${experimentLabel(e)} experiment stand, and what should I do next?`, context: { app, loop } } }))}>
 				<MessagesSquare className="w-3.5 h-3.5" /> Ask about it
 			</Button>
 		</>
@@ -649,7 +658,7 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 		// A side sheet: who/what/status pinned on top, the evidence scrolls, the
 		// next step pinned at the foot — it never scrolls out of reach.
 		return (
-			<div role="dialog" aria-label={`Experiment: ${humanId(e.id)}`} style={style}
+			<div role="dialog" aria-label={`Experiment: ${experimentLabel(e)}`} style={style}
 				className="absolute right-3 top-12 z-[6100] flex w-[22rem] max-w-[48%] flex-col overflow-hidden rounded-xl border border-ink-200 bg-card shadow-e3 map-panel-in 2xl:w-[26rem]">
 				<div className="space-y-1.5 border-b border-ink-100 px-3.5 pb-2.5 pt-3">{head}</div>
 				<div className="min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-contain px-3.5 py-3">
@@ -699,7 +708,19 @@ function VersionPanel({ app, e, version, style, onClose, onBack, onCompare }: {
 	const m = metric ? humanMetric(metric) : null;
 	const val = (n: number) => fmtMetricValue(n, m?.unit ?? "", metric);
 	const arm = (e.arms || []).find((a) => String(a.id) === version) as Record<string, unknown> | undefined;
-	const settings = arm ? Object.entries(arm).filter(([k]) => k !== "id" && k !== "description") : [];
+	const settings = settingRows(arm);
+	// One line per step from the ledger rows (the grid's own reading): the
+	// served average mixes every step that reports the metric (MLSys: a
+	// Simulate row with a Sandbox row), so a multi-step experiment shows steps.
+	const { graph: vGraph } = useAppGraph(app);
+	const vSteps = useMemo(() => (vGraph ? experimentSteps(vGraph.spec, e, vGraph.text) : []), [vGraph, e]);
+	const vRows = useExperimentRows(app, e.id);
+	const stepLines = useMemo(() => {
+		if (vSteps.length < 2 || !vRows) return [];
+		const ev = evidenceOf({ steps: vSteps, rows: vRows, metric, higherIsBetter: !(e.higher_is_better === false || e.metric?.higher_is_better === false), versions: [{ id: version }] });
+		const cells = ev.cells.get(version);
+		return cells ? ev.steps.map((st) => cellWords(cells.get(st.step)!, st)) : [];
+	}, [vSteps, vRows, metric, e, version]);
 	useEffect(() => {
 		const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") onClose(); };
 		window.addEventListener("keydown", onKey);
@@ -714,12 +735,18 @@ function VersionPanel({ app, e, version, style, onClose, onBack, onCompare }: {
 					<button type="button" onClick={onClose} aria-label="Close" title="Close (Esc)" className="ml-auto inline-flex h-6 w-6 items-center justify-center rounded-md text-ink-600 hover:bg-ink-100"><X className="h-3.5 w-3.5" /></button>
 				</div>
 				<div className="text-title font-semibold leading-snug text-ink-900">{v?.label ?? humanId(version)}</div>
-				<button type="button" onClick={onBack} className="text-caption text-ink-700 hover:text-ink-900 hover:underline">of {humanId(e.id)} ›</button>
+				<button type="button" onClick={onBack} className="text-caption text-ink-700 hover:text-ink-900 hover:underline">of {experimentLabel(e)} ›</button>
 				{v && <div className="flex items-center gap-1.5"><span className={cn("rounded-full border px-1.5 text-nano font-medium", TAG_CLS[v.tag] ?? TAG_CLS.current)}>{v.tag}</span><span className="text-caption text-ink-700">{v.line}</span></div>}
 			</div>
 			<div className="scrollbar-hide min-h-0 flex-1 space-y-3 overflow-y-auto px-3.5 py-3">
 				{v?.description && <p className="text-caption text-ink-800">{v.description}</p>}
-				{agg && agg.n > 0 && m && (
+				{stepLines.length > 0 && (
+					<section className="space-y-1">
+						<h3 className="eyebrow">Each step</h3>
+						<ul className="space-y-0.5 text-caption text-ink-800">{stepLines.map((l) => <li key={l}>{l}</li>)}</ul>
+					</section>
+				)}
+				{agg && agg.n > 0 && m && vSteps.length < 2 && (
 					<dl className="grid grid-cols-3 gap-2 text-center">
 						<div className="rounded-lg border border-ink-100 px-2 py-1.5"><dt className="eyebrow">Average</dt><dd className="font-mono text-meta tabular-nums text-ink-900">{val(agg.mean)}</dd></div>
 						<div className="rounded-lg border border-ink-100 px-2 py-1.5"><dt className="eyebrow">Latest</dt><dd className="font-mono text-meta tabular-nums text-ink-900">{agg.last != null ? val(agg.last) : "—"}</dd></div>
@@ -731,7 +758,7 @@ function VersionPanel({ app, e, version, style, onClose, onBack, onCompare }: {
 					<section className="space-y-1">
 						<h3 className="eyebrow">What it changes</h3>
 						<dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-caption">
-							{settings.map(([k, x]) => (<Fragment key={k}><dt className="text-ink-600">{humanId(k)}</dt><dd className="min-w-0 truncate font-mono text-micro text-ink-900" title={String(x)}>{typeof x === "object" ? JSON.stringify(x) : String(x)}</dd></Fragment>))}
+							{settings.map(([k, x]) => (<Fragment key={k}><dt className="text-ink-600">{k}</dt><dd className="min-w-0 truncate font-mono text-micro text-ink-900" title={x}>{x}</dd></Fragment>))}
 						</dl>
 					</section>
 				)}
@@ -862,7 +889,7 @@ export default function ResearchMap({ app }: { app: string }) {
 		if (!id) return null;
 		const [kind, a, b] = id.split(":");
 		if (kind === "wf") { const w = workflows.find((x) => x.id === a); return w ? { kind: "workflow", id: a, label: wfLabel(w) } : null; }
-		if (kind === "ver") { const e = exps.find((x) => x.id === a); const v = e ? versionsOf(e).find((x) => x.id === b) : undefined; return e && v ? { kind: "version", id: b, label: `${v.label} (${humanId(e.id)})`, exp: e } : null; }
+		if (kind === "ver") { const e = exps.find((x) => x.id === a); const v = e ? versionsOf(e).find((x) => x.id === b) : undefined; return e && v ? { kind: "version", id: b, label: `${v.label} (${experimentLabel(e)})`, exp: e } : null; }
 		return null;
 	}, [workflows, exps]);
 
@@ -906,11 +933,16 @@ export default function ResearchMap({ app }: { app: string }) {
 	// map, at the right edge; the camera frames the path in the space left.
 	const selProposalIdx = selKind === "sug" ? pending.findIndex((p) => `sug:${p.id}` === selected) : -1;
 	const panelOpen = !!(selWf || selNode || selExp || selProposalIdx >= 0 || selKind === "app");
+	const [panelWide, setPanelWideState] = useState(() => { try { return localStorage.getItem("studio:panel-wide") === "1"; } catch { return false; } });
+	const setPanelWide = (w: boolean) => { setPanelWideState(w); try { localStorage.setItem("studio:panel-wide", w ? "1" : "0"); } catch { /* private mode */ } };
 	// An idea's card needs a little more width for its three answers.
 	// The side panel takes a third of the stage (2026-11-27: "the experiment
 	// panel can take 1/3 of the graph space"), between 352 and 600 px; the graph
 	// frames itself in the rest.
-	const sidePx = stage.width ? Math.max(PANEL_PX, Math.min(600, Math.round(stage.width / 3))) : selProposalIdx >= 0 ? Math.max(panelPx, 416) : panelPx;
+	const narrowPx = stage.width ? Math.max(PANEL_PX, Math.min(600, Math.round(stage.width / 3))) : selProposalIdx >= 0 ? Math.max(panelPx, 416) : panelPx;
+	// "Wider" (2026-11-28, MLSys student review): the grid, spend and step
+	// agreement were squeezed into ~390 px beside a short, filtered list.
+	const sidePx = panelWide && stage.width ? Math.max(narrowPx, Math.min(960, stage.width - 24)) : narrowPx;
 	const panelStyle = { bottom: 12, width: sidePx, maxWidth: "calc(100% - 1.5rem)" };
 	const panel = selWf && graph ? (
 		<WorkflowPanel key={selWf.id} app={app} wf={selWf} spec={graph.spec} row={rows.get(selWf.id)} exps={exps}
@@ -1020,6 +1052,14 @@ export default function ResearchMap({ app }: { app: string }) {
 				</div>
 			)}
 			{panel}
+			{panel && stage.width > 900 && (
+				<button type="button" onClick={() => setPanelWide(!panelWide)} aria-pressed={panelWide}
+					aria-label={panelWide ? "Narrower panel" : "Wider panel"} title={panelWide ? "Narrower panel" : "Wider panel"}
+					style={{ right: `calc(0.75rem + ${sidePx}px + 0.375rem)` }}
+					className="absolute top-12 z-[6100] inline-flex h-7 w-7 items-center justify-center rounded-md border border-ink-200 bg-card text-ink-700 shadow-e1 hover:bg-ink-50 hover:text-ink-900">
+					{panelWide ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+				</button>
+			)}
 		</div>
 	);
 	const updated = new Date(data?.asOf ?? Date.now()).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
