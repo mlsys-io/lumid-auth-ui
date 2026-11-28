@@ -32,6 +32,9 @@ import { PageHeader } from '@/components/ui/page-header';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/ui/empty-state';
 import { updateInvitationCode } from '../../api/auth';
+import {
+	STALE_HEADING, bulkRevokeResult, groupTokens, isAutoMinted, lastUsedWords, powerfulScopes, revokeTheseLabel,
+} from '@/lib/token-hygiene';
 
 /**
  * /account/tokens — mint, list, revoke, audit Personal Access Tokens.
@@ -43,18 +46,23 @@ import { updateInvitationCode } from '../../api/auth';
  * the user.
  */
 // Tokens the platform mints on the user's behalf (an app intent needing a
-// credential) are named "<purpose> (…, auto)". One account had 98 of them
-// above its 2 hand-made tokens, so the ones the user actually manages were
-// buried. They stay listed — revocable and auditable — behind a fold.
-const isAutoMinted = (t: PATInfo) => /\bauto\)\s*$/.test(t.name);
-
-function TokenList({ tokens, onRevoke, onAudit }: {
+// credential) are named "<purpose> (…, auto)" (lib/token-hygiene isAutoMinted).
+// One account had 98 of them above its 2 hand-made tokens, so the ones the
+// user actually manages were buried. They stay listed — revocable and
+// auditable — behind a fold.
+//
+// Hand-made tokens nobody has used in 60+ days lead the page, grouped, with
+// one button that lists them for confirmation before revoking any.
+function TokenList({ tokens, onRevoke, onAudit, onBulkRevoke }: {
 	tokens: PATInfo[];
 	onRevoke: (t: PATInfo) => void;
 	onAudit: (t: PATInfo) => void;
+	onBulkRevoke: (list: PATInfo[]) => void;
 }) {
 	const [showAuto, setShowAuto] = useState(false);
-	const mine = tokens.filter((t) => !isAutoMinted(t));
+	const nowSec = Math.floor(Date.now() / 1000);
+	const { stale, rest } = groupTokens(tokens.filter((t) => !isAutoMinted(t)), nowSec);
+	const mine = rest;
 	const auto = tokens.filter(isAutoMinted);
 	const rows = (list: PATInfo[]) => list.map((t, i) => (
 		<TokenRow
@@ -67,6 +75,19 @@ function TokenList({ tokens, onRevoke, onAudit }: {
 	));
 	return (
 		<div className="space-y-3">
+			{stale.length > 0 && (
+				<section aria-label={STALE_HEADING} className="border border-ember-200 rounded-xl overflow-hidden bg-card">
+					<div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 bg-ember-50 border-b border-ember-200">
+						<span className="flex items-center gap-1.5 text-meta text-ember-700">
+							<AlertTriangle className="w-3.5 h-3.5 shrink-0" aria-hidden /> {STALE_HEADING}
+						</span>
+						<Button variant="destructive" size="sm" onClick={() => onBulkRevoke(stale)}>
+							<Trash2 className="w-3.5 h-3.5 mr-1" /> {revokeTheseLabel(stale.length)}
+						</Button>
+					</div>
+					{rows(stale)}
+				</section>
+			)}
 			{mine.length > 0 && (
 				<div className="border border-ink-200 rounded-xl overflow-hidden bg-card">{rows(mine)}</div>
 			)}
@@ -94,6 +115,7 @@ export default function TokensPage() {
 	const [mintOpen, setMintOpen] = useState(false);
 	const [minted, setMinted] = useState<MintPATResponse | null>(null);
 	const [confirmRevoke, setConfirmRevoke] = useState<PATInfo | null>(null);
+	const [bulkRevoke, setBulkRevoke] = useState<PATInfo[] | null>(null);
 	const [auditFor, setAuditFor] = useState<PATInfo | null>(null);
 
 	const refresh = () => {
@@ -138,7 +160,7 @@ export default function TokensPage() {
 					onAction={() => setMintOpen(true)}
 				/>
 			) : (
-				<TokenList tokens={tokens} onRevoke={setConfirmRevoke} onAudit={setAuditFor} />
+				<TokenList tokens={tokens} onRevoke={setConfirmRevoke} onAudit={setAuditFor} onBulkRevoke={setBulkRevoke} />
 			)}
 
 			{/* SSH keys.
@@ -204,6 +226,12 @@ export default function TokensPage() {
 				onRevoked={refresh}
 			/>
 
+			<BulkRevokeDialog
+				tokens={bulkRevoke}
+				onClose={() => setBulkRevoke(null)}
+				onRevoked={refresh}
+			/>
+
 			<AuditDialog token={auditFor} onClose={() => setAuditFor(null)} />
 		</div>
 	);
@@ -245,9 +273,9 @@ function TokenRow({
 						<Shield className="w-3 h-3" />
 						{token.scopes.join(', ')}
 					</span>
-					{token.last_used_at > 0 && (
+					{(token.status === 'active' || token.last_used_at > 0) && (
 						<span className="flex items-center gap-1">
-							<Clock className="w-3 h-3" /> last used {formatRelative(token.last_used_at)}
+							<Clock className="w-3 h-3" /> {lastUsedWords(token, Math.floor(Date.now() / 1000))}
 						</span>
 					)}
 				</div>
@@ -886,6 +914,84 @@ function RevokeDialog({
 	);
 }
 
+/** Revoke a list of tokens after the reader has seen every one of them. Calls
+ *  the same per-token revoke as the row button, one at a time; a failure is
+ *  named and the rest still go. */
+function BulkRevokeDialog({
+	tokens,
+	onClose,
+	onRevoked,
+}: {
+	tokens: PATInfo[] | null;
+	onClose: () => void;
+	onRevoked: () => void;
+}) {
+	const [submitting, setSubmitting] = useState(false);
+	const [done, setDone] = useState(0);
+	if (!tokens || tokens.length === 0) return null;
+	const nowSec = Math.floor(Date.now() / 1000);
+	const submit = async () => {
+		setSubmitting(true);
+		setDone(0);
+		const failed: string[] = [];
+		let revoked = 0;
+		for (const t of tokens) {
+			try {
+				await revokePAT(t.id);
+				revoked++;
+			} catch {
+				failed.push(t.name);
+			}
+			setDone((d) => d + 1);
+		}
+		const r = bulkRevokeResult(revoked, failed);
+		if (r.ok) toast.success(r.text);
+		else toast.error(r.text);
+		setSubmitting(false);
+		onRevoked();
+		onClose();
+	};
+	return (
+		<Dialog open onOpenChange={(v) => { if (!v && !submitting) onClose(); }}>
+			<DialogContent className="max-w-lg max-h-[85vh] overflow-hidden flex flex-col">
+				<DialogHeader>
+					<DialogTitle>{revokeTheseLabel(tokens.length)}?</DialogTitle>
+					<DialogDescription>
+						Each stops working immediately. Anything still using one will need a new token.
+					</DialogDescription>
+				</DialogHeader>
+				<ul className="flex-1 overflow-y-auto border border-ink-100 rounded-md divide-y divide-ink-100">
+					{tokens.map((t) => {
+						const strong = powerfulScopes(t.scopes);
+						return (
+							<li key={t.id} className="px-3 py-2 text-caption">
+								<div className="flex flex-wrap items-baseline gap-x-2">
+									<span className="font-medium text-ink-900">{t.name}</span>
+									<code className="font-mono text-micro text-ink-600">{t.token_prefix}…</code>
+								</div>
+								<div className="text-micro text-ink-600">
+									{lastUsedWords(t, nowSec)}
+									{strong.length > 0 && (
+										<span className="text-ember-700"> · has {strong.join(', ')}</span>
+									)}
+								</div>
+							</li>
+						);
+					})}
+				</ul>
+				<DialogFooter>
+					<Button variant="outline" onClick={onClose} disabled={submitting}>
+						Cancel
+					</Button>
+					<Button variant="destructive" onClick={submit} disabled={submitting}>
+						{submitting ? `Revoking… ${done} of ${tokens.length}` : revokeTheseLabel(tokens.length)}
+					</Button>
+				</DialogFooter>
+			</DialogContent>
+		</Dialog>
+	);
+}
+
 function AuditDialog({ token, onClose }: { token: PATInfo | null; onClose: () => void }) {
 	const [entries, setEntries] = useState<PATAccessLogEntry[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -963,14 +1069,6 @@ function AuditDialog({ token, onClose }: { token: PATInfo | null; onClose: () =>
 			</DialogContent>
 		</Dialog>
 	);
-}
-
-function formatRelative(ts: number): string {
-	const diff = Date.now() / 1000 - ts;
-	if (diff < 60) return 'just now';
-	if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-	if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-	return `${Math.floor(diff / 86400)}d ago`;
 }
 
 // ── SshKeysCard ───────────────────────────────────────────────────

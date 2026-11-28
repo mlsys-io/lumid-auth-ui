@@ -184,6 +184,7 @@ const DOCUMENT_EXTS = ['.pdf', '.docx', '.xlsx', '.pptx', '.rtf', '.odt', '.ods'
 // and its grounded opener at /studio — contradicting "New chat = no default
 // app, parallel to apps". Home and each app now keep their own slot.
 import { LIBRARY_KEY, DATA_KEY, APPS_KEY, COMPUTE_KEY } from '@/lib/chat-scopes';
+import { DATA_STARTERS } from '@/lib/warehouse-status';
 export { LIBRARY_KEY, DATA_KEY, APPS_KEY, COMPUTE_KEY };
 const STORAGE_KEY_BASE = 'studio_chat_transcript_v1';
 const transcriptKey = (scope: string) => `${STORAGE_KEY_BASE}:${scope}`;
@@ -2235,6 +2236,19 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 					!docked ? (
 						<div className="max-w-[640px] mx-auto w-full">
 							<ChatHero />
+						</div>
+					) : (groundApp || routeApp) === DATA_KEY ? (
+						// Data Warehouse only: a few plain questions the platform data
+						// tools answer. Pressing one pre-fills the composer — the reader
+						// sends it (lib/warehouse-status DATA_STARTERS).
+						<div role="group" className="flex flex-col items-start gap-1.5" aria-label="Questions to start with">
+							<div className="text-micro text-ink-600">Try asking</div>
+							{DATA_STARTERS.map((q) => (
+								<button key={q} type="button" onClick={() => setInput(q)}
+									className="text-left text-caption text-ink-700 rounded-lg border border-ink-200 bg-card px-2.5 py-1.5 hover:border-ink-300 hover:text-ink-900 transition-colors">
+									{q}
+								</button>
+							))}
 						</div>
 					) : null
 				) : (

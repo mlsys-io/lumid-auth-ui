@@ -35,6 +35,9 @@ import {
 } from "@/lib/data-activity";
 import { useAuth } from "@/hooks/useAuth";
 import { PickATable } from "@/components/illustrations/scenes";
+import {
+  FRESHNESS_WHY, OFFLINE_SHORT, freshnessLine, offlineLine, offlineWhy, sourcesLine,
+} from "@/lib/warehouse-status";
 
 // FinData's own browsing view, shown inside the catalog under FinData (it was a
 // top-level Data tab beside Catalog/Query/Jobs, which made one dataset look
@@ -111,20 +114,16 @@ function WhereItLives({ sel }: { sel: Selection }) {
 
 // ── Small shared bits ────────────────────────────────────────────────────────
 
-function FreshnessPill({ f }: { f?: InstanceCatalog["freshness"] }) {
-  if (!f) return null;
-  const cell = (n: number, cls: string, title: string) =>
-    n > 0 ? (
-      <span className={`px-1 rounded ${cls}`} title={`${n} ${title}`}>
-        {n} {title}
-      </span>
-    ) : null;
+/** "FinData: 201 of 297 feeds on schedule · 60 overdue · …" — words from
+ *  lib/warehouse-status, each state defined in the tooltip. The worst state
+ *  present tints the line. */
+function FreshnessLine({ label, f }: { label: string; f?: InstanceCatalog["freshness"] }) {
+  const line = freshnessLine(f);
+  if (!line) return null;
+  const tone = (f?.red ?? 0) > 0 ? "text-brick-700" : (f?.amber ?? 0) > 0 ? "text-ember-700" : "text-ink-600";
   return (
-    <span className="inline-flex gap-1 text-nano font-medium">
-      {cell(f.green, "bg-gold-100 text-gold-700", "fresh")}
-      {cell(f.amber, "bg-ember-100 text-ember-700", "stale")}
-      {cell(f.red, "bg-brick-100 text-brick-700", "overdue")}
-      {cell(f.gray, "bg-ink-100 text-ink-600", "unknown")}
+    <span className="text-micro" title={FRESHNESS_WHY}>
+      <span className="font-medium text-ink-700">{label}:</span> <span className={tone}>{line}</span>
     </span>
   );
 }
@@ -549,7 +548,11 @@ export default function DataLakeViewer({ config }: { config?: Record<string, unk
       schemas += c.schemas.length;
       tables += c.schemas.reduce((s, x) => s + (x.tables ?? 0), 0);
     }
-    return { schemas, tables, instances: cat.filter((c) => !c.error).length };
+    return {
+      schemas, tables,
+      instances: cat.filter((c) => !c.error && !c.loading).length,
+      loading: cat.filter((c) => c.loading).length,
+    };
   }, [cat]);
 
   return (
@@ -561,22 +564,19 @@ export default function DataLakeViewer({ config }: { config?: Record<string, unk
           <div className="text-micro text-ink-600">
             {loading
               ? "loading catalog…"
-              : `${totals.instances}/${LAKE_INSTANCES.length} instances · ${totals.schemas} schemas · ${totals.tables} tables · read-only`}
+              : sourcesLine(totals.instances, LAKE_INSTANCES.length, totals.schemas, totals.tables, totals.loading)}
           </div>
         </div>
-        <div className="flex flex-wrap gap-3">
-          {cat.filter((c) => isAdmin || c.error).map((c) => (
-            <div key={c.instance.id} className="flex items-center gap-1.5 text-micro">
-              <span className={c.error ? "text-brick-600" : "text-ink-600 font-medium"}>
-                {c.instance.label}
-              </span>
-              {c.error ? (
-                <span className="text-brick-600" title={c.error}>offline</span>
-              ) : (
-                <FreshnessPill f={c.freshness} />
-              )}
-            </div>
-          ))}
+        <div className="flex flex-col gap-0.5 min-w-0">
+          {cat.filter((c) => isAdmin || c.error).map((c) =>
+            c.error ? (
+              <div key={c.instance.id} className="text-micro text-brick-700" role="status" title={offlineWhy(c.error)}>
+                {offlineLine(c.instance.label, totals.instances)}
+              </div>
+            ) : (
+              <FreshnessLine key={c.instance.id} label={c.instance.label} f={c.freshness} />
+            ),
+          )}
         </div>
       </div>
 
@@ -587,7 +587,7 @@ export default function DataLakeViewer({ config }: { config?: Record<string, unk
             <input
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
-              placeholder="filter tables across all instances…"
+              placeholder="Filter tables across all sources…"
               className="w-full text-caption px-2 py-1 border border-ink-300 rounded"
             />
           </div>
@@ -603,7 +603,7 @@ export default function DataLakeViewer({ config }: { config?: Record<string, unk
                   <span className="text-ink-600 w-3">{openInst[c.instance.id] ? "▾" : "▸"}</span>
                   {c.instance.label}
                   <span className="ml-auto text-nano font-normal text-ink-600">
-                    {c.loading ? "…" : c.error ? "offline" : `${c.schemas.length} schemas`}
+                    {c.loading ? "…" : c.error ? OFFLINE_SHORT : `${c.schemas.length} schemas`}
                   </span>
                 </button>
                 {/* INDENT THE SCHEMAS UNDER THEIR DATABASE.

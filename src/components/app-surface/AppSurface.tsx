@@ -9,6 +9,7 @@
 // can be edited/managed directly from Studio, including apps with no surface yet.
 
 import AppPageTabs from "@/components/AppPageTabs";
+import { cn } from "@/lib/utils";
 import { useCallback, useEffect, useRef, useState, Suspense, type ComponentProps } from "react";
 import { recordInteraction } from "@/api/interactions";
 import { useAuth } from "@/hooks/useAuth";
@@ -215,7 +216,9 @@ function AppSurfaceImpl({
     // Always shown (even with no nav): its Research tab is the way back to the
     // research space, and this page is the app's "Overview" tab.
     if (hideNav) return null;
-    return <AppPageTabs app={app} nav={n} hasSurface current={surface || "home"} embedded={!!embedded} className="min-w-0 flex-shrink-0" />;
+    // In the workspace the row sits where the Research tab's row sits
+    // (ResearchHome): the first pill's text on the content edge (-ml-2.5).
+    return <AppPageTabs app={app} nav={n} hasSurface current={surface || "home"} embedded={!!embedded} className={cn("min-w-0 flex-shrink-0", embedded && "-ml-2.5")} />;
   };
 
   // Slim chrome row: nav tabs left (when the app declares `ui.nav`), a single
@@ -382,7 +385,10 @@ function AppSurfaceImpl({
           stripSlot,
         )
       : (
-        <div className="flex flex-wrap items-center gap-2 px-6 pt-3 pb-2 border-b border-ink-100 flex-shrink-0">
+        // pt-5 when embedded: the workspace wraps this surface in -my-5, so the
+        // row lands on the same line as the Research tab's (it sat 8px higher
+        // and 10px further right, so the tabs jumped on every switch).
+        <div className={cn("flex flex-wrap items-center gap-2 px-6 pb-2 border-b border-ink-100 flex-shrink-0", embedded ? "pt-5" : "pt-3")}>
           {actionBarInner(hasMd, nav)}
         </div>
       );
