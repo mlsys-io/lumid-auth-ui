@@ -7,6 +7,9 @@
 // endpoint (server-side YAML-validated, tenant-only) — comments and formatting
 // survive because edits go through yaml's parseDocument, not parse/stringify.
 //
+// Compute modules (spec `modules:`) are their own panel (components/modules),
+// editing through useAppGraph's save, which re-reads before writing.
+//
 // Skill imports additionally need the skill FILES pulled into the tenant's
 // skills root, so adding one goes through the add_skill intent (same flow as
 // the marketplace's "Add to app…") rather than a bare yaml edit.
@@ -26,6 +29,7 @@ import { appTitle } from "@/components/workflow/AppCard";
 import { loopLabel } from "@/lib/workflow-names";
 import { bearerHeader } from "@/api/session-bearer";
 import AppSecretsSection, { type ConfigField } from "./AppSecretsSection";
+import ModulesPanel from "@/components/modules/ModulesPanel";
 import { newWorkflowPath } from "@/components/research/new-workflow";
 import {
 	Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
@@ -363,6 +367,9 @@ export default function AppManagePanel() {
 					</div>
 				)}
 			</section>
+
+			{/* Compute modules — small CPU compute lum.id runs for this app (spec `modules:`) */}
+			<ModulesPanel app={app} readOnly={readOnly} onSaved={reload} />
 
 			{/* Skills */}
 			<section className="rounded-xl border border-ink-200 bg-card p-4 space-y-2.5">

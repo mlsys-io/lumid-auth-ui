@@ -202,6 +202,10 @@ function findWorkflow(d: Document.Parsed, id: string): YAMLMap | null {
 	return null;
 }
 
+/** The same parse-and-edit primitives, for spec edits that live in their own
+ *  module (lib/modules: the `modules:` list). */
+export { doc as specDocument, seqAt as specSeqAt };
+
 function findNode(d: Document.Parsed, id: string): YAMLMap | null {
 	const seq = d.get("nodes", true);
 	if (!isSeq(seq)) return null;
@@ -211,7 +215,8 @@ function findNode(d: Document.Parsed, id: string): YAMLMap | null {
 
 export interface NewWorkflow {
 	id: string; title?: string; about?: string; parent?: string; node?: string;
-	steps: { python?: string; dag?: string; skills?: string[]; workflows?: ChainStage[] };
+	/** `module` (+ its `inputs`): one app compute module as the whole step (lib/modules). */
+	steps: { python?: string; dag?: string; skills?: string[]; workflows?: ChainStage[]; module?: string; inputs?: Record<string, unknown> };
 	inputs?: Record<string, unknown>; data?: string[]; compute?: { site?: string; gpu?: string };
 	feedback?: FeedbackStep[]; notes?: string;
 }
