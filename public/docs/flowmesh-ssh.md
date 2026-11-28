@@ -316,9 +316,9 @@ Then set `spec.image: harbor.lum.id/sandbox/my-ssh:v1` (or `flowmesh ssh run --i
 
 **Push to Harbor only, and use the `harbor.lum.id` name everywhere.** Harbor at home is the
 record. Office and NUS keep replicas that copy Harbor's **public** projects (on first pull, and
-every 30 minutes). Today those replicas serve **sandboxes**; an SSH task is started by the
-worker's own Docker, which still pulls `harbor.lum.id` from home — so a large image pulls over
-the WAN the first time on each office/NUS worker.
+every 30 minutes), and every worker's Docker resolves `harbor.lum.id` to its own site's registry —
+so an SSH task at office or NUS pulls over the site LAN, not the WAN, and keeps working when the
+WAN is down. A tag pushed a moment ago is fetched by the replica on the first pull.
 
 Two things that make a pull fail, both surfacing only as a pull error that names
 neither cause:
