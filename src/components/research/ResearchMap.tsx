@@ -467,6 +467,7 @@ function MapCanvas({ fresh, app, exps, proposals, workflows, groups, rows, marks
 				// Workflows carry an overview panel: hovering lights it up, no card swap.
 				hoverCard={() => false}
 				selected={shown} lit={lit} grow={grow} order={order} height={height} evidence={evidence} insetBottom={insetBottom} insetRight={insetRight}
+				reselect={shown !== selected ? shown : null}
 				onSelect={onSelect} />
 		</div>
 	);

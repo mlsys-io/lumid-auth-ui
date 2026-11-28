@@ -41,6 +41,10 @@ export interface Space3DProps {
 	selected: string | null;
 	/** `shift`: the click held ⇧ (the graph's "compare with" gesture). */
 	onSelect: (id: string | null, shift?: boolean) => void;
+	/** A node drawn as selected on behalf of something inside it (a family,
+	 *  while one of its versions is open): clicking it opens it rather than
+	 *  clearing the selection. */
+	reselect?: string | null;
 	/** Ids on the selected path (lit); null when nothing is selected. */
 	lit: Set<string> | null;
 	/** First view this session: cards appear in creation order. */
@@ -125,7 +129,7 @@ const BOB_MS = 5200, BOB_SPREAD_MS = 1800;
 // A mouse left still this long over empty space counts as idle (the space turns).
 const POINTER_REST_MS = 3000;
 
-export default function Space3D({ nodes, edges, renderCard, renderDot, describe, selected, onSelect, lit, grow, order, height, evidence, insetBottom = 0, insetRight = 0, edgeClass, hoverCard }: Space3DProps) {
+export default function Space3D({ nodes, edges, renderCard, renderDot, describe, selected, onSelect, reselect, lit, grow, order, height, evidence, insetBottom = 0, insetRight = 0, edgeClass, hoverCard }: Space3DProps) {
 	const insetRef = useRef(insetBottom);
 	insetRef.current = insetBottom;
 	const rightRef = useRef(insetRight);
@@ -1022,7 +1026,7 @@ export default function Space3D({ nodes, edges, renderCard, renderDot, describe,
 							aria-label={describe(n)}
 							onFocus={(e) => { if (e.currentTarget.matches(":focus-visible")) { s.current.kbFocus = true; setHovered(n.id); } }}
 							onBlur={() => { s.current.kbFocus = false; setHovered((h) => (h === n.id ? null : h)); }}
-							onClick={(e) => { e.stopPropagation(); if (suppressClick.current) return; onSelect(sel && !e.shiftKey ? null : n.id, e.shiftKey); }}
+							onClick={(e) => { e.stopPropagation(); if (suppressClick.current) return; onSelect(sel && !e.shiftKey && n.id !== reselect ? null : n.id, e.shiftKey); }}
 							className="block text-left cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-plum-400 rounded-xl"
 						>
 							{/* Both stay in the DOM and only their visibility flips: swapping the
