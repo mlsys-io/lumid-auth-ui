@@ -21,7 +21,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import 'github-markdown-css/github-markdown-light.css';
 import {
-	ArrowUpRight, Zap, FileCode2, Activity, CandlestickChart, Compass, ArrowLeft, Cpu, Database, TerminalSquare, Bot, GraduationCap, Server, Workflow, Rocket,
+	ArrowUpRight, Zap, FileCode2, Activity, CandlestickChart, Compass, ArrowLeft, Cpu, Database, TerminalSquare, Bot, GraduationCap, Server, Workflow, Rocket, HardDrive,
 } from 'lucide-react';
 import StudioHow from './how';
 import { useAuth } from '../../hooks/useAuth';
@@ -232,6 +232,17 @@ const DOCS: DocEntry[] = [
 		group: 'Guides',
 		icon: TerminalSquare,
 		companion: { to: '/studio/research-fleet/sandboxes', label: 'Rent a sandbox' },
+	},
+	{
+		// Written after the 2026-11-27/28 storage maintenance: one page for "which
+		// folder do I use" across NUS, office and home, so sandboxes.md and
+		// flowmesh-ssh.md can link here instead of each restating the limits.
+		slug: 'storage',
+		title: 'Where your files live',
+		description: 'Home, local disk, models, container images and big data on each cluster — which folder to use for what, the limits on each, and where large datasets go.',
+		md: 'storage.md',
+		group: 'Guides',
+		icon: HardDrive,
 	},
 	{
 		// Data at the three moments people meet it: finding it (catalog), setting

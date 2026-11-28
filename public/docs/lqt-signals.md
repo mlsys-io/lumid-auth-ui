@@ -7,9 +7,10 @@ have to produce one.
 Read it once you have deployed something. It is not a prerequisite — it is the
 next thing, and it is a bigger project than a strategy.
 
-**Only three signal names reach `lqt.signal_history` today** — `vpin`, `ofi_z`,
-and `outcome_forecast`. A strategy reading any other name is scored against a
-seeded constant and labelled `signals: static`, which is not presentable no
+**Only three signal names are published for everyone today** — `vpin`, `ofi_z`,
+and `outcome_forecast`. A strategy reading any other name that nobody has
+published for you is scored against a seeded constant and labelled
+`signals: static`, which is not presentable no
 matter how good the number looks. Publishing a fourth name is the work described
 here.
 
@@ -87,9 +88,10 @@ table the live runtime reads — and appends to `lqt.signal_history`, which is
 what makes a later backtest able to claim `signals: recorded`. The payload takes
 a batch:
 
-The `instrument_id` must be one that is **live now** — a signal published
-against an expired ticker is stored, but no backtest will ever replay against
-it (the tape window is 7 days). `GET /lqt-data/market/kalshi-active-instruments`
+The `instrument_id` should be one that is **live now** — a signal published
+against an expired ticker is stored, but a backtest replays it only if you pass
+an `until` inside that ticker's recorded life (the default window is the last
+7 days). `GET https://lum.id/lqt-data/market/kalshi-active-instruments`
 returns the currently traded set, most active first.
 
 ```json
@@ -98,7 +100,7 @@ returns the currently traded set, most active first.
    "instrument_id": "KXBTCD-26SEP0211-T77099.99",
    "score_ticks": 7200,
    "confidence_bps": 6000,
-   "ts_event_ns": 1756400000000000000}
+   "ts_event_ns": 1788357600000000000}
 ]}
 ```
 
@@ -135,7 +137,8 @@ numbers in — which is exactly why the split works.
 The producer graduates through five rungs, and you can stop at whichever one
 your idea has earned:
 
-1. **Notebook** — `make jupyter` on the dev stack, port 8888. Throwaway; prove
+1. **Notebook** — any Jupyter notebook (LQT's `lqt-python-research` image ships
+   one on port 8888; there is no `make jupyter` target). Throwaway; prove
    the prompt returns something parseable.
 2. **Script** — `python/lqt_research/signals/`, committed, deterministic.
 3. **Workflow** — a FlowMesh YAML with a schedule. **This is the first rung

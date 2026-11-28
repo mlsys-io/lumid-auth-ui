@@ -6,11 +6,11 @@ onboarding failures are really "one layer is done and the reader thinks all thre
 | Layer | What it is | How you know it worked |
 |---|---|---|
 | **Cluster registry** | inventory — what exists, who owns it, commercial fields | the node appears under Cluster registry, status `active` |
-| **FlowMesh runtime** | the thing that actually takes jobs (guardian + workers) | a worker with a real `wkr-NN` id, status `IDLE`, at **Compute → Fleet** |
+| **FlowMesh runtime** | the thing that actually takes jobs (node server + workers) | a worker with a real `wkr-NN` id, status `IDLE`, at **Research Fleet → Nodes & workers** |
 | **Self-heal** | the per-box watchdog that repairs workers after a reboot | `kubectl -n kube-system get ds flowmesh-watchdog-installer` shows the node Ready |
 
 A box can be fully enrolled in the registry and still take **zero** jobs. The registry is
-inventory, not capacity. Judge capacity at **Compute → Fleet**, never here.
+inventory, not capacity. Judge capacity at **Research Fleet → Nodes & workers**, never here.
 
 ---
 
@@ -54,9 +54,31 @@ sudo lvextend -l +100%FREE /dev/mapper/ubuntu--vg-ubuntu--lv
 sudo resize2fs /dev/mapper/ubuntu--vg-ubuntu--lv
 ```
 
-**Architecture.** A box with no arm64 worker image (NVIDIA GB10, for example) can enrol in the
-registry but cannot accept jobs. That is a *partial* onboarding, and it looks identical to a
-finished one from the registry side.
+On the office boxes the image store is a bounded volume instead: `/var/lib/containerd` is a
+150 GB loop XFS and `/huggingface` a 100 GB one (`k8s-lift/node-storage/`, 2026-11-27) — a new
+office box should get the same layout before it takes jobs.
+
+**Architecture.** The worker images are multi-arch — `flowmesh_worker:v0.1.15-rc.1-{cpu,gpu}`
+publishes amd64 and arm64 (checked 2026-11-28) — so an arm64 box such as an NVIDIA GB10 can
+take jobs. What such boxes often lack is Docker's `nvidia` runtime: they ship the toolkit without
+registering it, so run the `nvidia-ctk runtime configure` line above and check
+`docker info | grep -i runtimes` lists `nvidia`. Without it the box enrols but cannot take GPU
+jobs — a *partial* onboarding that looks identical to a finished one from the registry side.
+
+**If the box also joins a site's k3s** (home/office, for sandboxes), three more things, each with
+its own check:
+
+- **Registry trust.** The `registry-trust` DaemonSet (`k8s-lift/registry-trust/`, Argo-managed)
+  stages `/etc/rancher/k3s/registries.yaml` so `harbor.lum.id` resolves to the site's own registry
+  (Harbor at home, the zot replica at office). It takes effect only after you restart k3s on that
+  node; `kubectl -n registry-trust get ds` READY == DESIRED is the coverage number.
+- **Docker inside sandboxes (sysbox).** `k8s-lift/sysbox/install-sysbox.sh`, then its
+  `containerd-config.toml.tmpl`, then label `lumid.io/sysbox=true` (CPU only). The template must
+  stay in the **k3s base (version 2) schema** — a containerd-2-style runtime section silently
+  dropped the `nvidia` runtime on every GPU node on 2026-11-27. After any change there, check
+  that the node still advertises `nvidia.com/gpu`.
+- **Restarting `k3s-agent` restarts every pod on the node** — do it in a quiet window, one node
+  at a time, and never two etcd members at once.
 
 ## 3. Cluster-registry agent
 
@@ -67,38 +89,39 @@ so mint it when you are at the box, not in advance.
 
 The installer writes `/etc/lumid/agent.token` and starts the agent.
 
-## 4. FlowMesh guardian + workers
+## 4. FlowMesh node server + workers
 
-Driven from `~/flowmeshctl/` **on the host box**, not on the target.
+Each box runs its own FlowMesh **node server** (the supervisor) from
+`/home/flowmesh/FlowMesh/server/` with the `flowmesh stack` CLI, as the `flowmesh` user. It
+registers with its site's control plane and starts the worker containers itself. The old
+`~/flowmeshctl` guardian recipe is retired — if a `flowmesh_guardian` container is still on the
+box, stop and remove it first.
 
 ```bash
-# 1. Mint an operator key (returns an api_key in 'flm-…' shape)
-curl -X POST http://<host>:8010/api/v1/auth/keys \
-  -H "Authorization: Bearer <admin key>" \
-  -d '{"key_type":"operator","alias":"<node>-guardian","principal_id":"<principal>"}'
+cd /home/flowmesh/FlowMesh/server       # the CLI resolves .env relative to cwd
 
-# 2. Append to ~/flowmeshctl/configs/flowmesh_config.yaml under guardians:
-#   - node: "<ip>"
-#     guardian_api_key: "flm-…"
-#     env_guardian_file: "envs/.env.guardian.<node>"
-#     worker_config: "configs/cpu_worker_config.yaml"   # or gpu_only_… on GPU-only boxes
-#     workers:
-#       images: ["cpu", "gpu"]                          # or ["gpu"]
-#       auto: "per_gpu"
+# 1. .env — copy it from a box already at the SAME site and change only the per-box values.
+#    FLOWMESH_VERSION drives all three image tags (server, worker cpu, worker gpu); match the site.
 
-# 3. Generate the per-host env from the template envs/.env.guardian.1 —
-#    GUARDIAN_CLUSTER, GUARDIAN_ALIAS, GUARDIAN_TOKEN (32-byte b64), FLOWMESH_API_KEY.
+# 2. Declare the workers in configs/worker_config.yaml (init_on_start: true, aliases cpu_N / gpu_N).
+#    A worker started only with `flowmesh stack worker up` is gone after the next `stack down`,
+#    and a name that is not cpu_N / gpu_N is invisible to the self-heal watchdog (§5).
 
-# 4. Pre-distribute the 45 GB image over the LAN rather than pulling per node:
+# 3. Pre-distribute the ~45 GB GPU image over the LAN rather than pulling per node:
 ssh flowmesh@<source> "docker save \
-  kaiitunnz/flowmesh_worker:latest-gpu \
-  kaiitunnz/flowmesh_worker:latest-cpu \
-  kaiitunnz/flowmesh_guardian:latest -o /tmp/fm_imgs.tar"
+  ghcr.io/mlsys-io/flowmesh_server:vX.Y.Z \
+  ghcr.io/mlsys-io/flowmesh_worker:vX.Y.Z-gpu \
+  ghcr.io/mlsys-io/flowmesh_worker:vX.Y.Z-cpu -o /tmp/fm_imgs.tar"
 ssh flowmesh@<source> "cat /tmp/fm_imgs.tar" | ssh flowmesh@<target> "docker load"
 
-# 5. Deploy
-cd ~/flowmeshctl && .venv/bin/python flowmeshctl.py guardian deploy <node>
+# 4. Bring it up
+./.venv/bin/flowmesh stack up
 ```
+
+`flowmesh stack up` does not re-read `worker_config.yaml` while the node server is already
+running — after editing it, `docker restart flowmesh_node_server`. Check the result on the box
+(`docker logs flowmesh_node_server | grep 'Registered worker'`) and in that site's worker list
+(`/fm/<site>/api/v1/workers`; the merged `/fm` view can hide home and office workers).
 
 ## 5. Enrol the box in self-heal — do not skip this
 
@@ -150,7 +173,7 @@ never-heartbeated rows after 1 h, and idle/busy rows whose heartbeat is stale > 
 destroyed or re-enrolled box leaves a ghost row behind. Always check "last seen" before reading
 a row as capacity — a ghost and a live idle worker look identical otherwise.
 
-**The box is enrolled but takes no jobs.** In order of likelihood: no arm64 image for this
-architecture; the guardian deployed but its workers never registered; or the worker is in the
-orphaned-token loop from §5. **Compute → Fleet** distinguishes them — it shows nodes and their
+**The box is enrolled but takes no jobs.** In order of likelihood: Docker's `nvidia` runtime is
+not registered (§2); the node server came up but its workers never registered; or the worker is in the
+orphaned-token loop from §5. **Research Fleet → Nodes & workers** distinguishes them — it shows nodes and their
 workers as one tree, so "node present, zero live workers" is visible at a glance.

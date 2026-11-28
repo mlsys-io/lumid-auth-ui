@@ -53,7 +53,7 @@ As of W1 of the Personal AI plan, **workflow** is the user-facing supertype acro
 | User-facing word | What it points to | Where it lives |
 |---|---|---|
 | **Workflow** (scheduled) | An xpio loop in `xpcloud.yaml::loops[]` (or `workflows[]` — see below) | `~/.xp/apps/<app>/` or `~/.tenants/<sub>/.xp/apps/<app>/` |
-| **Workflow** (visual) | An n8n DAG | n8n's own database. **NOT CURRENTLY DEPLOYED** (verified 2026-08-21): there is no n8n in the cluster and `lum.id/n8n/` does not answer — it proxies to the pre-UKS docker-bridge gateway and *hangs* rather than 404ing. The `flowmesh-n8n/` fork exists in-tree but is unbuilt. Treat this row as the intended shape, not a live surface. |
+| **Workflow** (visual) | An n8n DAG | n8n's own database. **NOT CURRENTLY DEPLOYED** (verified 2026-11-28): there is no n8n in the cluster and `lum.id/n8n/` has no route of its own — it falls through to the login redirect like any unknown path. The `flowmesh-n8n/` fork is archived under `deprecated/`, unbuilt. Treat this row as the intended shape, not a live surface. |
 | **Workflow** (atomic) | A 1-step skill — the marketplace's gmail-mcp, tavily-search, etc. | Community-owned repo at `xpcloud /repos/community/<skill>` |
 | **Workflow** (composed) | A multi-step skill (an app, in old vocabulary) — personal-agent, mbb-ai, etc. | Same xpcloud namespace |
 
@@ -319,6 +319,7 @@ loops:
 #   lumid-containers    — Docker container lifecycle (build/run/stop/health/stats)
 #   lumid-knowledge     — render_prior_knowledge from a knowledge agent bank
 #   lumid-metrics       — Prometheus/Docker metrics + HTTP probes + log parsing
+#                         (lum.id runs no Prometheus; point those helpers at your own)
 #   lumid-prompt-audit  — SHA-256 fingerprint prompts, correlate with score deltas
 #   lumid-annotate      — multi-step labeling pipeline (inbox/emit/trace)
 #   lumid-interview     — human-in-the-loop questions + auditable exchange log

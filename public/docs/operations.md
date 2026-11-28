@@ -6,6 +6,11 @@ single PASS/WARN/FAIL scorecard. It is the operator's stack-wide view; the narro
 LQT-bottomlines self-audit (`tools/superdogfood/check.py`, `docs/runbooks/superdogfood.md`)
 is folded in here rather than duplicated.
 
+**The copy that runs** is baked into the `opsagent` image from
+`deploy_infra/docker/opsagent/lqt-tools/tools/opsagent/stack_check.py` (the LQT-repo copy lags it).
+The `opsagent-sweep` CronJob in namespace `lumid` runs one full sweep every 15 minutes and writes
+the rows to `obs.stack_check`. Dimension list re-checked against that copy on 2026-11-28.
+
 ```bash
 set -a; . /proj/.env; set +a               # UPCLOUD_TOKEN, LQT_MAILBOX_PAT, …
 export KUBECONFIG=~/.kube/uks-lumid-prod2.yaml
@@ -27,20 +32,26 @@ a scheduled loop or CI.
   with the exception text — a single broken check never crashes the whole run.
 - **A missing surface is SKIP, not FAIL.** A check that needs a surface/PAT that
   does not exist yet reports `SKIP` with a pointer to what would make it live.
-- **`--remediate` is parsed but inert this pass.** It only *prints* the `AUTO`
-  actions it would take (`# TODO remediate` stubs in the code). No live mutation.
+- **`--remediate` is a dry run unless `OPSAGENT_REMEDIATE_LIVE=1`.** It prints the `AUTO`
+  actions it would take. The opsagent image sets that variable, so there it runs the
+  allowlisted fixes. The allowlist holds one entry: a rollout restart of a not-Ready
+  `lumid` deployment. Every other `AUTO` row is surfaced, not fixed.
 
 ### JSON scorecard shape (`--json`)
 
 ```json
 {"results":[{"dimension":str,"check":str,"status":"PASS|WARN|FAIL|SKIP",
-             "detail":str,"remediation":"AUTO|SURFACE|null","cadence":"15m|1h|deploy|daily"}],
+             "detail":str,"remediation":"AUTO|SURFACE|null","cadence":"15m|1h|deploy|daily",
+             "priority":"P0|null"}],
  "summary":{"PASS":n,"WARN":n,"FAIL":n,"SKIP":n,"gate":"PASS|WARN|FAIL"},
+ "remediations":[...],
  "generated_at":"<ISO8601>"}
 ```
 
 `remediation`: `AUTO` = safe for a future `--remediate` to fix automatically;
 `SURFACE` = human-gated (memo/task/page); `null` = nothing to do (PASS or a pure SKIP).
+`priority: "P0"` pages a human even on a WARN. It is set only on conditions that cannot heal
+on their own. `remediations` lists what `--remediate` did (applied, dry-run, or surfaced).
 
 ## Environment / credentials
 
@@ -55,6 +66,11 @@ All optional — a missing cred degrades the relevant checks to `SKIP` (never a 
 | `LQT_ADMIN_PAT` | `auth-stats`, loop-SLO (admin-gated) | those SKIP |
 | `LQT_OPS_DISK_WARN_PCT` / `LQT_OPS_DISK_FAIL_PCT` | per-box disk thresholds (default 85 / 92) | defaults |
 | `LQT_OPS_WATCHER_OWNER` / `LQT_OPS_WATCHER_BANK` | privacy-contract probe target | defaults (`a3f48236-personal` / `yao-personal-watcher`) |
+| `LQT_OPS_GPU_TEMP_WARN_C` / `_FAIL_C` (and `_GB10` variants) | `gpu_thermal` thresholds (default 75 / 85 °C; GB10 85 / 92) | defaults |
+| `LUMID_IDENTITY_BRIDGE_SECRET` | `claude_pool` (identity's internal pool-health surface) | `claude_pool` SKIP |
+| `ONPREM_CRED_DIR` (default `/etc/onprem-k3s`) | `onprem_nodes` home/office k3s reads via site-mesh | that site SKIP |
+| `LUYAOMINI_181_PASSWORD` | `dr` (backup logs on the dev box) | `dr` SKIP |
+| `REGISTRY_REPLICAS`, `VAST_API_KEY` | `registry` replica digests, `vast` spend | those SKIP |
 
 ## The dimension → check → surface → threshold → remediation → cadence matrix
 
@@ -64,9 +80,13 @@ Remediation column: `AUTO` = safe to auto-fix (once `--remediate` is wired);
 ### infra (UKS)
 | Check | Surface / command | Threshold (PASS) | Remediation | Cadence |
 |---|---|---|---|---|
-| node-pressure | `kubectl top nodes` | every node cpu% AND mem% < 90 | SURFACE (scale/investigate) | 15m |
-| pods | `kubectl -n lumid get pods` | none not-Ready/Running (dead cronjob/e2e Error pods tolerated) | SURFACE; **FAIL** on any CrashLoop | 15m |
+| nodes / node-pressure | `kubectl top nodes` | readable; every node cpu% AND mem% < 90 | SURFACE (scale/investigate) | 15m |
+| cpu-unaccounted | node CPU vs the sum of its pods | no node with CPU no pod accounts for (dind-hidden) | SURFACE, P0 | 15m |
+| pods | `kubectl -n lumid get pods` | none not-Ready/Running (finished Job pods ignored; pods under 5 min old still starting) | SURFACE; **FAIL** on any CrashLoop | 15m |
 | argo | `kubectl -n argocd get applications` | all `Synced` + `Healthy` | SURFACE; OutOfSync+Healthy = WARN, Degraded/Missing = FAIL | deploy |
+| cronjobs | latest finished run + `lastSuccessfulTime` per CronJob | newest run succeeded and last success < 3× the schedule period (suspended ones skipped) | SURFACE | 15m |
+| pvc | kubelet volume stats | every PVC < 85% (WARN ≥85, FAIL ≥95) | SURFACE (PVCs grow, never shrink) | 15m |
+| nginx-cm | `lumid-landing` volumes | serves the newest `lumid-landing-nginx-v*` ConfigMap on every volume | SURFACE; mixed versions = FAIL | 15m |
 
 ### cloud (reachability)
 | Check | Surface | Threshold | Remediation | Cadence |
@@ -115,7 +135,14 @@ Per-collector staleness is a best-effort follow-up (no public per-collector surf
 | Check | Surface | Threshold | Remediation | Cadence |
 |---|---|---|---|---|
 | gateway | `curl https://lum.id/llm/health` | 2xx/3xx | SURFACE | 15m |
-| backends | `GET /llm/v1/models` (Bearer) | ≥ 1 model listed | SURFACE (worker box down — luyao4 / tailnet) | 15m |
+| backends | `GET /llm/v1/models` (Bearer) | ≥ 1 local model listed | SURFACE (worker box down / tailnet) | 15m |
+| model:`<id>` | each id in the live `LUMID_LLM_BACKENDS` | present as a local backend | SURFACE (circuit open or peer down) | 15m |
+| completion | one short chat completion on the default model | generates text | SURFACE, P0 | 15m |
+
+### gpu_thermal (per-box GPU temperature)
+| Check | Surface | Threshold | Remediation | Cadence |
+|---|---|---|---|---|
+| `<box>:temp` | `lumid.trade/lqt/resource-usage/gpu` | below 75 °C (WARN ≥75, FAIL ≥85; GB10 boxes 85 / 92); snapshot < 30 min old | SURFACE | 15m |
 
 ### resource (per-box disk pressure)
 | Check | Surface | Threshold | Remediation | Cadence |
@@ -125,11 +152,11 @@ Per-collector staleness is a best-effort follow-up (no public per-collector surf
 ### providers (venue feed liveness)
 | Check | Surface | Threshold | Remediation | Cadence |
 |---|---|---|---|---|
-| venue_health | `obs.venue_health` (via `/lqt/signals/venue_health`) | per-venue fresh | AUTO restart feed | 15m |
-| alpaca/massive/rpc | — | — | SURFACE — **unmonitored gap**; build `obs.venue_health` (Stream D) | 15m |
+| venue_health | `/lqt/venue-health/<box>` for each field box (`obs.venue_health`) | every md-* feed connected | SURFACE | 15m |
 
-`obs.venue_health` currently returns `[]` (surface exists, not yet populated) → SKIP
-with a pointer, not FAIL. Once populated, Polymarket/Kalshi liveness moves to live.
+`field-venue-telemetry` pushes one row per market-data container, so this covers whatever
+feeds each box runs (Polymarket, Kalshi, Alpaca, Massive, PM-US). A row not refreshed in
+30 min is a retired feed and is dropped, not reported as down. No rows at all → SKIP.
 
 ### auth (lum.id token authority)
 | Check | Surface | Threshold | Remediation | Cadence |
@@ -138,6 +165,13 @@ with a pointer, not FAIL. Once populated, Polymarket/Kalshi liveness moves to li
 | introspect | `POST /oauth/introspect {token}` | `active:true` round-trip | SURFACE | 15m |
 | jwks | `GET /.well-known/jwks.json` | ≥ 1 signing key | SURFACE | 15m |
 | auth-stats | `GET /api/v1/admin/auth-stats` | no failed-login spike | SURFACE — SKIP without `LQT_ADMIN_PAT` | 15m |
+
+### claude_pool + claude_proxy (lum.id/claude)
+| Check | Surface | Threshold | Remediation | Cadence |
+|---|---|---|---|---|
+| refreshable / quarantined / at_risk:`<signal>` | identity's internal pool-health surface | pool healthy (servable ≥ floor); none quarantined. 0 refreshable = FAIL | SURFACE, P0 — a quarantined account needs a fresh `claude auth login` + re-add | 15m |
+| replicas | `deploy/claude-proxy` | `spec.replicas` == `CLAUDE_PROXY_REPLICAS` | SURFACE, P0 | 15m |
+| messages-stream | one streamed `/claude/v1/messages` turn on a non-Anthropic model | completes | SURFACE | 15m |
 
 ### xpcloud + loop SLO + privacy contract
 | Check | Surface | Threshold | Remediation | Cadence |
@@ -151,6 +185,11 @@ with a pointer, not FAIL. Once populated, Polymarket/Kalshi liveness moves to li
 |---|---|---|---|---|
 | flowmesh-host / lumilake | `lum.id/{fm,ll}/healthz` | 2xx/3xx | SURFACE | 15m |
 
+### onprem_nodes (node conditions, cloud + home + office)
+| Check | Surface | Threshold | Remediation | Cadence |
+|---|---|---|---|---|
+| `<site>:<node>` | `GET /api/v1/nodes` (cloud via kubeconfig; home/office k3s via site-mesh) | Ready, no Disk/Memory/PID pressure | SURFACE, P0 — NotReady = FAIL; pressure = WARN (it does not clear on its own) | 15m |
+
 ### runmesh
 | Check | Surface | Threshold | Remediation | Cadence |
 |---|---|---|---|---|
@@ -161,7 +200,9 @@ with a pointer, not FAIL. Once populated, Polymarket/Kalshi liveness moves to li
 |---|---|---|---|---|
 | `<domain>` | `curl` each public domain through the edge | 2xx/3xx | SURFACE (DNS / edge / cert — see reference_spaceship_dns) | 15m |
 
-Domains: `lum.id`, `xp.io`, `runmesh.ai`, `lumilake.ai`, `lumid.trade`.
+Domains: `lum.id`, `xp.io`, `lumid.market`, `runmesh.ai`, `lumilake.ai`, `lumid.trade`.
+`lumid.market` lapsed on 2026-10-14 (QuantArena moved to `lum.id/market`), so its row
+FAILs until it is removed from the probe's list.
 
 ### registry (Harbor at home + the per-site replicas)
 | Check | Surface | Threshold | Remediation | Cadence |
@@ -175,6 +216,7 @@ Set `REGISTRY_REPLICAS=<name>=<base-url>,…` to enable the comparison; unset is
 | Check | Surface | Threshold | Remediation | Cadence |
 |---|---|---|---|---|
 | `<site>` | `/sbx/api/whoami` (home), `/sbx/<site>/api/whoami` (office, nus) | 401 or 2xx | SURFACE — a dead site must show as unreachable in the SiteStrip, never silently absent | 15m |
+| docker/`<site>` | `docker.health` in that site's `/api/sandboxes` (fed by the sysbox-probe CronJob, every 10 min) | Docker-inside healthy on every sysbox node | SURFACE — SKIP where Docker mode is off or without `LQT_ADMIN_PAT` | 15m |
 
 **Distinguish the two 401s by BODY, not status.** sandbox-control answers ~33 B of JSON; nginx's
 admin gate answers ~179 B of HTML. Both mean healthy — home is public and app-gated, office and nus
@@ -199,7 +241,25 @@ SKIP without `VAST_API_KEY`.
 | Check | Surface | Threshold | Remediation | Cadence |
 |---|---|---|---|---|
 | LQT_MAILBOX_PAT | `POST /oauth/introspect` | `active:true` | SURFACE (re-mint) | daily |
-| cert-expiry | (separate surface) | — | SURFACE — not probed here; the `lb-cert-reconcile` CronJob owns TLS certs (`kubectl -n lumid get cronjob lb-cert-reconcile`) | daily |
+| cert-expiry | TLS handshake to each public domain | ≥ 21 days left (WARN <21, FAIL <7) | SURFACE — the `lb-cert-reconcile` CronJob renews the certs; this catches a renewal that stopped | daily |
+
+### dr (backups)
+| Check | Surface | Threshold | Remediation | Cadence |
+|---|---|---|---|---|
+| lqt-field-vault | vault log on the dev box | newest run < 36 h old, no `fail=N` | SURFACE — stale = FAIL | 1h |
+| fleet-dr-synology, mirror-db-nas | job logs on the dev box | newest run < 30 h old, `rc=0` | SURFACE — stale = FAIL | 1h |
+| pgbackrest/`<stanza>` | both stanzas on the data primary | newest backup < 30 h old | SURFACE — stale = FAIL | 1h |
+
+### field_cd (the field-box reconciler)
+| Check | Surface | Threshold | Remediation | Cadence |
+|---|---|---|---|---|
+| `<box>/manifest-pullable` | `/var/log/lqt-field-cd.log` on each field box | no `pull failed` (a manifest image that does not exist) | SURFACE — FAIL; it can never converge | 1h |
+| `<box>/reconcile-churn` | same log, last 24 h | no container reconciled over and over | SURFACE — WARN | 1h |
+
+### dogfood (qa-sentinel)
+| Check | Surface | Threshold | Remediation | Cadence |
+|---|---|---|---|---|
+| qa-sentinel pulse / sweep | `lumid.trade/lqt/stack-check` history | last pulse < 6 h (FAIL > 12 h); last sweep < 26 h (FAIL > 50 h) | SURFACE — see `deploy_infra` `dogfood-runbook.md` | 15m |
 
 ## Live vs SKIP (what's real today, on the dev box with `/proj/.env`)
 
@@ -207,25 +267,27 @@ SKIP without `VAST_API_KEY`.
 / field-box freshness), dev (disk / loadavg), data (universe), freshness (signals),
 bottomlines (superdogfood fold), bill (UpCloud credits), findata, llm (gateway +
 backends), resource (per-box disk), auth (healthz / introspect / jwks), xpcloud (health
-+ privacy-contract), runmesh, dns+reachability (all 6 domains), secrets (PAT validity).
++ privacy-contract), runmesh, dns+reachability (6 domains; `lumid.market` fails, see above),
+secrets (PAT validity + cert expiry).
 
 **Legitimately SKIP (surface/cred not present):**
-- `providers/venue_health` + `alpaca/massive/rpc` — `obs.venue_health` exists but is
-  empty; the provider-liveness telemetry isn't populated yet (**build it — Stream D**).
+- `providers/venue_health` — SKIP only when no field box has pushed venue telemetry.
 - `bottomlines` #9/#12/#5/#14 — need the cold-SoR (181) or deploy-plane, not the data
   plane (honest SKIP per the superdogfood runbook, never faked green).
 - `auth/auth-stats` + `xpcloud/loop-slo` — admin-gated; SKIP without `LQT_ADMIN_PAT`.
 - `cloud/kv.run findata` — kv.run raw service ports (:5000/:5012) are firewalled to
   the field/bastion network; findata liveness is covered live via `findata`.
-- `secrets/cert-expiry` — owned by the `lb-cert-reconcile` CronJob, not this probe.
+- `claude_pool`, `onprem_nodes`, `dr`, `registry` replication, `vast` — need a credential
+  the in-cluster sweep has and the dev box may not (see the env table).
 
 ## Self-evolve (the loop, future)
 
 1. **Cadence** (the `cadence` field): run freshness/reachability dimensions every 15m,
-   the heavier folds hourly, argo/single-SHA on deploy, bill/secrets daily. Drive it
-   from the lumid-scheduler or a CronJob.
-2. **Remediate** (`--remediate`, once wired): apply the `AUTO` rows only — each
-   idempotent + logged. Today it is a **dry run** (prints what it would do).
+   the heavier folds hourly, argo/single-SHA on deploy, bill/secrets daily. Today the
+   `opsagent-sweep` CronJob runs every dimension every 15 min; `cadence` is a label.
+2. **Remediate** (`--remediate`): apply the `AUTO` rows only — each idempotent + logged.
+   Live in the opsagent image for the one allowlisted fix (see the design contract);
+   everything else is still surfaced.
 3. **Surface**: a `SURFACE` WARN/FAIL → an inbox memo + task; a repeated one → escalate.
    Privacy-contract, integrity (#9/#12), and RLS FAILs page immediately, never auto-fix.
 

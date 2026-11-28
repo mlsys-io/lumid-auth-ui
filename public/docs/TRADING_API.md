@@ -27,7 +27,7 @@ The API token is generated when you create a simulation strategy and join a comp
 
 ### Error Responses
 
-**Important**: All API responses return HTTP 200 OK. Errors are indicated by non-zero `ret_code` values in the response body.
+**Important**: Trading and validation errors return HTTP 200 OK with a non-zero `ret_code` in the body. Token problems (401, 403) and rate limiting (429) are the exception: they come back with that HTTP status as well as the matching `ret_code`.
 
 **401 Unauthorized** - Invalid or missing token
 
@@ -72,7 +72,7 @@ Submit a buy or sell order for a specific symbol.
 |-------|------|----------|-------------|
 | symbol | string | Yes | Stock symbol (e.g., "AAPL", "GOOGL") |
 | direction | string | Yes | Trade direction: "Buy" or "Sell" |
-| volume | integer | Yes | Number of shares (must be > 0) |
+| volume | number | Yes | Quantity, > 0 and at most 1,000,000. Stocks trade in whole shares; BTC accepts down to 0.0001 and ETH down to 0.001 |
 
 **Response** (200 OK):
 
@@ -105,7 +105,7 @@ Submit a buy or sell order for a specific symbol.
 
 **Error Responses**:
 
-**Note**: All responses return HTTP 200 OK. Check the `ret_code` field to determine success (0) or error (non-zero).
+**Note**: These errors return HTTP 200 OK. Check the `ret_code` field to determine success (0) or error (non-zero). Only token errors (401/403) and rate limiting (429) also set the HTTP status.
 
 Common error codes:
 - `1400` - Competition not active
@@ -837,7 +837,7 @@ func main() {
 
 ### 1. Error Handling
 
-Always check the `ret_code` field in responses (all responses return HTTP 200 OK):
+Always check the `ret_code` field in responses (business errors return HTTP 200 OK; 401, 403 and 429 also set the HTTP status):
 
 - `ret_code: 0` - Success
 - `ret_code: 1400` - Competition not active
@@ -856,10 +856,10 @@ The Trading API implements token bucket rate limiting to ensure fair resource us
 
 **Rate Limit Rules**:
 
-- **Limit**: 100 requests per minute per API token
-- **Burst**: 100 requests (maximum burst capacity)
+- **Limit**: 600 requests per minute per API token
+- **Burst**: 200 requests (maximum burst capacity)
 - **Scope**: Per API token (each simulation strategy has independent rate limits)
-- **Algorithm**: Token bucket (tokens refill at 100 per minute)
+- **Algorithm**: Token bucket (tokens refill at 600 per minute)
 
 **Rate Limit Response** (429 Too Many Requests):
 
@@ -902,7 +902,7 @@ The Trading API implements token bucket rate limiting to ensure fair resource us
 
 ## Error Codes Reference
 
-**Important**: All API responses return HTTP 200 OK. Success or failure is indicated by the `ret_code` field in the JSON response body.
+**Important**: Success or failure is indicated by the `ret_code` field in the JSON response body. Business errors return HTTP 200 OK; token errors (401, 403) and rate limiting (429) also set that HTTP status.
 
 - `ret_code: 0` = Success
 - `ret_code: non-zero` = Error
@@ -936,7 +936,7 @@ The Trading API implements token bucket rate limiting to ensure fair resource us
 | 401 | Unauthorized | Invalid or missing API token |
 | 403 | Forbidden | Valid token but action not allowed |
 | 404 | Not Found | Requested resource does not exist |
-| 429 | Too Many Requests | Rate limit exceeded (100 requests/minute) |
+| 429 | Too Many Requests | Rate limit exceeded (600 requests/minute per token) |
 | 500 | Internal Error | Server-side error occurred |
 | 5000 | Database Error | Database operation failed |
 | 5200 | External Service Error | External service (e.g., price feed) failed |

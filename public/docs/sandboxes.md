@@ -44,7 +44,8 @@ immediately, so it works the moment it is saved.
 | **Image** | pick from the site's list, or `custom…` for any reference — including our own `harbor.lum.id/<project>/<name>:<tag>` (§8). |
 | **Data** | attach live stores — Lumid Data, FinData, LQT — see §5. Nothing is mounted or copied. File datasets need no selection: `/datasets` is already mounted. |
 | **Ports** | publish up to **2** services on a real public TCP port — see §9. |
-| **Expires after** | max **24h**. The container goes; your home directory does not. |
+| **Docker inside** | tick it for a CPU sandbox that can run `docker run`, `docker build` and Compose — see [Docker inside](#docker-inside-a-sandbox). |
+| **Expires after** | max **48h** for a CPU sandbox, **24h** with a GPU. The container goes; your home directory does not. |
 
 ---
 
@@ -219,6 +220,7 @@ credential at **Account → FinData SQL**.
 
 ```
 /home/<you>     ← network storage, survives delete/recreate, per site
+/scratch        ← this machine's local disk, 50 GiB, GONE on delete
 $HOME = /root   ← container overlay, GONE on delete
 ```
 
@@ -228,6 +230,27 @@ $HOME = /root   ← container overlay, GONE on delete
 Homes are **per site**: your home on office is a different directory from your
 home on home. They are not replicated, deliberately — live multi-writer sync of
 ordinary dev files is a much larger problem than it looks.
+
+**`/scratch` is the machine's local disk** — fast, for build output, temporary data and
+caches. It is a separate volume capped at **50 GiB per person per machine** (writes stop at the
+limit; delete files to continue), never backed up, and gone with the sandbox. Copy what you
+want to keep to `/home/<you>`. Where every kind of file belongs, across sandboxes, bare-metal
+logins and FlowMesh sessions: [Where your files live](/studio/docs/storage).
+
+### Docker inside a sandbox
+
+Tick **Docker inside** when you create a sandbox (API: `"docker": true`) and the box runs its
+own Docker daemon — `docker run`, `docker build`, `docker compose`, published ports — without
+root on the machine and without `--privileged` (it is an unprivileged system container, via
+sysbox). Available on home, office and NUS.
+
+- **CPU only** — asking for a GPU with Docker is refused (`400`).
+- **Fixed image**: Python 3.11 with Docker CE, Buildx and Compose; the image field is ignored.
+- **Needs a sandbox home** (the network volume), not a linked host home. Inside the box, files in
+  that home show as owned by `nobody` — expected (the box runs in its own user namespace); you can
+  still read and write them.
+- **It shares the sandbox's CPU and memory.** Images, containers and build cache count against a
+  **50 GiB** box disk; `docker system prune` frees it.
 
 ---
 
@@ -355,7 +378,7 @@ and the GPU quota for other users is zero.
 | **Models** | `/models` — the shared model store, **read-only**, mounted in every box. Load weights from here instead of downloading them again. |
 | **Scratch** | `/scratch` — fast local NVMe, per user, *not* backed up. |
 | **Images** | `harbor.lum.id/…` references work unchanged; the site pulls them from its own replica. NUS also has its own registry, **`registry.lum.id`** — see below. |
-| **Limits** | 2 GPUs (all the site has) and 8 sandboxes per admin; 24h TTL. |
+| **Limits** | 2 GPUs (all the site has) and 8 sandboxes per admin; 48h for a CPU box, 24h with a GPU. |
 
 **Getting a shell — `ssh -p 31222 gw@lum.id`.** Same key rules as the other sites (§1): your lum.id
 key, pushed to NUS when you create a sandbox there or with `POST /sbx/nus/api/keys/sync`. The NUS
@@ -568,9 +591,10 @@ with your token.
 
 ## Limits
 
-Per user, per site: **2 sandboxes**, **24h** TTL, **1 GPU** per sandbox (office
-admins: 2), CPU sandboxes of **1 / 2 / 4 / 8** cores, **2 public ports** per
-sandbox, **20 GB** per saved image.
+Per user, per site: **2 sandboxes**, up to **48h** for a CPU sandbox and **24h** with a GPU,
+**1 GPU** per sandbox (office admins: 2), CPU sandboxes of **1 / 2 / 4 / 8** cores,
+**2 public ports** per sandbox, **20 GB** per saved image, **50 GiB** of local disk
+(`/scratch`) per person per machine.
 
 The port pool is **shared across the whole site**, not per user — 16 ports, so
 8 sandboxes can publish 2 each at any one time. Every published port costs a
