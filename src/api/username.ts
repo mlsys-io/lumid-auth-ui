@@ -20,3 +20,20 @@ export async function setMyUsername(username: string): Promise<UsernameInfo> {
 	const r = await apiClient.put<DataResponse<UsernameInfo>>("/api/v1/user/username", { username });
 	return r.data.data;
 }
+
+export interface UsernameCheck {
+	name: string;
+	ok: boolean;
+	/** Why Save would refuse it, in words (taken, reserved, shape). */
+	problem?: string;
+}
+
+/** Would Save accept this name for me? Null when this identity version has no check endpoint yet. */
+export async function checkMyUsername(name: string): Promise<UsernameCheck | null> {
+	try {
+		const r = await apiClient.get<DataResponse<UsernameCheck>>("/api/v1/user/username/check", { params: { name } });
+		return r.data.data;
+	} catch {
+		return null;
+	}
+}

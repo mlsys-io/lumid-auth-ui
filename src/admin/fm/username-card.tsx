@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { UserRound } from "lucide-react";
-import { getMyUsername, setMyUsername, type UsernameInfo } from "../../api/username";
+import { checkMyUsername, getMyUsername, setMyUsername, type UsernameCheck, type UsernameInfo } from "../../api/username";
 import { applyUsername, getUsername } from "../../api/sandboxes";
 import { renameState, verifyState, type SiteRenameState } from "../../lib/username-apply";
 import { TONES } from "../../lib/tones";
@@ -17,11 +17,22 @@ export default function UsernameCard({ sites = ["home", "office"] }: { sites?: s
 	const [saving, setSaving] = useState(false);
 	// Per-site progress after a change: the page WAITS until each site has moved you, then checks it.
 	const [progress, setProgress] = useState<Record<string, SiteRenameState>>({});
+	// Live answer from the server while typing: taken by someone, reserved (an existing login or sandbox), or free.
+	const [check, setCheck] = useState<UsernameCheck | null>(null);
 	useEffect(() => { getMyUsername().then(setInfo).catch(() => setInfo(null)); }, []);
+	const want = draft.trim();
+	const localProblem = editing ? usernameProblem(draft) : null;
+	useEffect(() => {
+		setCheck(null);
+		if (!editing || localProblem || !want || want === (info?.username ?? "")) return;
+		let live = true;
+		const t = setTimeout(() => { void checkMyUsername(want).then((r) => { if (live && r?.name === want) setCheck(r); }); }, 350);
+		return () => { live = false; clearTimeout(t); };
+	}, [editing, want, localProblem, info?.username]);
 	if (!info) return null;
 	const current = info.username;
-	const problem = editing ? usernameProblem(draft) : null;
-	const changed = draft.trim() !== (current ?? "");
+	const problem = localProblem ?? (check && !check.ok ? (check.problem ?? "that name is not available") : null);
+	const changed = want !== (current ?? "");
 	async function save() {
 		setSaving(true);
 		try {
@@ -100,7 +111,9 @@ export default function UsernameCard({ sites = ["home", "office"] }: { sites?: s
 						<Button size="sm" onClick={save} disabled={saving || !!problem || !changed}>{saving ? "Saving…" : "Save"}</Button>
 						<Button variant="ghost" size="sm" onClick={() => setEditing(false)}>Cancel</Button>
 					</div>
-					<p className="text-caption text-ink-600">{problem ?? (changed ? renameNote(current, draft.trim()) : USERNAME_RULE)}</p>
+					<p className={`text-caption ${problem ? "text-brick-700" : "text-ink-600"}`} data-testid="username-check">
+						{problem ?? (changed ? `${check?.ok ? `${want} is free. ` : ""}${renameNote(current, want)}` : USERNAME_RULE)}
+					</p>
 				</div>
 			)}
 		</section>

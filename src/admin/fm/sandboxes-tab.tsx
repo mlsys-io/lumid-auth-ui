@@ -74,6 +74,7 @@ import { SiteBadge, SiteStrip, TabShell, shortGpu, useFanout } from "./shared";
 import UsernameCard from "./username-card";
 import PortsEditor from "./ports-editor";
 import { portNote } from "../../lib/username";
+import { poolLine, portsButtonLabel, portsNextStep } from "../../lib/ports";
 import { PUBLIC_SITE } from "./fleet-tab";
 
 /** Sites whose shells come from FlowMesh rather than sandbox-control. Admin-only:
@@ -265,6 +266,9 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 	// handle to the shared tier. Before this, publishing meant having NAS root,
 	// and the documented route was "ask an operator".
 	const [dsOpen, setDsOpen] = useState(false);
+	// "Public ports" sits in the toolbar so it is findable with no sandbox running — before 2026-11-28 it lived only
+	// inside the create form and on a running row, and a user with neither open saw no port control at all.
+	const [portsOpen, setPortsOpen] = useState(false);
 	const [dsBusy, setDsBusy] = useState(false);
 	const [dsName, setDsName] = useState("");
 	const [dsNote, setDsNote] = useState("");
@@ -716,6 +720,11 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 						className="rounded-md border border-plum-300 bg-plum-50 px-3 py-1.5 text-sm font-medium text-plum-700 hover:bg-plum-100">
 						New sandbox
 					</button>
+					<button onClick={() => setPortsOpen((v) => !v)} data-testid="ports-toggle"
+						title="Give a service in a sandbox (a notebook, web app or database) an address anyone on the internet can reach"
+						className={`rounded-md border px-3 py-1.5 text-sm ${portsOpen ? "border-plum-300 bg-plum-50 text-plum-700" : "border-ink-300 bg-card text-ink-700 hover:bg-ink-50"}`}>
+						{portsButtonLabel(target, portPoolForSite(target))}
+					</button>
 					<button onClick={() => setDsOpen((v) => !v)}
 						title={`Publish, add to or remove file datasets on ${target} — mounted read-only at /datasets in every sandbox there`}
 						className="ml-auto rounded-md border border-ink-300 bg-card px-3 py-1.5 text-sm text-ink-700 hover:bg-ink-50">
@@ -1069,6 +1078,47 @@ export default function SandboxesTab({ isAdmin }: { isAdmin: boolean }) {
 				</div>
 				</div>
 				)}
+
+				{portsOpen && (() => {
+					const live = rows.filter((r) => r.kind === "sandbox" && r.state === "Running" && portPoolForSite(r.site).enabled);
+					return (
+						<div className="mt-3 rounded-md border border-ink-200 bg-card p-3" data-testid="ports-panel">
+							<div className="text-sm font-medium text-ink-800">Public ports</div>
+							<p className="mt-1 max-w-3xl text-xs text-ink-600">
+								A public port gives a service inside your sandbox an address on the internet, like{" "}
+								<code className="rounded bg-ink-50 px-1">lum.id:31234</code>. Anyone can reach it — put a password
+								or token on the service. Up to {portPoolForSite(target).max_per_sandbox ?? 2} per sandbox; ports are
+								shared by everyone at a site.
+							</p>
+							<p className="mt-1 text-xs text-ink-700">{sites.map((s) => poolLine(s, portPoolForSite(s))).join(" · ")}</p>
+							<p className="mt-2 text-xs text-ink-600">{portsNextStep(live.length)}</p>
+							{live.length === 0 ? (
+								<button onClick={() => { setPortsOpen(false); setCreateOpen(true); }}
+									className="mt-2 rounded-md border border-plum-300 bg-plum-50 px-3 py-1.5 text-sm font-medium text-plum-700 hover:bg-plum-100">
+									New sandbox with a port
+								</button>
+							) : (
+								<ul className="mt-2 space-y-3">
+									{live.map((r) => (
+										<li key={r.key} className="text-xs">
+											<div>
+												<span className="font-medium text-ink-900">{r.name}</span>
+												<span className="text-ink-600"> on {r.site}</span>
+												{r.ports?.map((p) => (
+													<span key={p.node_port} className="ml-2 font-mono text-ink-700">
+														{p.connect ?? `:${p.node_port}`} → {p.container_port}{p.label ? ` · ${p.label}` : ""}
+													</span>
+												))}
+											</div>
+											<PortsEditor site={r.site} name={r.name} ports={r.ports ?? []}
+												max={portPoolForSite(r.site).max_per_sandbox ?? 2} onDone={() => refresh()} />
+										</li>
+									))}
+								</ul>
+							)}
+						</div>
+					);
+				})()}
 
 				{dsOpen && (
 					<div className="mt-3 rounded-md border border-ink-200 bg-card p-3">
