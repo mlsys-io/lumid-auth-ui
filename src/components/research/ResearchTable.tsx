@@ -166,10 +166,10 @@ export default function ResearchTable({ app, exps, pending, workflows, groups, r
 				<table className="w-full table-fixed text-caption">
 					<thead className="sticky top-0 z-[1] bg-card">
 						<tr className="border-b border-ink-100 text-left text-micro text-ink-600">
-							<th className={cn(cell, "w-[30%] font-medium")}>Name</th>
-							<th className={cn(cell, "w-[22%] font-medium")}>Status</th>
+							<th className={cn(cell, "w-full font-medium sm:w-[30%]")}>Name</th>
+							<th className={cn(cell, "hidden w-[22%] font-medium sm:table-cell")}>Status</th>
 							<th className={cn(cell, "hidden w-[15%] font-medium md:table-cell")}>Last runs</th>
-							<th className={cn(cell, "w-[25%] font-medium")}>Best result</th>
+							<th className={cn(cell, "hidden w-[25%] font-medium sm:table-cell")}>Best result</th>
 							<th className={cn(cell, "hidden w-[8%] font-medium lg:table-cell")}>Last run</th>
 						</tr>
 					</thead>
@@ -226,8 +226,14 @@ function TableRow({ r, selected, open, onToggle, onSelect, picked, onPick, cell 
 					<span className={cn("min-w-0 truncate", r.node.kind === "version" ? "text-ink-800" : "font-medium text-ink-900")}>{r.name}</span>
 					{r.sub && r.node.kind !== "experiment" && <span className="flex-shrink-0 text-micro text-ink-600">{r.sub}</span>}
 				</div>
+				{/* Phones: one stacked row — the status and best result under the name,
+				    so the name gets the width (it was cut to "Bac…" at 390 px). */}
+				<div className="mt-0.5 space-y-0.5 sm:hidden" style={{ paddingLeft: r.depth * 16 + 30 }}>
+					<div className={cn("text-micro leading-snug", TONE_TEXT[r.status.tone] ?? "text-ink-700")}>{r.status.text}</div>
+					{r.best && <div className="truncate font-mono text-micro tabular-nums text-ink-700">{r.best}</div>}
+				</div>
 			</td>
-			<td className={cn(cell, "truncate", TONE_TEXT[r.status.tone] ?? "text-ink-700")} title={r.status.text}>{r.status.text}</td>
+			<td className={cn(cell, "hidden truncate sm:table-cell", TONE_TEXT[r.status.tone] ?? "text-ink-700")} title={r.status.text}>{r.status.text}</td>
 			<td className={cn(cell, "hidden md:table-cell")}>
 				{spark.length > 0 && (
 					<span className="flex items-center gap-[3px]" aria-label={`Last ${spark.length} runs`}>
@@ -237,7 +243,7 @@ function TableRow({ r, selected, open, onToggle, onSelect, picked, onPick, cell 
 					</span>
 				)}
 			</td>
-			<td className={cn(cell, "truncate font-mono tabular-nums text-ink-800")} title={r.best}>{r.best}</td>
+			<td className={cn(cell, "hidden truncate font-mono tabular-nums text-ink-800 sm:table-cell")} title={r.best}>{r.best}</td>
 			<td className={cn(cell, "hidden truncate text-ink-600 lg:table-cell")}>{r.when}</td>
 		</tr>
 	);

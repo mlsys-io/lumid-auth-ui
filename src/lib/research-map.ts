@@ -9,7 +9,7 @@
 // → versions, with suggestions as dashed branches off the app.
 
 import type { MeExperiment, MeWorkflowRow } from "@/api/me";
-import { fmtAgo } from "@/lib/activity";
+import { fmtAgo, plainCause } from "@/lib/activity";
 import { humanMetric, fmtMetricValue } from "@/lib/run-answer";
 
 export type Tone = "ok" | "running" | "failing" | "attention" | "idle";
@@ -73,11 +73,65 @@ const baselineArm = (e: MeExperiment): string | undefined => {
 	return typeof b === "string" ? b : b?.arm;
 };
 
+/** "screen failed its last 5 run(s): HTTP 401…" (identity markStarved) →
+ *  "Stuck — Screen failed its last 5 runs: Not signed in (HTTP 401)". Was the
+ *  same sentence for every cause ("the workflow that runs it is failing"),
+ *  which hid WHICH workflow and WHY (2026-11-28, MBB student round). */
+export function stuckWords(reason: string): string {
+	const m = /^\s*(\S+) failed its last (\d+) run\(s\)(?::\s*([\s\S]*))?$/.exec(reason);
+	if (!m) return "Stuck — the workflow that runs it is failing";
+	const n = Number(m[2]);
+	const runs = n === 1 ? "its last run" : `its last ${n} runs`;
+	const why = m[3] && m[3].trim() ? `: ${plainCause(m[3])}` : "";
+	return `Stuck — ${humanId(m[1])} failed ${runs}${why}`;
+}
+
+/** Versions sharing the top mean (two or more = a tie), from the state's means. */
+export function tiedAtTop(e: MeExperiment): string[] {
+	const vs = Object.entries(e.variants || {}).filter(([, v]) => v && v.n > 0 && Number.isFinite(v.mean));
+	if (vs.length < 2) return [];
+	const hib = e.metric?.higher_is_better !== false;
+	const best = (hib ? Math.max : Math.min)(...vs.map(([, v]) => v.mean));
+	const eps = 1e-9 * Math.max(1, Math.abs(best));
+	const top = vs.filter(([, v]) => Math.abs(v.mean - best) <= eps).map(([k]) => k);
+	return top.length >= 2 ? top : [];
+}
+
+/** Where a gated experiment's versions stand: passed every step / stopped / held. */
+function gateTally(e: MeExperiment) {
+	const g = e.gate_progress || {};
+	const ids = Object.keys(g);
+	const stopped = ids.filter((k) => !g[k].passed);
+	const ok = ids.filter((k) => g[k].passed);
+	const furthest = stopped.reduce<{ k: string; i: number } | null>((m, k) => (!m || g[k].index > m.i ? { k, i: g[k].index } : m), null);
+	return { ids, stopped, ok, furthestStop: furthest ? g[furthest.k].reached : "" };
+}
+
 export function experimentStatus(e: MeExperiment): { tone: Tone; text: string } {
 	if (e.status && /concluded|done|archived|closed/i.test(e.status)) {
 		return e.best_variant && e.criteria_met
 			? { tone: "ok", text: `Done — ${humanId(e.best_variant)} won` }
 			: { tone: "idle", text: "Done — no clear winner" };
+	}
+	// A gated chain where the best number comes from a step its version failed:
+	// nothing "leads" (2026-11-28 audit: "Quality roe lowlev leads" with every
+	// version stopped at Robustness).
+	if (e.best_failed_gate) {
+		const t = gateTally(e);
+		const where = humanId(e.best_stopped_at || t.furthestStop);
+		return { tone: "attention", text: `No version passed every step — the furthest stopped at ${where}` };
+	}
+	if (!e.n_results && e.gate_progress && Object.keys(e.gate_progress).length) {
+		const t = gateTally(e);
+		if (t.ids.length && !t.ok.length) {
+			return { tone: "attention", text: `No version passed every step — all ${t.ids.length} stopped (the furthest at ${humanId(t.furthestStop)})` };
+		}
+	}
+	// Only where it would otherwise say "X leads": the server ranked one of a
+	// tie first (MLSys: C16 "leads" at 22.4 = 22.4 tok/s).
+	const tie = tiedAtTop(e);
+	if (tie.length >= 2 && !e.criteria_met && !!e.best_variant && tie.includes(e.best_variant)) {
+		return { tone: "running", text: `Tied — ${tie.length} versions score the same so far` };
 	}
 	if (!e.n_results) {
 		if (e.unfed) return { tone: "attention", text: "Can't start — no workflow runs it" };
@@ -97,7 +151,7 @@ export function experimentStatus(e: MeExperiment): { tone: Tone; text: string } 
 		// experiment read "Stuck" in red (2026-11-27, Quant Research 0.8.0).
 		if (e.starved) {
 			return /\bfailed\b/i.test(e.starved_reason || "")
-				? { tone: "failing", text: "Stuck — the workflow that runs it is failing" }
+				? { tone: "failing", text: stuckWords(e.starved_reason || "") }
 				: { tone: "idle", text: "Not started yet — none of its versions has run" };
 		}
 		// The workflow ran, but never AS one of these versions (runs started by
@@ -121,6 +175,37 @@ export function experimentStatus(e: MeExperiment): { tone: Tone; text: string } 
 	if (min && vs.length >= declared && vs.every((v) => v.n >= min)) return { tone: "idle", text: "Enough results — too close to call so far" };
 	const need = min * declared;
 	return { tone: "running", text: need ? `Collecting results: ${Math.min(e.n_results, need)} of ${need}` : `Collecting results: ${e.n_results} so far` };
+}
+
+/**
+ * What to do next with an experiment, as one sentence — the research procedure
+ * made explicit for ANY app with a gated chain (steps in run order). The
+ * buttons below it do the work; this says which one is the next move and why.
+ *   passed every step → compare them, then take the best further
+ *   passed a step, the next one held → run them through it
+ *   untried versions → run them (the cheap steps first)
+ *   all stopped → the round is over: add new versions (each is another try)
+ */
+export function nextStepWords(e: MeExperiment, steps: string[]): string {
+	const g = e.gate_progress || {};
+	const declared = (e.arms || []).map((a) => a.id);
+	const all = [...new Set([...declared, ...Object.keys(g), ...Object.keys(e.variants || {})])];
+	if (!steps.length || !all.length) return "";
+	const last = steps[steps.length - 1];
+	const plural = (n: number, w = "version") => `${n} ${w}${n === 1 ? "" : "s"}`;
+	const done = all.filter((k) => g[k]?.passed && g[k].reached === last);
+	const held = all.filter((k) => g[k]?.passed && g[k].reached !== last);
+	const untried = all.filter((k) => !g[k] && !(e.variants?.[k]?.n));
+	const stopped = all.filter((k) => g[k] && !g[k].passed);
+	if (done.length) return `${plural(done.length)} passed every step. Next: compare them, then take the best one further — a forward or real-world test.`;
+	if (held.length) {
+		const at = g[held[0]].reached;
+		const nxt = steps[steps.indexOf(at) + 1];
+		return `Next: ${plural(held.length)} passed ${humanId(at)}${nxt ? ` — run ${held.length === 1 ? "it" : "them"} through ${humanId(nxt)}` : ""}.`;
+	}
+	if (untried.length) return `Next: run the ${plural(untried.length, "untried version")} — the cheap steps first.`;
+	if (stopped.length) return `This round is over: none of the ${plural(stopped.length)} passed every step. Next: add new versions — each one counts as another try.`;
+	return "";
 }
 
 /** The same status in a few words, for a label on the map (the full
@@ -243,13 +328,26 @@ function titleOf(e: MeExperiment, id: string): string {
  *  serving overrides) becomes one "key: value" row per field instead of a JSON
  *  blob; lists join; long text stays whole (the cell truncates, the title shows
  *  it). Meta fields (id, description, about, title, arm) are not settings. */
+/** A setting key in words, unit kept: "half_spread_bps" → "half spread (bps)". */
+function settingName(k: string): string {
+	if (k.includes(".")) return k; // a dotted override path is the user's own address for it
+	const m = humanMetric(k);
+	const label = m.label.charAt(0).toLowerCase() + m.label.slice(1);
+	return m.unit ? `${label} (${m.unit})` : label;
+}
+
 export function settingRows(arm: Record<string, unknown> | undefined): Array<[string, string]> {
 	const out: Array<[string, string]> = [];
 	const show = (v: unknown): string => (Array.isArray(v) ? v.map(show).join(", ") : v && typeof v === "object" ? JSON.stringify(v) : String(v));
 	for (const [k, v] of Object.entries(arm || {})) {
 		if (["id", "description", "about", "title", "arm", "label"].includes(k)) continue;
 		if (v && typeof v === "object" && !Array.isArray(v)) {
-			for (const [k2, v2] of Object.entries(v as Record<string, unknown>)) out.push([`${humanId(k)} · ${k2}`, show(v2)]);
+			for (const [k2, v2] of Object.entries(v as Record<string, unknown>)) {
+				if (v2 && typeof v2 === "object" && !Array.isArray(v2)) {
+					// one more level (a strategy's costs: {bps, half_spread_bps})
+					for (const [k3, v3] of Object.entries(v2 as Record<string, unknown>)) out.push([`${humanId(k2)} · ${settingName(k3)}`, show(v3)]);
+				} else out.push([`${humanId(k)} · ${settingName(k2)}`, show(v2)]);
+			}
 		} else out.push([humanId(k), show(v)]);
 	}
 	return out;
@@ -257,17 +355,23 @@ export function settingRows(arm: Record<string, unknown> | undefined): Array<[st
 
 export function versionsOf(e: MeExperiment): VersionInfo[] {
 	const declared = (e.arms || []).map((a) => a.id);
-	const observed = Object.keys(e.variants || {});
+	const observed = [...new Set([...Object.keys(e.variants || {}), ...Object.keys(e.gate_progress || {})])];
 	const ids = [...declared, ...observed.filter((o) => !declared.includes(o))];
 	const base = baselineArm(e);
 	const metric = e.metric?.name || e.metric_name || "";
 	const { unit } = metric ? humanMetric(metric) : { unit: "" };
 	const tied = new Set(e.not_separable_from || []);
+	const topTie = tiedAtTop(e);
 	return ids.map((id) => {
 		const v = e.variants?.[id];
 		const n = v?.n ?? 0;
+		const gp = e.gate_progress?.[id];
 		let tag = "trying", tone: Tone = "running";
-		if (!v || n === 0) { tag = "not run yet"; tone = "idle"; }
+		// A gated chain says where the version stands before any ranking does:
+		// "stopped at Robustness" is final; "trying" invited another run.
+		if (gp && !gp.passed) { tag = `stopped at ${humanId(gp.reached)}`; tone = "idle"; }
+		else if (!v || n === 0) { tag = gp ? `passed ${humanId(gp.reached)}` : "not run yet"; tone = gp ? "running" : "idle"; }
+		else if (topTie.includes(id)) { tag = "tied"; tone = "running"; }
 		else if (e.best_variant === id && e.criteria_met && e.comparable !== false) { tag = "winning"; tone = "ok"; }
 		else if (e.best_variant === id && e.comparable !== false) { tag = "leading"; tone = "ok"; }
 		else if (tied.has(id)) { tag = "can't tell apart"; tone = "running"; }

@@ -46,13 +46,16 @@ export function RollingNumber({ value, format, className }: { value: number | nu
 	return <span className={cn("tabular-nums transition-colors duration-700", flash && "text-gold-600", className)}>{shown == null ? "—" : format(shown)}</span>;
 }
 
-export default function BestScoreChart({ evo, labelOf, colorOf, metricKey, unit, higherIsBetter, minSamples, target }: {
+export default function BestScoreChart({ evo, labelOf, colorOf, metricKey, unit, higherIsBetter, minSamples, target, failedAt }: {
 	evo: Evolution;
 	labelOf: (arm: string) => string;
 	colorOf: (arm: string) => number;
 	metricKey: string; unit: string; higherIsBetter: boolean; minSamples: number;
 	/** The value the research is aiming for (experiment metric.target), drawn as a labelled line. */
 	target?: number | null;
+	/** A gated chain where the top number came from a step its version did NOT
+	 *  pass: it is the furthest result, not a "best" (2026-11-28 audit). */
+	failedAt?: string | null;
 }) {
 	const fmt = (v: number) => fmtMetricValue(v, unit, metricKey);
 	const clipId = `bs-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
@@ -119,13 +122,14 @@ export default function BestScoreChart({ evo, labelOf, colorOf, metricKey, unit,
 					<div className="text-micro text-ink-600">A version counts once it has {minSamples} result{minSamples === 1 ? "" : "s"} · {higherIsBetter ? "higher" : "lower"} is better</div>
 				</figcaption>
 				<div className="text-right">
-					<div className="eyebrow">Best so far</div>
+					<div className="eyebrow">{failedAt ? "Top result" : "Best so far"}</div>
 					<div className="font-mono text-h2 leading-none text-ink-900">
 						<RollingNumber value={evo.hero?.value ?? null} format={fmt} />
 					</div>
 					<div className="text-micro text-ink-600 mt-0.5">
 						{evo.hero ? `${labelOf(evo.hero.arm)} · ${evo.chain.find((c) => c.arm === evo.hero!.arm)?.n ?? 0} results` : `no version has ${minSamples} results yet`}
 					</div>
+					{failedAt && <div className="text-micro text-ember-700 mt-0.5">didn&apos;t pass {failedAt}</div>}
 				</div>
 			</div>
 			<div ref={wrapRef} className="relative">

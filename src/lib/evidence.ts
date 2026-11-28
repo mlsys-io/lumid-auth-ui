@@ -72,7 +72,9 @@ const KEYWORDS = new Set(["and", "or", "not", "true", "false", "in", "is"]);
 /** A gate or a reason in words: "score >= 0.5 and trades >= 30" →
  *  "Score ≥ 0.5 and trades ≥ 30"; names become labels, never snake_case. */
 export function ruleInWords(expr: string): string {
-	const t = (expr || "").trim();
+	// An engine reason carries its numbers at full precision ("dsr_p 0.151779
+	// >= 0.05"): three significant figures read as a number, not a log line.
+	const t = (expr || "").trim().replace(/-?\d+\.\d{4,}/g, (x) => String(Number(Number(x).toPrecision(3))));
 	if (!t) return "";
 	let first = true;
 	const out = t.replace(/[A-Za-z_][A-Za-z0-9_.]*|>=|<=|==|!=/g, (tok) => {

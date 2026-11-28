@@ -2,7 +2,7 @@
 // Fixtures are trimmed copies of real lum.id experiments (2026-11-24).
 import type { MeExperiment } from "@/api/me";
 import { appPages, pageHref } from "./app-pages";
-import { humanId, experimentStatus, versionsOf, criteriaInWords, buildResearchTree, pathTo, mapSummary, comparabilityNote, suggestionParent, experimentLoop, versionsToRun, triedVersions, settingRows, experimentLabel, proposalCheck, shortStatus, batchProgress, type Proposal } from "./research-map";
+import { humanId, experimentStatus, versionsOf, nextStepWords, tiedAtTop, criteriaInWords, buildResearchTree, pathTo, mapSummary, comparabilityNote, suggestionParent, experimentLoop, versionsToRun, triedVersions, settingRows, experimentLabel, proposalCheck, shortStatus, batchProgress, type Proposal } from "./research-map";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -38,7 +38,10 @@ check("status: not comparable, in words", () => eq(experimentStatus(kol), { tone
 check("status: confirmed winner", () => eq(experimentStatus(won), { tone: "ok", text: "Winning: Plain style" }));
 check("status: never ran / starved / unfed", () => {
 	eq(experimentStatus(fresh).text, "Not started yet");
-	eq(experimentStatus({ ...fresh, starved: true, starved_reason: "backtest failed its last 5 run(s): HTTP 500" } as MeExperiment), { tone: "failing", text: "Stuck — the workflow that runs it is failing" });
+	eq(experimentStatus({ ...fresh, starved: true, starved_reason: "backtest failed its last 5 run(s): HTTP 500" } as MeExperiment).tone, "failing");
+	eq(experimentStatus({ ...fresh, starved: true, starved_reason: "backtest failed its last 5 run(s): HTTP 500" } as MeExperiment).text.startsWith("Stuck — Backtest failed its last 5 runs: "), true);
+	eq(experimentStatus({ ...fresh, starved: true, starved_reason: "screen failed its last 1 run(s)" } as MeExperiment).text, "Stuck — Screen failed its last run");
+	eq(experimentStatus({ ...fresh, starved: true, starved_reason: "something failed oddly" } as MeExperiment).text, "Stuck — the workflow that runs it is failing");
 	// Never ran, or waits to be dispatched: not started, not failing.
 	eq(experimentStatus({ ...fresh, starved: true, starved_reason: "no run of screen has been recorded yet" } as MeExperiment), { tone: "idle", text: "Not started yet — none of its versions has run" });
 	// Rows from earlier steps, none carrying the metric yet: under way, not "not started".
@@ -230,4 +233,44 @@ check("shortStatus keeps the first clause", () => {
 	eq(shortStatus(won).text, `${humanId("musk_v1")} won`);
 });
 
+check("gated chains: nothing leads when the best failed its step; stopped versions say so", () => {
+	const e = { id: "fs", metric: { name: "oos_sharpe" }, n_results: 3, best_variant: "q", best_failed_gate: true, best_stopped_at: "robustness",
+		arms: [{ id: "q" }, { id: "p" }, { id: "v" }],
+		variants: { q: { n: 1, mean: 0.42 }, p: { n: 1, mean: -0.45 } },
+		gate_progress: { q: { reached: "robustness", index: 3, passed: false }, p: { reached: "robustness", index: 3, passed: false }, v: { reached: "bar_backtest", index: 2, passed: false } } } as unknown as MeExperiment;
+	eq(experimentStatus(e), { tone: "attention", text: "No version passed every step — the furthest stopped at Robustness" });
+	const tags = Object.fromEntries(versionsOf(e).map((v) => [v.id, v.tag]));
+	eq(tags, { q: "stopped at Robustness", p: "stopped at Robustness", v: "stopped at Bar backtest" });
+	eq(nextStepWords(e, ["data_check", "bar_backtest", "robustness"]),
+		"This round is over: none of the 3 versions passed every step. Next: add new versions — each one counts as another try.");
+});
+
+check("gated chains: the next move is said in words", () => {
+	const steps = ["data_check", "bar_backtest", "robustness"];
+	const held = { id: "x", arms: [{ id: "a" }, { id: "b" }, { id: "c" }],
+		gate_progress: { a: { reached: "bar_backtest", index: 2, passed: true }, b: { reached: "bar_backtest", index: 2, passed: true }, c: { reached: "bar_backtest", index: 2, passed: false } } } as unknown as MeExperiment;
+	eq(nextStepWords(held, steps), "Next: 2 versions passed Bar backtest — run them through Robustness.");
+	const untried = { id: "y", arms: [{ id: "a" }, { id: "b" }] } as unknown as MeExperiment;
+	eq(nextStepWords(untried, steps), "Next: run the 2 untried versions — the cheap steps first.");
+	const done = { id: "z", arms: [{ id: "a" }], gate_progress: { a: { reached: "robustness", index: 3, passed: true } } } as unknown as MeExperiment;
+	eq(nextStepWords(done, steps).startsWith("1 version passed every step."), true);
+	eq(nextStepWords(untried, []), "");
+});
+
+check("ties: equal top means read 'Tied', not 'leads'", () => {
+	const e = { id: "t", metric: { name: "goodput_tok_s" }, n_results: 3, best_variant: "c16",
+		variants: { c32: { n: 1, mean: 22.4 }, c16: { n: 1, mean: 22.4 }, c8: { n: 1, mean: 22.4 } } } as unknown as MeExperiment;
+	eq(tiedAtTop(e).length, 3);
+	eq(experimentStatus(e), { tone: "running", text: "Tied — 3 versions score the same so far" });
+	eq(versionsOf(e).map((v) => v.tag), ["tied", "tied", "tied"]);
+	const lead = { ...e, variants: { c32: { n: 1, mean: 22.4 }, c16: { n: 1, mean: 23.0 } } } as unknown as MeExperiment;
+	eq(tiedAtTop(lead), []);
+});
+
+check("settings: nested keys read as words with their unit", () => {
+	eq(settingRows({ spec: { universe: "top_n_dollar_volume:500", costs: { bps: 1, half_spread_bps: 2 } } }),
+		[["Spec · universe", "top_n_dollar_volume:500"], ["Costs · bps", "1"], ["Costs · half spread (bps)", "2"]]);
+});
+
 export const caseCount = checks.length;
+

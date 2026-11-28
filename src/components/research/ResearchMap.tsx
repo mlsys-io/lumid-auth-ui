@@ -49,7 +49,7 @@ import { fmtAgo } from "@/lib/activity";
 import {
 	buildResearchTree, comparabilityNote, criteriaInWords, experimentStatus, humanId, mapSummary, pathTo, versionsOf, OTHER_NODE, DOT_SIZE,
 	type MapEdge, type MapNode, type Proposal, type Tone, type VersionInfo,
-	shortStatus, rowStatus, triedVersions, experimentLoop, settingRows, experimentLabel} from "@/lib/research-map";
+	shortStatus, rowStatus, triedVersions, experimentLoop, settingRows, experimentLabel, nextStepWords} from "@/lib/research-map";
 import { humanMetric, fmtMetricValue } from "@/lib/run-answer";
 import { workflowPath } from "@/lib/run-routes";
 import { loopLabel } from "@/lib/workflow-names";
@@ -550,6 +550,7 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 	const note = comparabilityNote(e);
 	// Each version at each feedback step of its workflow (renders once a result lands).
 	const steps = useMemo(() => experimentSteps(spec, e, specText), [spec, e, specText]);
+	const nextWords = e.shared ? "" : nextStepWords(e, steps.map((x) => x.step));
 	// One read of the ledger rows for the spend and holdout lines.
 	const expRows = useExperimentRows(app, e.id);
 	const progress = useMemo(() => versionProgress(expRows, steps.map((x) => x.step)), [expRows, steps]);
@@ -591,6 +592,8 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 			<div className={cn("flex items-start gap-1.5 font-medium leading-snug", panel ? "text-caption" : "text-meta", TONE_TEXT[st.tone])}>
 				<span className={cn(dot(st.tone), "mt-[0.4em] flex-shrink-0")} />{st.text}
 			</div>
+			{/* The procedure, one sentence: what the next move is (any gated chain). */}
+			{nextWords && <p className={cn("text-ink-800", panel ? "text-caption" : "text-micro")} data-next-step>{nextWords}</p>}
 			{sharedLine(e) && <p className={cn("text-plum-700", panel ? "text-caption" : "text-micro")}>{sharedLine(e)}</p>}
 		</>
 	);
@@ -609,7 +612,8 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 	) : evolution && metric && e.comparable !== false ? (
 		// Comparable versions: Novix's best-so-far story on one axis.
 		<BestScoreChart evo={evolution} labelOf={labelOf} colorOf={colorOf} metricKey={metric} unit={m?.unit ?? ""}
-			higherIsBetter={hib} minSamples={Math.max(1, e.min_samples || 1)} target={target} />
+			higherIsBetter={hib} minSamples={Math.max(1, e.min_samples || 1)} target={target}
+			failedAt={e.best_failed_gate ? humanId(e.best_stopped_at || "") : null} />
 	) : spark ? (
 		// Measured differently: one small chart per version, never ranked. Each
 		// row names its version and state, so no separate version list follows.

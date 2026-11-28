@@ -1384,6 +1384,12 @@ export interface MeExperiment {
   // Arms the winner is NOT separable from: their interval against it crosses
   // zero. Rendered beside the verdict, never instead of the means.
   not_separable_from?: string[] | null;
+  // Gated chains (LumidOS evaluate, rows with dims.stage): how far each version
+  // got and whether its newest row there passed; and whether the best number
+  // comes from a step that version did not pass.
+  gate_progress?: Record<string, { reached: string; index: number; passed: boolean }> | null;
+  best_failed_gate?: boolean | null;
+  best_stopped_at?: string | null;
   // What the run QUEUE knows and the ledger cannot: a failed run writes no row,
   // so without this a dispatched arm that kept dying is indistinguishable from
   // one that was never dispatched.
