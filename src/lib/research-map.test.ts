@@ -252,6 +252,7 @@ check("gated chains: the next move is said in words", () => {
 	eq(nextStepWords(held, steps), "Next: 2 versions passed Bar backtest — run them through Robustness.");
 	// Ran but scored nothing is not "untried" (the Run button said "once more").
 	const ran = { id: "x", arms: [{ id: "a" }, { id: "b" }], variants: { a: { n: 1, mean: 1 } }, metric: { name: "goodput" } } as unknown as MeExperiment;
+	eq([humanId("profit_gpa"), humanId("oos_sharpe"), humanId("dsr_p")], ["Profit GPA", "OOS sharpe", "DSR p"]);
 	eq(nextStepWords(ran, ["simulate"]), "Next: run the 1 untried version — the cheap steps first.");
 	eq(nextStepWords(ran, ["simulate"], ["a", "b"]), "Next: 1 version ran but recorded no goodput — open it to see why before running it again.");
 	eq(versionsOf(ran, ["b"]).find((v) => v.id === "b")?.tag, "ran, no score");
