@@ -13,7 +13,7 @@
 
 import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowRight, ChevronDown, FlaskConical, Maximize2, MessagesSquare, Minimize2, Plus, Sparkles, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronDown, FlaskConical, Maximize2, MessagesSquare, Minimize2, Plus, Sparkles, X } from "lucide-react";
 import { openNewWorkflow, useNewWorkflowParam, useNewWorkflowRequests } from "@/components/research/new-workflow";
 import apiClient from "@/api/client";
 import { me, type MeExperiment, type MeExperimentDetail } from "@/api/me";
@@ -36,7 +36,7 @@ import Space3D from "@/components/research/Space3D";
 import RunVersions from "@/components/research/RunVersions";
 import EvidenceGrid from "@/components/research/EvidenceGrid";
 import PairedDelta from "@/components/research/PairedDelta";
-import AddVersions from "@/components/research/AddVersions";
+import AddVersions, { AddVersionsBody } from "@/components/research/AddVersions";
 import ExperimentSpend, { useExperimentRows } from "@/components/research/ExperimentSpend";
 import HoldoutLine from "@/components/research/HoldoutLine";
 import { cellWords, evidenceOf, versionProgress, experimentSteps } from "@/lib/evidence";
@@ -534,7 +534,9 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 	const addVersions = !e.shared && (
 		<Button size="sm" variant={roundOver(e) ? "accent" : "ghost"} onClick={() => setAdding(true)}><Plus className="w-3.5 h-3.5" /> Add versions</Button>
 	);
-	const addSheet = adding && <AddVersions app={app} e={e} onClose={() => setAdding(false)} />;
+	// In the panel, the form takes the panel's place (Back / Esc return); only
+	// the page view, which has no panel, still opens it as a popup.
+	const addSheet = adding && !panel && <AddVersions app={app} e={e} onClose={() => setAdding(false)} />;
 	const series = seriesData?.series ?? null;
 	const versions = versionsOf(e, seriesData?.tried);
 	// Lines in DECLARED version order, so colours follow the version. A series
@@ -600,10 +602,10 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 	// Esc closes the panel wherever focus is (the map keeps focus after a click).
 	useEffect(() => {
 		if (!panel) return;
-		const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") onClose?.(); };
+		const onKey = (ev: KeyboardEvent) => { if (ev.key === "Escape") { if (adding) setAdding(false); else onClose?.(); } };
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);
-	}, [panel, onClose]);
+	}, [panel, onClose, adding]);
 	const loop = e.dispatch?.loop || e.loops?.[0];
 	const done = criteriaInWords(e.success_criteria);
 	// What the research is aiming for, when the experiment declares it.
@@ -724,6 +726,28 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 		</>
 	);
 
+	if (panel && adding) {
+		// Add versions shifts this panel to the form (wider, like the workflow
+		// panel's own forms) instead of stacking a popup on it.
+		return (
+			<div role="dialog" aria-label={`Add versions: ${experimentLabel(e)}`} style={style}
+				className="absolute right-3 top-12 z-[6100] flex w-[37.5rem] max-w-[calc(100%-1.5rem)] flex-col overflow-hidden rounded-xl border border-ink-200 bg-card shadow-e3 map-panel-in">
+				<div className="flex items-center gap-2 border-b border-ink-100 px-3.5 pb-2.5 pt-3">
+					<button type="button" onClick={() => setAdding(false)} aria-label={`Back to ${experimentLabel(e)}`} title="Back (Esc)"
+						className="-ml-1 inline-flex h-6 items-center rounded-md px-1 text-ink-700 hover:bg-ink-100 hover:text-ink-900">
+						<ArrowLeft className="h-3.5 w-3.5" />
+					</button>
+					<div className="min-w-0">
+						<div className="eyebrow text-plum-700">Add versions</div>
+						<div className="truncate text-title font-semibold text-ink-900">{experimentLabel(e)}</div>
+					</div>
+				</div>
+				<div className="flex min-h-0 flex-1 flex-col px-3.5 py-3">
+					<AddVersionsBody app={app} e={e} onDone={() => setAdding(false)} />
+				</div>
+			</div>
+		);
+	}
 	if (panel) {
 		// A side sheet: who/what/status pinned on top, the evidence scrolls, the
 		// next step pinned at the foot — it never scrolls out of reach.

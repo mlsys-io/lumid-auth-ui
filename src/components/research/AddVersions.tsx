@@ -66,7 +66,11 @@ function SettingRow({ f, value, onChange, onReset, onRemove }: {
 	);
 }
 
-export default function AddVersions({ app, e, onClose }: { app: string; e: MeExperiment; onClose: () => void }) {
+/** The form itself — shown IN the experiment's panel with Back (operator,
+ *  2026-11-28: "reuse the panel, don't pop up another"), or in the popup below
+ *  for a caller with no panel. `onDone` runs after Cancel and after a save. */
+export function AddVersionsBody({ app, e, onDone }: { app: string; e: MeExperiment; onDone: () => void }) {
+	const onClose = onDone;
 	const { graph, save } = useAppGraph(app);
 	const text = graph?.text ?? "";
 	const loop = experimentLoop(e);
@@ -131,14 +135,9 @@ export default function AddVersions({ app, e, onClose }: { app: string; e: MeExp
 	// A portal: the panel that opens this sheet animates with a transform,
 	// which made it the containing block of this fixed overlay — the sheet was
 	// clipped inside the panel (round 10, 2026-11-28).
-	return createPortal((
-		<div role="dialog" aria-label="Add versions" className="fixed inset-0 z-[7000] flex items-center justify-center bg-ink-900/30 p-4" onClick={onClose}>
-			<div className="flex max-h-[90vh] w-full max-w-xl flex-col gap-3 rounded-xl border border-ink-200 bg-card p-4 shadow-e3 map-panel-in" onClick={(ev) => ev.stopPropagation()}>
-				<div className="flex items-start justify-between gap-3">
-					<div>
-						<div className="eyebrow text-plum-700">Add versions</div>
-						<div className="text-title font-semibold text-ink-900">{experimentLabel(e)}</div>
-					</div>
+	return (
+		<div className="flex min-h-0 flex-1 flex-col gap-3">
+				<div className="flex justify-end">
 					<Button size="sm" variant="ghost" onClick={mode === "form" ? toText : () => setMode("form")}>
 						{mode === "form" ? "Edit as text" : "Back to the form"}
 					</Button>
@@ -222,8 +221,23 @@ export default function AddVersions({ app, e, onClose }: { app: string; e: MeExp
 						{busy ? "Adding…" : n > 1 ? `Add ${n} versions` : "Add the version"}
 					</Button>
 				</div>
+		</div>
+	);
+}
+
+/** The popup form, for a caller with no panel to show it in. A portal: the
+ *  panel that opens it animates with a transform, which made it the containing
+ *  block of this fixed overlay — the sheet was clipped inside the panel. */
+export default function AddVersions({ app, e, onClose }: { app: string; e: MeExperiment; onClose: () => void }) {
+	return createPortal((
+		<div role="dialog" aria-label="Add versions" className="fixed inset-0 z-[7000] flex items-center justify-center bg-ink-900/30 p-4" onClick={onClose}>
+			<div className="flex max-h-[90vh] w-full max-w-xl flex-col gap-3 rounded-xl border border-ink-200 bg-card p-4 shadow-e3 map-panel-in" onClick={(ev) => ev.stopPropagation()}>
+				<div>
+					<div className="eyebrow text-plum-700">Add versions</div>
+					<div className="text-title font-semibold text-ink-900">{experimentLabel(e)}</div>
+				</div>
+				<AddVersionsBody app={app} e={e} onDone={onClose} />
 			</div>
 		</div>
-	), document.body
-	);
+	), document.body);
 }
