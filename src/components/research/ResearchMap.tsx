@@ -34,6 +34,7 @@ import EmptyResearchSpace from "@/components/research/EmptyResearchSpace";
 import Space3D from "@/components/research/Space3D";
 import RunVersions from "@/components/research/RunVersions";
 import EvidenceGrid from "@/components/research/EvidenceGrid";
+import PairedDelta from "@/components/research/PairedDelta";
 import AddVersions from "@/components/research/AddVersions";
 import ExperimentSpend, { useExperimentRows } from "@/components/research/ExperimentSpend";
 import HoldoutLine from "@/components/research/HoldoutLine";
@@ -555,6 +556,9 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 	const grid = (
 		<>
 			<EvidenceGrid app={app} e={e} steps={steps} onPickVersion={onPickVersion} pickedVersion={pickedVersion} />
+			{/* Is a version really better than the baseline on the same items? Renders only when a step reports paired_delta (consulting session). */}
+			<PairedDelta steps={steps} rows={expRows} label={labelOf}
+				baseline={typeof e.baseline === "string" ? e.baseline : (e.baseline as { arm?: string } | null)?.arm ?? null} />
 			{/* What it cost, was it worth it, does the cheap step predict the next (MLSys session, PR 324). */}
 			<ExperimentSpend app={app} e={e} steps={steps} rows={expRows ?? undefined} />
 			{/* Which step may read held-out data, who has, and how many trials (MLSys session, PR 329). */}
