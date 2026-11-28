@@ -10,7 +10,7 @@
 // order survive — the same file is what the scheduler runs. Every edit is a
 // pure text → text function; the caller saves it with base_sha (409 = reload).
 
-import { parseDocument, isMap, isSeq, type Document, YAMLMap, YAMLSeq } from "yaml";
+import { parse, parseDocument, isMap, isSeq, stringify, type Document, YAMLMap, YAMLSeq } from "yaml";
 
 export interface FeedbackMetric { name: string; better: "higher" | "lower"; target?: number }
 /**
@@ -357,5 +357,114 @@ export function setFeedback(text: string, workflowId: string, feedback: Feedback
 		if (f.gate?.trim()) m.set("gate", f.gate.trim()); else m.delete("gate");
 		return m;
 	});
+	return String(d);
+}
+
+// ── versions of an experiment ─────────────────────────────────────────────
+//
+// A researcher adds versions to an existing experiment from its panel (round
+// 10, 2026-11-28: the only ways were the chat — which could not read the app's
+// notes — or hand-editing YAML). Text in, text out, comments kept.
+
+export interface NewVersion { id: string; about?: string; inputs: Record<string, unknown> }
+
+function findExperiment(d: Document.Parsed, id: string): YAMLMap | null {
+	const seq = d.get("experiments", true);
+	if (!isSeq(seq)) return null;
+	for (const it of (seq as YAMLSeq).items) if (isMap(it) && s((it as YAMLMap).get("id")) === id) return it as YAMLMap;
+	return null;
+}
+
+/** The inputs a version of workflow `wfId` can set: its own, or for a chain
+ *  every stage's (a version's inputs reach every stage). */
+export function versionInputs(spec: AppSpec, wfId: string): string[] {
+	const wf = spec.workflows.find((w) => w.id === wfId);
+	if (!wf) return [];
+	const names = new Set(Object.keys(wf.inputs));
+	for (const st of chainStages(wf.steps)) {
+		for (const k of Object.keys(spec.workflows.find((w) => w.id === st.use)?.inputs ?? {})) names.add(k);
+	}
+	return [...names];
+}
+
+/** The ids an experiment already declares (versions, or older `arms`). */
+export function versionIds(text: string, experimentId: string): string[] {
+	const d = parseDocument(text || "");
+	const e = d.errors.length ? null : findExperiment(d as Document.Parsed, experimentId);
+	if (!e) return [];
+	const out: string[] = [];
+	for (const key of ["versions", "arms"]) {
+		const seq = e.get(key, true);
+		if (isSeq(seq)) for (const it of (seq as YAMLSeq).items) if (isMap(it)) out.push(s((it as YAMLMap).get("id")));
+	}
+	return out.filter(Boolean);
+}
+
+/** A starting point for new versions: the experiment's first version as YAML,
+ *  renamed, so the reader edits a real example instead of a blank box. */
+export function versionTemplate(text: string, experimentId: string): string {
+	const d = parseDocument(text || "");
+	const e = d.errors.length ? null : findExperiment(d as Document.Parsed, experimentId);
+	const seq = e?.get("versions", true);
+	const first = isSeq(seq) ? (seq as YAMLSeq).items.find(isMap) : null;
+	const base = first ? obj((first as YAMLMap).toJSON()) : {};
+	const inputs = obj(base.inputs);
+	const entry: Obj = { id: `${s(base.id) || "version"}_2`, about: "What this version changes, and why it might win" };
+	if (Object.keys(inputs).length) entry.inputs = inputs;
+	return stringify([entry], { lineWidth: 0 });
+}
+
+/**
+ * New versions as the reader typed or pasted them: a YAML/JSON list of
+ * `{id, about?, inputs?}` (one mapping counts as a list of one). Every problem
+ * comes back in words; `versions` holds only the ones that can be added.
+ */
+export function parseNewVersions(text: string, taken: Iterable<string>, inputNames?: string[]): { versions: NewVersion[]; problems: string[] } {
+	const problems: string[] = [];
+	let raw: unknown;
+	try { raw = parse(text || ""); } catch (e) { return { versions: [], problems: [`That isn't valid YAML or JSON: ${String((e as Error).message).split("\n")[0]}`] }; }
+	const items = Array.isArray(raw) ? raw : raw && typeof raw === "object" ? [raw] : [];
+	if (!items.length) return { versions: [], problems: ["Write at least one version: a list of entries with an id and inputs."] };
+	const seen = new Set(taken);
+	const allowed = inputNames && inputNames.length ? new Set(inputNames) : null;
+	const versions: NewVersion[] = [];
+	items.forEach((it, i) => {
+		const o = obj(it);
+		const id = s(o.id).trim();
+		const where = id ? `"${id}"` : `Entry ${i + 1}`;
+		if (!/^[a-z][a-z0-9_]{0,47}$/.test(id)) { problems.push(`${where}: an id is lower-case letters, digits and _ (it starts with a letter).`); return; }
+		if (seen.has(id)) { problems.push(`${where}: there is already a version with that id.`); return; }
+		const inputs = obj(o.inputs);
+		const unknown = allowed ? Object.keys(inputs).filter((k) => !allowed.has(k)) : [];
+		if (unknown.length) { problems.push(`${where}: ${unknown.join(", ")} ${unknown.length > 1 ? "aren't inputs" : "isn't an input"} of this experiment's workflow, so ${unknown.length > 1 ? "they" : "it"} would be ignored. Its inputs: ${[...allowed!].join(", ")}.`); return; }
+		const extra = Object.keys(o).filter((k) => !["id", "about", "inputs"].includes(k));
+		if (extra.length) { problems.push(`${where}: put ${extra.join(", ")} under inputs (a version has only id, about and inputs).`); return; }
+		seen.add(id);
+		versions.push({ id, ...(s(o.about).trim() ? { about: s(o.about).trim() } : {}), inputs });
+	});
+	return { versions, problems };
+}
+
+/** Append versions to an experiment's `versions:` (the simple scheme). */
+export function addVersions(text: string, experimentId: string, versions: NewVersion[]): string {
+	const d = doc(text);
+	const e = findExperiment(d, experimentId);
+	if (!e) throw new Error(`There is no experiment "${experimentId}" in this app's spec`);
+	if (isSeq(e.get("arms", true)) && !isSeq(e.get("versions", true))) {
+		throw new Error(`"${experimentId}" lists arms (the older form), not versions — add them in Settings (YAML)`);
+	}
+	const taken = new Set(versionIds(text, experimentId));
+	const cur = e.get("versions", true);
+	let seq: YAMLSeq;
+	if (isSeq(cur)) seq = cur as YAMLSeq;
+	else { seq = new YAMLSeq(); e.set("versions", seq); }
+	for (const v of versions) {
+		if (taken.has(v.id)) throw new Error(`There is already a version "${v.id}"`);
+		taken.add(v.id);
+		const entry: Obj = { id: v.id };
+		if (v.about) entry.about = v.about;
+		if (Object.keys(v.inputs).length) entry.inputs = v.inputs;
+		seq.add(d.createNode(entry));
+	}
 	return String(d);
 }
