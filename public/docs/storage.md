@@ -1,20 +1,20 @@
 # Where your files live
 
-Every cluster — NUS, office and home — uses the same places for your data: your **home**, a
-**local disk**, a **model cache**, **container images**, and **central storage** for anything big.
-Your paths did not change. This page says which folder to use for what, and the limits on each.
+Every cluster — NUS, office and home — uses **the same paths for the same kind of file**. Learn them once;
+they are the same on every machine you log into.
 
-> Updated **2026-11-28**, after the storage maintenance: homes moved off the machines' system
-> disks, every office machine got a capped image store and model cache, and sandboxes got a
-> capped local disk.
+> Updated **2026-11-28**: homes moved off the machines' system disks and capped at 500 GiB, one shared
+> dataset folder and one shared model folder per cluster, and a model/dataset mirror at every site.
 
-| Place | Path | For | Limit |
+| Kind | Path (every cluster) | For | Limit |
 |---|---|---|---|
-| **Home** | `/home/<you>` | code, configs, notebooks, results you keep | **500 GiB** per person per machine |
-| **Local disk** | `/scratch` (sandbox) | build output, temporary data, caches | 50 GiB per person per machine |
-| **Models** | `/mnt/hf-hot` (office), `/huggingface` | model weights | 100 GB cache per machine |
+| **Home** | `/home/<you>` | code, configs, notebooks, results you keep | **500 GiB** per person per machine, hard |
+| **Datasets** | `/mnt/datasets` | big data, anything shared (read-write) | the cluster's big store |
+| **Models** | `/mnt/models` | shared model weights (read-only) | — |
+| **Model/dataset downloads** | `HF_ENDPOINT` (already set) | Hugging Face downloads go through the site mirror | — |
+| **Model cache** | `/huggingface` | this machine's own cache | 100 GB (office) |
+| **Local disk** | `/scratch` (sandbox) | build output, temporary data | 50 GiB per person per machine |
 | **Images** | `harbor.lum.id/<project>/<name>:<tag>` | container images | 150 GB per office machine |
-| **Big data** | `/mnt/datasets` (office), central storage per cluster | datasets, anything shared | — |
 
 ---
 
@@ -24,8 +24,7 @@ Same path on every machine you log into.
 
 **Capped at 500 GiB per person per machine — a hard limit.** At the cap, writes fail with
 "Disk quota exceeded" until you delete files or move big data to `/mnt/datasets`. Check your usage
-with `quota -s`. In force on office luyao0 and luyao3 since 2026-11-28; luyao1, luyao2, luyao4 and NUS
-follow at their next maintenance window.
+with `quota -s`. In force on the office and home machines since 2026-11-28; NUS follows when the home moves there finish.
 
 | Where you are | Your home is stored on | Notes |
 |---|---|---|
@@ -48,18 +47,33 @@ Homes are **not a backup**. Keep anything you cannot lose in git as well.
 
 ---
 
-## Models
+## Models — `/mnt/models` and the site mirror
 
-- **Office:** load from **`/mnt/hf-hot`**, the shared read-only store (Qwen 2.5 and 3 families,
-  Llama 3.2, embedding models), instead of downloading your own copy.
-- Each office machine also keeps a cache at **`/huggingface`**, capped at **100 GB**. Files that are
-  also in the shared store take no space, and when the cache is full the least recently used
-  models are removed — they can always be downloaded again.
-- **NUS s0:** models are under `/data/huggingface` on central storage; NUS sandboxes see the
-  shared store at `/models`.
-- A FlowMesh SSH session does **not** see `/huggingface` — it downloads what it needs.
-- A private copy in `~/.cache/huggingface` counts against your home. If several people need a
-  model, ask for it to be added to the shared store.
+- **`/mnt/models`** is the cluster's shared, read-only model store, laid out like a Hugging Face cache
+  (`/mnt/models/hub/models--<org>--<name>`). Point `HF_HUB_CACHE=/mnt/models/hub` at it, or pass
+  the snapshot path, instead of downloading your own copy.
+  - Office: Qwen 2.5 and 3 families, Llama 3.2, embedding models (`/mnt/hf-hot` still works).
+  - NUS: storage-head `/data/huggingface` (16 TB) on s0 and h0.
+  - Home: n5-max `tank/models` (Qwen 2.5/3, LLaVA 1.5, Wan 2.1 so far).
+- **Downloads go through the site mirror.** Every machine has `HF_ENDPOINT` set to its site's Hugging
+  Face mirror, so a model or dataset is downloaded from the internet **once per site**; everyone
+  after you gets it at local speed, and it keeps working when the internet link is down. Nothing to
+  change in your code — `from_pretrained`, `snapshot_download` and `load_dataset` all use it.
+
+  | Site | `HF_ENDPOINT` |
+  |---|---|
+  | Office | `http://192.168.6.204:31890` |
+  | Home | `http://192.168.7.155:31890` |
+  | NUS | `http://10.10.40.2:31890` (InfiniBand) |
+
+  Gated models still need your own `HF_TOKEN`. The mirror keeps what it fetched for everyone at the site,
+  so do not fetch anything you may not share within the group.
+- Each office machine also keeps a cache at **`/huggingface`**, capped at **100 GB**; the least recently
+  used models are removed when it is full.
+- A FlowMesh SSH session does **not** see `/mnt/models` or `/huggingface` and has no `HF_ENDPOINT`;
+  `export HF_ENDPOINT=<your site's mirror>` to download through the mirror.
+- A private copy in `~/.cache/huggingface` counts against your 500 GiB home. If several people need a
+  model, ask for it to be added to `/mnt/models`.
 
 ---
 
@@ -88,9 +102,12 @@ Large datasets and anything shared belong here, not in your home or on a local d
 
 | Cluster | Where | Space | Notes |
 |---|---|---|---|
-| **Office** | **QNAP NAS** (`192.168.6.150`) | ~43 TB free | **`/mnt/datasets` on every office machine** (luyao0–luyao4). Make a folder per project; anyone can read it, only the owner can delete. About 110 MB/s, so copy what a job reads hard to `/scratch` first. Not backed up. In office sandboxes, published datasets appear read-only at `/datasets`. luyao4's SSD (homes) is nearly full — do not put datasets there. |
-| **NUS** | storage-head `/data` (disk array, InfiniBand) | ~388 TB free | Datasets in `/data/data`, models in `/data/huggingface`. One disk array — not a backup. |
-| **Home** | n5-max pool `tank` | ~95 TB free | Sandbox homes, shared data. |
+| **Office** | QNAP NAS (`192.168.6.150`) | ~43 TB free | **`/mnt/datasets`** on luyao0–luyao4. About 110 MB/s today (the NAS link is 1 Gb/s), so copy what a job reads hard to `/scratch` first. luyao4's SSD (homes) is nearly full — do not put datasets there. |
+| **NUS** | storage-head `/data/data` (disk array, over InfiniBand) | ~48 TB free | **`/mnt/datasets`** on s0 and h0 (also at `/data/data` on s0). Models in `/data/huggingface`. |
+| **Home** | n5-max pool `tank` (10 Gb/s) | ~76 TB free | **`/mnt/datasets`** on n5-max, luyaobox9 and luyaomini–luyaomini5. |
+
+The same path on every cluster: make a folder per project; anyone can read it, only the owner can
+delete it. **Not backed up.** In sandboxes, published datasets appear read-only at `/datasets`.
 
 **Tables: query them, do not copy them.** FinData and Lumid Data answer queries in place — see
 [Sandboxes §5](/studio/docs/sandboxes#5-data--query-it-do-not-copy-it) and
@@ -105,7 +122,7 @@ Large datasets and anything shared belong here, not in your home or on a local d
 2. Put scratch work on the local disk and copy results home.
 3. Load models from the shared store instead of downloading your own copy.
 4. Push the images you rely on to a **public** Harbor project and use the `harbor.lum.id` name.
-5. Put large datasets on your cluster's central storage — `/mnt/datasets` at office — and keep your
+5. Put large datasets in `/mnt/datasets` (every cluster) and keep your
    home under 500 GiB.
 
 Questions, missing files, a model to add to the shared store, or an image to restore: ask Yao.
