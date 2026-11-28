@@ -28,6 +28,10 @@ import { RunDots, StepProgress, type RunDot, type StepDot } from "@/components/r
 import { EvidenceTable } from "@/components/research/EvidenceGrid";
 import { nextWords } from "@/lib/evidence";
 import { DEMO_EVIDENCE } from "./evidence-fixtures";
+import ProgressPerSpend from "@/components/research/ProgressPerSpend";
+import SpendLine from "@/components/research/SpendLine";
+import StepAgreement from "@/components/research/StepAgreement";
+import { SPEND_ROWS, SPEND_STEPS, SPEND_USAGE, spendLabel } from "./spend-fixtures";
 
 // Progress-dots demo data (fixed times, so the gallery is stable).
 const DEMO_T = Math.floor(Date.now() / 1000) - 600;
@@ -217,6 +221,17 @@ export default function DesignGallery() {
 					</div>
 				</Section>
 
+				<Section id="spend" title="What it cost — results per spend, does the cheap step predict, budget">
+					<div className="grid gap-6 lg:grid-cols-2">
+						<div className="rounded-xl border border-border bg-card p-4">
+							<ProgressPerSpend steps={SPEND_STEPS} rows={SPEND_ROWS} metric="goodput_tok_s" label={spendLabel} />
+						</div>
+						<div className="rounded-xl border border-border bg-card p-4 space-y-4">
+							<StepAgreement steps={SPEND_STEPS} rows={SPEND_ROWS} label={spendLabel} />
+							<SpendLine usage={SPEND_USAGE} rows={SPEND_ROWS} />
+						</div>
+					</div>
+				</Section>
 				<Section id="dots" title="Progress dots — a dot is a run, or a step">
 					<div className="grid gap-8 md:grid-cols-2">
 						<div className="space-y-3">
