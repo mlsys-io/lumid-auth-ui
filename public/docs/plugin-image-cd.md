@@ -56,11 +56,11 @@ Prereqs: repo secrets `GHCR_USER` + `GHCR_TOKEN` (org PAT: `repo` + `read:packag
    baseline):
    ```bash
    # The lane is semver, so a tag NOT HIGHER than the live one builds an image and then rolls
-   # nothing, silently. Live was v1.6.0 on 2026-09-28 -- check the CURRENT one first:
+   # nothing, silently. Live was v1.11.1 on 2026-11-28 -- check the CURRENT one first:
    #   kubectl -n lumid get pods -l app=lumilake \
    #     -o jsonpath='{.items[0].spec.containers[*].image}'
-   git tag -a lumilake-v1.7.0 origin/dev -m "base -> lumilake_server v0.1.<new>"
-   git push origin lumilake-v1.7.0     # builds ghcr.io/mlsys-io/lumilake:v1.7.0 -> Image Updater rolls
+   git tag -a lumilake-v1.12.0 origin/dev -m "base -> lumilake_server v0.1.<new>"
+   git push origin lumilake-v1.12.0    # builds ghcr.io/mlsys-io/lumilake:v1.12.0 -> Image Updater rolls
    ```
 4. **Verify:** `curl -H "Authorization: Bearer <PAT>" https://lum.id/ll/openapi.json` → new version.
 
@@ -72,7 +72,7 @@ cutting a *higher* tag that happens to carry the older build.
 
 ## FlowMesh — auto-**sync**, manual image **pin** ⚠️
 
-> **Updated 2026-09-11, and again 2026-09-27 (v0.1.10-rc.2).** The plugin-bake recipe **is**
+> **Updated 2026-09-11, 2026-09-27 (v0.1.10-rc.2) and 2026-11-28 (v0.1.15-rc.1 live at every site).** The plugin-bake recipe **is**
 > committed, and the `flowmesh-host` app **does** carry Image Updater annotations — which does *not*
 > mean the image lane is automated (trap box below). rc.2 added: fleet-first ordering for
 > node-coupled releases, bake-from-source when the plugin changed, and busy/SSH-session gates on
@@ -90,7 +90,7 @@ git write-back). Those annotations can never match the tag this service actually
 
 > ### ⚠️ The trap: a suffixed tag silently fails a clean-semver lane
 >
-> The plugin image is tagged `vX.Y.Z-plugin` (live since 2026-09-27: **`v0.1.10-rc.2-plugin`**). The lane's regex is
+> The plugin image is tagged `vX.Y.Z-plugin` (live since 2026-11-27: **`v0.1.15-rc.1-plugin`**). The lane's regex is
 > `^v\d+\.\d+\.\d+$`, which the `-plugin` / `-plugin2` / `-rc.N` suffix fails. The updater
 > therefore tracks **nothing** — and it says so nowhere. The Application still reports
 > **`Synced / Healthy`**, because "Synced" means *matches git plus the write-back override*, not
@@ -143,7 +143,10 @@ hand-pinned by design — but it has two consequences worth stating:
   2026-09-09 had manifest `v0.1.6-rc.1`, Application pinned `v0.1.5`, and v0.1.5 serving throughout.
 
   **NUS `platform-flowmesh` is exactly this shape** — stock OSS `flowmesh_server`, semver
-  `allow-tags`, `write-back-method: argocd`. To put an rc there you must FIRST remove the image
+  `allow-tags`, `write-back-method: argocd`. That lane is **switched off today** (the annotations are
+  commented out in `nus-cluster/argocd/apps/platform-flowmesh.yaml` since the v0.1.10-rc.1 pin; NUS
+  runs `v0.1.15-rc.1`, pinned in `nus-cluster/platform/flowmesh/kustomization.yaml`), so pinning an rc
+  there is safe now. If the lane is ever turned back on: to put an rc there you must FIRST remove the image
   from the Application's `image-list` annotation (do **not** widen `allow-tags` to admit `-rc`;
   that regexp exists to keep pre-release builds off a service other people depend on), AND clear
   any override already on the live object — deleting the annotations does not prune it:
@@ -223,6 +226,11 @@ see the shadowing warning under the per-box roll.
    | home | `flowmesh-host-home` | `home-flowmesh/flowmesh-home.yaml` | plain dir — inline full ref on the container |
    | office | `flowmesh-host-office` | `office-flowmesh/flowmesh-office.yaml` | plain dir — inline full ref on the container |
 
+   **NUS is a sixth site, outside this table**: it runs the stock `flowmesh_server` (no plugin), pinned in
+   `nus-cluster/platform/flowmesh/kustomization.yaml` plus the two `fm-supervisor` manifests and the
+   `fm-worker` image in `nus-cluster/platform/flowmesh-workers/`, and is synced by NUS's own Argo CD —
+   hard-refresh there too.
+
    Then `FLOWMESH_VERSION: vX.Y.Z` in each site's Deployment, so every supervisor creates workers
    from the matching `flowmesh_worker` tag (cloud: the **dind-spawned co-located CPU worker**;
    vast/vast2: the **rented instance**; home/office: their own fleets).
@@ -287,8 +295,10 @@ the rc.2 roll (uptime and ~31 GB per card unchanged).
 
 > **DO NOT TRUST A WRITTEN ROSTER COUNT — including this one.** As of 2026-09-18 this file said 8
 > boxes, `flowmesh-watchdog.sh` said 7 ("was 9 until 2026-08-13"), and
-> `flowmesh-fleet-watchdog-cronjob.yaml` sets `EXPECTED_GPU_NODES: "17"` (federated: home 12 +
-> office 5). They cannot all be right. Derive the roster live before planning a roll — `lum.id/fm`,
+> `flowmesh-fleet-watchdog-cronjob.yaml` set `EXPECTED_GPU_NODES: "17"` (federated: home 12 +
+> office 5). They could not all be right; the cronjob now lists the roster BY NAME
+> (`EXPECTED_GPU_ALIASES`, 10 boxes: `luyao0`–`luyao4`, `luyaomini1`–`luyaomini5`) and flags both
+> missing and unexpected nodes. Derive the roster live before planning a roll — `lum.id/fm`,
 > or `kubectl get ds flowmesh-watchdog-installer` (it reconciles onto every node labelled
 > `lumid.io/flowmesh-gpu=true`, so its coverage IS the roster).
 
@@ -301,8 +311,8 @@ on `.203`/`.204`:
 
 | Site | Boxes | Jump host |
 |---|---|---|
-| **home** `192.168.7.0/24` | `luyaomini1`…`luyaomini5` = **.182 / .183 / .184 / .185 / .186**; `luyaomini` (control-plane) .181; `luyaobox9` .199; `luyao-n5-max` .155; `luyao-gmk` .156; GB10s `gx10-548e` .170, `gx10-db5e` .171 | `luyaobox9` (`.199`) |
-| **office** `192.168.6.0/24` | `luyao0/2/3/4` = .200 / .202 / .203 / .204 | `kvrun-jump` = **`luyaobox7`** |
+| **home** `192.168.7.0/24` | `luyaomini1`…`luyaomini5` = **.182 / .183 / .184 / .185 / .186**; `luyaomini` (control-plane) .181; `luyaobox9` .199; `luyao-n5-max` .155; `luyao-gmk` .156 (the GB10s `gx10-548e`/`gx10-db5e` were .170/.171 until they moved to the office 2026-11-02) | `luyaobox9` (`.199`) |
+| **office** `192.168.6.0/24` | `luyao0`…`luyao4` = .200 / .201 / .202 / .203 / .204 | `kvrun-jump` = **`luyaobox7`** |
 
 **This table previously listed the minis at `192.168.6.182-185`** — wrong on both the subnet and the
 offset (it was off by one: the old `.182` is retired, and `luyaomini1` now holds `.182`). Following
@@ -340,14 +350,17 @@ prompt cannot run, so pass the password another way. Prefer the file: it stays o
 the environment, and out of your shell history and session transcript.
 ```bash
 umask 077; printf %s '<password>' > ~/.fm-pw          # once, by hand
-SSHPASS_FILE=~/.fm-pw DRY_RUN=1 k8s-lift/flowmesh-host/fleet-roll.sh v0.1.10-rc.1
+SSHPASS_FILE=~/.fm-pw DRY_RUN=1 k8s-lift/flowmesh-host/fleet-roll.sh v0.1.15-rc.1
 ```
 `SSHPASS=...` inline works too but lands in history. With none of the three available the script
 exits 1 and names all three — it will not fail silently.
 
 **The BUSY gate needs a FlowMesh API token** (any token that can list workers):
 `FM_API_TOKEN_FILE=/path` (preferred), `FM_API_TOKEN=...`, or `~/.lumid/admin.pat`; without one the
-script exits 1. **Why the GPU-pid gate alone was not enough:** an SSH-session task holds a worker with
+script exits 1. **Point it at the box's site:** the gate reads `$FM_BASE/api/v1/workers`, and the
+default `FM_BASE=https://lum.id/fm` is the merged view — on 2026-11-27 it returned only NUS workers, so
+every home and office box would have read as idle. Run one site at a time with
+`FM_BASE=https://lum.id/fm/home` (or `/fm/office`). **Why the GPU-pid gate alone was not enough:** an SSH-session task holds a worker with
 NO GPU compute process. On 2026-09-27 the old gate passed luyao0 while `gpu_1` carried a user's live
 session, and the roll recreated the session container under them. The on-box check (containers
 labelled `flowmesh.ssh.managed=true`) exists alongside the API check because the merged `/fm` view

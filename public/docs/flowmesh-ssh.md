@@ -20,7 +20,8 @@ from your laptop with plain `ssh`.
 | Stop (running) | `POST …/api/v1/tasks/<task_id>/stop` |
 | Cancel (still queued) | `POST …/api/v1/workflows/<workflow_id>/cancel` |
 
-`<site>` is `home`, `office` or `nus`; omit it (`https://lum.id/fm/api/v1/…`) for the cloud mesh.
+`<site>` is `home`, `office` or `nus`. Without a site (`https://lum.id/fm/api/v1/…`) reads are merged across
+sites and a submit goes to **office** — name the site instead of relying on that.
 Auth is `Authorization: Bearer <lm_pat_live_…>` — **one lum.id PAT works on every site**, there is
 no per-site mesh key.
 

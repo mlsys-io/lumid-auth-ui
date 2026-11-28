@@ -6,11 +6,14 @@ executed, and what breaks along the way. The worked example is `vla-curation`, a
 demo that turns raw robot episodes into a VLA training manifest, but the
 contract in §4–§6 applies to any compute graph you write.
 
-The raw `/fm` and `/ll` endpoints on this page are **admin-only at the edge**.
-§2 has the read path a normal user gets instead.
+Most raw `/fm` and `/ll` endpoints on this page are **admin-only at the edge**;
+`/fm/home` and `/fm/office` are open to any signed-in user (§2 says exactly which).
+§2 also has the read path a normal user gets instead.
 
 Measured on the live office lane on 2026-09-18; the surface, auth and job-status
-sections re-verified 2026-09-20. Where a thing is unverified, it says so.
+sections re-verified 2026-09-20. Sites, auth tiers and the context-length default
+re-checked 2026-11-28 against FlowMesh v0.1.15-rc.1 and Lumilake v1.11.1. Where a
+thing is unverified, it says so.
 
 ---
 
@@ -53,22 +56,31 @@ fast and safe even when an LLM op's backend is offline. `run_lumilake_job`
 `output_location` must be `{type: s3, prefix: …}` or `{type: db, table, column}`;
 the deployed server rejects `inline` and `http` with a 422.
 
-### Auth: `/fm` and `/ll` are admin-only
+### Auth: who can reach which prefix
 
 A personal `lm_pat_live_*` belonging to a non-admin gets **403** on both
 `GET /ll/api/v1/workers` and `GET /fm/api/v1/workers`. The whole `/ll/api/v1/*`
-prefix sits behind `auth_request /internal_admin_check` at the edge, and `/fm`
-is gated the same way. `GET /fm/healthz` and `GET /ll/healthz` stay anonymous.
+prefix sits behind `auth_request /internal_admin_check` at the edge, and so do the
+merged `/fm/api/v1/*` and the `/fm/cloud`, `/fm/vast`, `/fm/vast2` sites. `/fm/nus/*`
+is admin-only too. `GET /fm/healthz` and `GET /ll/healthz` stay anonymous.
+
+The exceptions are the two sites on hardware we own. **`/fm/home/*` and
+`/fm/office/*` take any signed-in user's PAT.** FlowMesh scopes rows to your
+identity there, so you see your own tasks and sessions, and an empty list means
+"none of yours", not "the site is down". The inventory reads
+`GET /fm/home|office/api/v1/nodes|workers` show the whole site to any signed-in
+user. `/ll/<site>/*` is not gated at the edge but refuses a call without your own
+`Authorization: Bearer` PAT (401).
 
 That prefix previously answered **anonymously** — `GET /ll/api/v1/workers`
 returned the fleet inventory (hostnames, cores, RAM, GPUs, cached models) to any
 caller with no credential — and closing that in 2026-09-12 took the whole prefix
 with it. Earlier notes claimed the proxy injects an operator token for bare
 `/fm` and `/ll` so a normal user PAT reaches the shared fleet. **It does not.**
-Every raw-HTTP example below needs an admin credential.
+The examples below use `$ADMIN_PAT`; the ones under `/fm/home` and `/fm/office`
+also work with your own PAT, scoped to your own work.
 
-One credential covers all three sites — there is no per-site key. It just
-has to be an admin one.
+One credential covers every site — there is no per-site key.
 
 ### The read path a normal user has
 
@@ -105,25 +117,31 @@ Studio (React-Flow graph, HALO worker badges) — see
 
 ## 3. Sites and federation
 
-`cloud`, `home` and `office` are three separate sites behind mesh-federator.
-`/fm` and `/ll` fan out to all three and merge; `/fm/<site>/…` talks to exactly
-one. Before federation these bases proxied only to the **cloud** control plane,
+FlowMesh has six sites behind mesh-federator: `cloud`, `home`, `office`, `nus`,
+and the rented-GPU `vast` and `vast2`. Lumilake has four: `cloud`, `home`,
+`office`, `nus`. `/fm` and `/ll` fan out to all of them and merge; `/fm/<site>/…`
+talks to exactly one. `cloud`, `vast` and `vast2` normally list 0 workers: cloud is
+the hub, and the vast sites rent GPUs only while work is queued. Before
+federation these bases proxied only to the **cloud** control plane,
 which is why they once reported a single FlowMesh node and zero Lumilake workers
 while the on-prem sites held the rest.
 
 The list endpoints still return a **JSON array** — the same contract as before,
 merged, with each record carrying an extra `site` field. Existing callers keep
 working unchanged and simply see more. Per-site status rides in a response
-header, so nothing is lost:
+header, so nothing is lost (counts below are illustrative):
 
 ```
-X-Mesh-Sites: cloud=1,home=9,office=5
-X-Mesh-Sites: cloud=0,home=5,office=error(HTTP 401)     # a failing site is named, not hidden
+X-Mesh-Sites: cloud=0,home=10,nus=2,office=10,vast=0,vast2=0
+X-Mesh-Sites: cloud=0,home=10,nus=2,office=error(HTTP 401),vast=0,vast2=0   # a failing site is named, not hidden
 ```
 
 **Read that header before trusting a count.** It is what distinguishes "office
 is unreachable" from "office has no workers" — a distinction the old
-single-upstream view could not express.
+single-upstream view could not express. To check whether one site's workers are
+`IDLE` or `BUSY`, read that site's own list, `/fm/<site>/api/v1/workers`. On
+2026-11-27 the merged list returned only the NUS workers and would have shown every
+home and office box as idle.
 
 `?shape=full` returns the structured form instead of a bare array:
 
@@ -135,8 +153,11 @@ single-upstream view could not express.
 ```
 
 Federated today: `fm/api/v1/nodes`, `fm/api/v1/workers`, `ll/api/v1/workers`,
-**and per-worker retrieve** `GET /api/v1/workers/{id}`. **Everything else —
-notably `POST /api/v1/workflows` (submit) — is proxied verbatim to the cloud.**
+**and per-worker retrieve** `GET /api/v1/workers/{id}`. **Everything else is
+proxied verbatim to one default site.** For `/fm` that is **office**, not the
+cloud: the cloud mesh has no workers, and while submits went there every task
+failed unassigned. So `POST /fm/api/v1/workflows` (submit) runs at office. For
+`/ll` it is the cloud Lumilake.
 
 ### Picking a site
 
@@ -177,9 +198,10 @@ curl -s  https://lum.id/fm/api/v1/workers/wkr-nonexistent -H "Authorization: Bea
 ```
 
 Worker ids are globally unique (`wkr-NNN`), so the first site that answers is
-the owning site. Lumilake's orchestrator is pointed at the populated **office**
-site (`/fm/office`) so list + retrieve + submit all reach a site that actually
-has workers.
+the owning site. The cloud Lumilake's orchestrator is pointed at the populated
+**office** site (`/fm/office`) so list + retrieve + submit all reach a site that
+actually has workers. The home, office and NUS Lumilakes each dispatch to their
+own site's FlowMesh.
 
 ### Two things a site will trip you on
 
@@ -336,15 +358,14 @@ tokens.** Set **both** spellings in `chat_template_kwargs` —
 Qwen reasoning anyway; the resulting payload fails FlowMesh's `InferenceItem`
 validation, so it surfaces as a *schema* error and reads like a contract bug.
 
-**Override `max_model_len` per op — the 8192 is a server default, not your
-model.** Lumilake pins `max_model_len=8192` **fleet-wide, as a server default
-applied to every op**. It is not a property of the model you chose and it is not
-the office lane's choice, so a job on `home` or `cloud` is affected
-identically. When the model derives a *smaller* maximum than that default —
-`llava-1.5` derives 4096 — vLLM refuses to start and reports `Failed to
-initialize vLLM after trying tensor_parallel_size candidates [1]`, which reads
-like a capacity problem and is a context-length mismatch. Override per op rather
-than lowering the server default.
+**A context-length mismatch reads like a capacity problem.** When an op asks for
+more context than the model derives — `llava-1.5` derives 4096 — vLLM refuses to
+start and reports `Failed to initialize vLLM after trying tensor_parallel_size
+candidates [1]`. Until 2026-09-18 Lumilake forced `max_model_len=8192` on every op,
+which hit exactly this. Every site now runs with no cap
+(`LUMILAKE_VLLM_MAX_MODEL_LEN=0`), so each model uses its own native window. If a
+model's native context does not fit the card it lands on, set
+`config.max_model_len` on that op; a per-op value always wins.
 
 **`output_location.prefix` is RELATIVE to the server's `S3_DATA_PREFIX`,** which
 is prepended. Repeating it writes to `<prefix>/<prefix>/…` **and the job still

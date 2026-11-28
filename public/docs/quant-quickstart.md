@@ -30,7 +30,7 @@ based on the price and on a few published **signals**.
 | Word | Meaning here |
 |---|---|
 | **Strategy** | Your rules, written in a small language (`.lqts`). Registered under your account and paper-traded from the moment it compiles |
-| **Signal** | A number computed from the market's trading, published for you to read. Three exist: `ofi_z`, `vpin`, `outcome_forecast` |
+| **Signal** | A number computed from the market's trading, published for you to read. Three are published for everyone: `ofi_z`, `vpin`, `outcome_forecast` |
 | **`ofi_z`** | Order-flow imbalance as a z-score: are buyers or sellers more aggressive than usual right now? Stored ×1000, so `1500` means 1.5 standard deviations |
 | **`vpin`** | How "informed" the recent trading looks, from 0 to 1, stored ×10000 (`7000` = 0.7) |
 | **Backtest** | Replaying your strategy over a contract's recorded history to see what it would have done |
@@ -128,10 +128,11 @@ next one.
 
 ## 6. Limits worth knowing up front
 
-- **Three signals only**: `ofi_z`, `vpin`, `outcome_forecast`. A strategy that
-  reads any other name compiles, but its backtests can never be real.
-- **Backtests replay the last 7 days**, and a contract must have settled
-  before its result counts.
+- **Three shared signals**: `ofi_z`, `vpin`, `outcome_forecast`. A strategy that
+  reads any other name compiles, but its backtests are not real until you
+  publish that signal yourself ([Producing your own signal](/studio/docs/lqt-signals)).
+- **Backtests replay the last 7 days** by default (a `window` of up to 90 days
+  can be asked for), and a contract must have settled before its result counts.
 - **Your limit price is used.** A `@ <price>` fills at the price you named;
   omitting it fills at the mid. Read that as *"if I had been filled at my
   price"* — it does not claim the market ever traded there. The result

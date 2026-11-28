@@ -3,7 +3,7 @@
 ## Overview
 
 The FinData warehouse (market data, fundamentals, prediction markets, news, macro, and more —
-1.7&nbsp;TB, 22 schemas, ~9,800 tables) is reachable with **real SQL**, not only over HTTP. Point
+2.8&nbsp;TB, 22 schemas, ~9,990 tables) is reachable with **real SQL**, not only over HTTP. Point
 `psql`, DBeaver, pgAdmin, Metabase, Tableau, or DuckDB's `postgres` extension straight at it.
 
 Use this when you need ad-hoc joins, bulk pulls, or tooling the REST shape doesn't fit. For
@@ -47,7 +47,7 @@ Three things follow from the credential being yours:
 >
 > **You do not need any of this to query FinData in chat.** The Studio chatbox answers
 > warehouse questions for every signed-in user with no grant at all. SQL is the gated path
-> because it is a direct, unmetered connection to 1.7 TB of production data; chat is
+> because it is a direct, unmetered connection to 2.8 TB of production data; chat is
 > rate-limited, accounted, and runs through a service credential. If you were denied here,
 > chat still works.
 
@@ -102,7 +102,7 @@ plus a notebook; if you genuinely need more, say so rather than opening a second
 
 **A query that runs past 120 seconds is cancelled, not slow.** It isn't a broken connection.
 In particular, a naive `SELECT count(*)` on one of
-the large hypertables (e.g. `prediction_markets.kalshi_markets` — 49.7M rows / 126&nbsp;GB) will
+the large hypertables (e.g. `prediction_markets.kalshi_markets` — more than 60M rows) will
 hit this timeout. Scope your query first:
 
 ```sql
@@ -119,7 +119,7 @@ select * from timescaledb_information.hypertables where hypertable_schema = 'pre
 ```sql
 \dn                                            -- list schemas (22)
 select table_schema, count(*) from information_schema.tables
-  group by 1 order by 2 desc;                  -- ~9,800 tables
+  group by 1 order by 2 desc;                  -- ~9,990 tables
 select * from timescaledb_information.hypertables;
 ```
 
@@ -163,8 +163,8 @@ SELECT * FROM findata.market.ohlc_daily WHERE symbol = 'AAPL' ORDER BY date DESC
 ## From the Studio chatbox (natural language → SQL)
 
 You don't need a SQL client at all — the **Studio chatbox** (`lum.id/studio`) can run analytical
-queries against FinData for you. Select **FinData** in the data-app picker, then ask in plain
-English. The model discovers the schema with `data_catalog` and runs read-only SQL with
+queries against FinData for you. Open **Studio → Data Warehouse** and ask its chat, or use its
+**Ask** tab with **FinData** chosen, in plain English. The model discovers the schema with `data_catalog` and runs read-only SQL with
 `data_query` (which POSTs to `/retrieve` — SELECT-only, read-only txn, row cap, statement timeout).
 
 Example prompts:

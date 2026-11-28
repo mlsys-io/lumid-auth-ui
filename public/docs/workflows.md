@@ -26,12 +26,14 @@ the canvas you build one on.
 
 Two routes. They write the same thing.
 
-**From the Experiments tab** — open your agent and choose **Experiments**. Every
-study the agent declares is listed there with its metric, its scope, its experiments
-and its state. It is a *reading* surface: to create one, open **Workflows**,
-select a workflow that has no study yet, and use the **Measurement** form. A
-workflow that already feeds a study shows that study instead, so a second
-study on the same workflow is a chatbox job — which is exactly how
+**From the Experiments page** — open your app and choose its **Experiments** tab
+(apps such as mbb-consultant declare one), or open **Marketplace → Experiments**
+([`/studio/library/experiments`](/studio/library/experiments)) for every app at
+once. Every study the app declares is listed there with its metric, its scope, its
+versions and its state. On the app's own tab, **New experiment** creates one: pick
+the workflow, name the metric and the scope (a dataset or a case list), and name the
+versions — **Run** defines and queues them in one step. A second study on a
+workflow that already feeds one is easiest from the chatbox — which is exactly how
 `analyst_local_gpu` and `judge_panel_parity` both came to feed `case_eval`.
 
 **From the chatbox**, in words:
@@ -104,7 +106,9 @@ reading of a repeat.
 
 ### Experiments that run without you
 
-A scheduled fire passes **no arguments**, so a workflow whose experiments template their
+New workflows made in Studio start as `run: manual` — nothing runs until someone
+presses **Run** — so this applies only to a workflow whose spec gives it a
+`schedule:`. A scheduled fire passes **no arguments**, so a workflow whose experiments template their
 subject (`{{ args.doc_current | default('…') }}`) re-scores the one default on
 every fire. That measures the scorer's noise, not the experiments. Two workflow settings
 fix it; `doc-readability`'s `score_docs` uses both:
@@ -134,7 +138,7 @@ engine:
 
 ## 2. View status
 
-The **Experiments** tab is the status surface.
+The **Experiments** page is the status surface.
 
 ![The Experiments tab. Each study carries its state, its experiments, its sample count, and — once the criteria are met — its verdict.](/docs/img/experiments-surface.png)
 
@@ -144,7 +148,7 @@ Read the chips left to right:
 |---|---|
 | `collecting` | rows are arriving, criteria not yet met |
 | `criteria met` | the declared `success_criteria` evaluated true |
-| `2 experiments · 1 never run` | a declared experiment that has produced nothing |
+| `2 versions · 1 never run` | a declared version that has produced nothing |
 | `52 results` | rows carrying the **declared metric**, across all experiments |
 | `52 of 78 rows` | 26 rows are in the ledger and carry something else — hover for the keys they do carry |
 
@@ -158,19 +162,21 @@ tenants before it existed.
 
 ## 3. Harvest results
 
-Open a workflow row to see what a run produced.
+Open one of a workflow's runs to see what it produced. The run page shows
+**Runs** and **Data** always, and two more tabs only when they have something to
+say:
 
 ![KOL strategy's detail: kol_alpha under Metric & experiments flagged `metric mismatch` with its state predating the current metric, the Outputs tier reporting that the last run recorded no artifact, and the run tree.](/docs/img/experiments-workflows.png)
 
-- **Metric & experiments** — the study this workflow feeds, in place, so a result is
-  never in only one of the two tabs.
-- **Outputs** — the latest run's final artifact, served from the run store.
+- **Experiment** (only when the workflow feeds one) — the study, in place, so a
+  result is never in only one of two places.
+- **Outputs**, under it — the latest run's final artifact, served from the run store.
   Per-step detail and the LLM transcript are *not* available: they live only in
   the run directory on the scheduler's volume, which the API service does not
   mount. Those surfaces now say so rather than rendering as empty, which used to
   be indistinguishable from a workflow nobody had run.
-- **Run tree** — each run as a node with its score and delta. `NOT SCORED` is a
-  real state, not a gap.
+- **Changes tried** (only when runs branched) — the run tree: each run as a node
+  with its score and delta. `NOT SCORED` is a real state, not a gap.
 
 ### Reading a run's experiments on the canvas
 
@@ -507,11 +513,13 @@ document and stops being an n8n one.
 ## 10. Open one
 
 Go to [`/studio/workflows/new`](/studio/workflows/new), or press **New
-workflow** on any agent's **Workflows** or **Experiments** surface. Paste or
-upload a definition, or start from the example that is already in the box.
+workflow** on [**Your workflows**](/studio/workflows/mine). Paste or upload a
+definition, or start from the example that is already in the box. (An app's own
+**New workflow**, under the app in the sidebar, is something else: a short sheet
+that adds a workflow to that app, which then runs only when you press **Run**.)
 
 There is no *Studio → Workflows → New* path: the sidebar has no Workflows
-entry. `/studio/workflows` takes you to your agents, and
+entry. `/studio/workflows` takes you to your apps, and
 [`/studio/workflows/market`](/studio/workflows/market) is the **Workflow Market** —
 shared templates to import, not your own workflows and not a place to create one.
 
@@ -775,6 +783,10 @@ to become a Lumid workflow.
 ---
 
 ## Changelog
+
+- **1.5.0** (2026-11-28) — Where things are now: Experiments is an app tab (with
+  **New experiment**) or Marketplace → Experiments; the run page's Experiment and
+  Changes tried tabs; new workflows are `run: manual`.
 
 - **1.4.0** (2026-09-27) — § *Arms that run without you*: `rotate_args` (a
   scheduled fire walks a frozen slice) and `engine.arms_concurrency` (arms that

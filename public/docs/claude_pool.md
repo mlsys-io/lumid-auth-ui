@@ -4,28 +4,28 @@
 >
 > **If your role is `user`, this page is not your path — use
 > `deepseek-v4.1-flash`, and it is unlimited.** No token budget, no 4h/7d window,
-> no waiting for an account slot: the model runs on our own 4× H200 NVL server and is
-> configured `dailyBudgetTokens: -1`. The practical limits are a 6000/min
-> gateway rate limit and GPU concurrency, not a quota.
+> no waiting for an account slot: the model runs on NUS SoC's GPU gateway, with our
+> office GX10 cluster behind it, and is configured `dailyBudgetTokens: -1`. The
+> practical limits are a 120/min per-user rate limit and GPU concurrency, not a quota.
 >
 > **If you are a researcher, you can stop after [Quick start](#quick-start).**
 > Set `ANTHROPIC_MODEL=deepseek-v4.1-flash` and you are done. Everything below
 > about pooled accounts, per-user quota, homing and contributing accounts is
-> the **operator** path — Sonnet/Haiku need `admin`, Opus/Fable need
-> `super_admin`.
+> the **operator** path — Sonnet/Haiku/Opus need `admin`, Fable needs
+> `super_admin` (or a pool with Fable enabled).
 >
 > Admin+ only:
 > [Your personal pool quota](#your-personal-pool-quota) ·
 > [Contributing your account to the pool](#contributing-your-account-to-the-pool)
 
-Run your own Claude Code through the org's pooled accounts, or on our
-in-house LLM fleet. The proxy authenticates you with a lum.id PAT, then
+Run your own Claude Code through the org's pooled accounts, or on the
+non-Anthropic models our LLM gateway serves. The proxy authenticates you with a lum.id PAT, then
 routes every request to the pool or the fleet.
 
-> **The default and recommended Claude Code model is the in-house
+> **The default and recommended Claude Code model is
 > `deepseek-v4.1-flash`** — it is free at the margin, open to **all roles**, and
-> needs no pool quota. Pooled Claude models — **Sonnet / Haiku (admin+)**, and
-> **Opus / Fable 5 (super_admin+)** — draw the org's shared Anthropic pool
+> needs no pool quota. Pooled Claude models — **Sonnet / Haiku / Opus (admin+)**, and
+> **Fable 5 (super_admin+)** — draw the org's shared Anthropic pool
 > quota and are reserved for operators who need genuine Claude behaviour. Set
 > `ANTHROPIC_MODEL=deepseek-v4.1-flash` (see [Quick start](#quick-start)) and a
 > fresh session lands on the native model by default.
@@ -34,16 +34,18 @@ routes every request to the pool or the fleet.
 
 ## No terminal? Use the Studio chatbox
 
-The [Studio chatbox](/studio) runs **real Claude Code sessions** server-side —
-no install, no PAT setup. Pick a **(Code)** model from the model picker:
+The [Studio chatbox](/studio) runs server-side — no install, no PAT setup. Its
+**(Code)** models run **real Claude Code sessions**; pick one from the model picker:
 
 | Model | Who | Backed by |
 |---|---|---|
-| DeepSeek-V4.1-Flash (Lumid GPU) | everyone | In-house 4× H200 NVL (NUS) — **default**, no pool quota |
-| Qwen3.8-27B (Code · Lumid GPU) | everyone | In-house luyao1 2× RTX 5090 (tier 0) + gmk + n5-max (tier 1) — no pool quota |
+| DeepSeek-V4.1-Flash (Chat) | everyone | NUS SoC GPU gateway, office GX10s behind it — **default**, no pool quota |
+| DeepSeek-V4.1-Flash (Code) | admin+ | Same model in the Claude Code harness — no pool quota |
+| Qwen3.8-27B (Chat / Code) | everyone | NUS SoC GPU gateway — no pool quota |
+| Qwen3.8 Flash-Next (Chat / Code) | everyone | NUS SoC GPU gateway — no pool quota |
 | Claude Sonnet (Code) | admin+ | Account pool (your 4h/7d quota) |
-| Claude Opus (Code) | admin+ | Account pool |
-| Claude Fable 5 (Code) | super_admin | Account pool |
+| Claude Opus (Code) | admin+ | Account pool (plus a separate Opus cap for `admin`) |
+| Claude Fable 5 (Code) | super_admin, or a pool with Fable enabled | Account pool |
 
 Other non-Anthropic vendor models (Kimi K3, GLM-5.3-Flash, any OpenRouter model) are
 **disabled** — see [Non-Anthropic models](#non-anthropic-models-deepseek-and-qwen38-only).
@@ -58,13 +60,14 @@ cost, duration, step count and cache hit rate. The session pill above the compos
 the live session; reopening a chat thread resumes it. Pool-backed models show
 your personal quota next to the model picker, and their sessions are recorded
 on [/claude-sessions](/claude-sessions) like any pool traffic. The
-DeepSeek-V4.1-Flash entry runs the same Claude Code harness against our own GPUs —
-free at the margin, and open to every role. (Like all traffic, it is subject to
+DeepSeek-V4.1-Flash (Code) and Qwen (Code) entries run the same Claude Code harness
+on those non-Anthropic models — free at the margin. (Like all traffic, they are subject to
 the same per-user [session recording](#session-recording) toggle — see below.)
 
 > **Ordinary (`user`) accounts run Claude Code on deepseek-v4.1-flash by default.**
 > Sonnet and Haiku draw the org's shared Anthropic pool quota and now require
-> **admin** — a `user` requesting a Claude pool model gets `403`. Use the
+> **admin** — a `user` who asks for Sonnet or Haiku is served `deepseek-v4.1-flash`
+> instead (no pool quota), and Opus or Fable return `403`. Use the
 > DeepSeek-V4.1-Flash default for everyday work, and reach for a Claude model
 > only when you need its specifically-Claude behaviour. (Opus is also admin+,
 > Fable 5 is super_admin+ — unchanged.)
@@ -82,16 +85,17 @@ the same per-user [session recording](#session-recording) toggle — see below.)
 > OpenRouter cost-abuse incident — 102 of 147 requests in one window, from `user`
 > accounts). Qwen3.8-27B runs on luyao1's two RTX 5090s (tier 0) with two tier-1
 > replicas on the home segment, `SELF_HOSTED_MODELS`
-> on claude-proxy, and is open to every role — same footing as deepseek. See
+> on claude-proxy, and is open to every role — same footing as deepseek. (Since
+> 2026-11-07 those on-prem copies are paused; NUS SoC's gateway serves it.) See
 > [Non-Anthropic models](#non-anthropic-models-deepseek-and-qwen38-only).
 
-**The chatbox default is DeepSeek-V4.1-Flash, served on our own hardware.** It runs
-tensor-parallel across four H200 NVL GPUs (vLLM, 1M-token context), so ordinary chat costs nothing per
+**The chatbox default is DeepSeek-V4.1-Flash (Chat), served by NUS SoC's GPU gateway**
+with our office GX10 cluster as the fallback, so ordinary chat costs nothing per
 token and consumes no pool quota — reach for a Claude **(Code)** model when you
 want a real Claude Code session (tool use, repo edits, sub-agents), and leave
 everyday chat on the default. It is a reasoning model, so its thinking is
 streamed as a reasoning block and kept out of the final answer. Note this is the
-*in-house* copy, not the metered OpenRouter offload — see
+*free* copy, not the metered OpenRouter offload — see
 [Non-Anthropic models](#non-anthropic-models-deepseek-and-qwen38-only) for why the
 `deepseek/` prefix matters.
 
@@ -112,7 +116,7 @@ claude
 
 That's it. No new client, no re-login — this is the standard Claude Code
 `ANTHROPIC_BASE_URL` override, and `ANTHROPIC_MODEL=deepseek-v4.1-flash` lands
-you on the in-house native model by default. If you leave `ANTHROPIC_MODEL`
+you on the free native model by default. If you leave `ANTHROPIC_MODEL`
 unset, Claude Code's own default applies — set it explicitly so every user
 lands on the free native model. (You may of course set it to a Claude pool
 model instead, subject to the [role table](#model-access-by-role) below.)
@@ -205,21 +209,23 @@ native model — this is the recommendation, not a lock-in.
 
 The pool gates model families by your lum.id role:
 
-| Role | Sonnet / Haiku | Opus | Fable | DeepSeek (in-house) | Qwen3.8-27B (in-house) |
+| Role | Sonnet / Haiku | Opus | Fable | DeepSeek | Qwen3.8-27B / Flash-Next |
 |------|:---:|:---:|:---:|:---:|:---:|
-| `user` | — | — | — | ✅ | ✅ |
+| `user` | served as DeepSeek | — | — | ✅ | ✅ |
 | `admin` | ✅ | ✅ | — | ✅ | ✅ |
 | `super_admin` | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+Fable is also open to anyone whose pool has **Fable enabled** (set on [/code](/code)).
 
 **Sonnet / Haiku are now `admin`+**, and **Opus is `admin`+**, so ordinary
 (`user`) accounts do not get faithful Anthropic Claude models — their Claude
 Code runs on `deepseek-v4.1-flash` by default, which is free and open to every
-role. Requesting a model above your tier returns `403` with the required role —
+role. Requesting Opus or Fable above your tier returns `403` with the required role —
 switch to an allowed model (e.g. `--model deepseek-v4.1-flash`) or ask an admin
 to raise your role. Unlisted Claude-base models are available to everyone.
-**Two** non-Anthropic models are enabled, both in-house and open to **all
-roles** — `deepseek-v4.1-flash` (default, NUS 4× H200) and
-`qwen3.8-27b` (luyao1 2× RTX 5090 tier 0 + gmk + n5-max tier 1). There are no admin-only
+**Three** non-Anthropic models are enabled, all free and open to **all
+roles** — `deepseek-v4.1-flash` (default), `qwen3.8-27b` and
+`qwen3.8-flash-next`, all served by NUS SoC's GPU gateway first. There are no admin-only
 vendor models (Kimi K3 / GLM-5.3-Flash / generic OpenRouter, and every
 `qwen3.6-*` id, were disabled — GLM and qwen3.6 as of 2026-09-01).
 
@@ -234,28 +240,25 @@ vendor models (Kimi K3 / GLM-5.3-Flash / generic OpenRouter, and every
 
 ### Non-Anthropic models (DeepSeek and Qwen3.8 only)
 
-Two non-Anthropic models are available, both open to **every role** (user,
+Three non-Anthropic models are available, all open to **every role** (user,
 admin, super_admin) via the `lum.id/llm` relay, same PAT as the Claude pool:
 
 | Model flag | Backing | Context | Price (input/output per M tok) |
 |---|---|---|---|
-| `--model deepseek-v4.1-flash` | **In-house 4× H200 NVL** (NUS, vLLM tensor-parallel) | 1M | **free** — owned GPUs |
-| `--model qwen3.8-27b` | **In-house luyao1 2× RTX 5090** (tier 0) + gmk + n5-max (tier 1) | 214K | **free** — owned GPUs |
+| `--model deepseek-v4.1-flash` | **NUS SoC GPU gateway**, then our office GX10 cluster (4× GX10, one engine) | 1M | **free** to you |
+| `--model qwen3.8-27b` | **NUS SoC GPU gateway** | 214K | **free** to you |
+| `--model qwen3.8-flash-next` | **NUS SoC GPU gateway** only — no overflow | — | **free** to you |
 
-> **OpenRouter is a bounded overflow, not the primary path, for either model.**
-> `deepseek-v4.1-flash` is served on our own **four H200 NVL GPUs** (one
-> tensor-parallel server at NUS) first — free at the margin, no metering, no data
-> leaving the tailnet on the common path. `qwen3.8-27b`
-> is served on luyao1's two RTX 5090s first (tier 0, one replica per card), with two
-> tier-1 replicas on the home segment (gmk, a Ryzen AI MAX+ 395; and n5-max, the
-> data-primary box). Requests only spill to OpenRouter
-> (the matching OpenRouter DeepSeek-V4.1-Flash / `qwen/qwen3.8-27b`) when the
-> in-house backend is at its concurrency roof (24 concurrent requests for
-> deepseek) or a request runs long enough to trigger the hedge — that overflow is
-> metered. **1M context for deepseek.** Every `qwen3.8-27b` backend serves
-> **214K**, verified on all four, and the parity is deliberate: one id with two
-> different limits would let a request succeed or be rejected depending on which
-> replica the pool picked. Deepseek is the one the
+> **OpenRouter is a bounded overflow, not the primary path, for any of them.**
+> Since 2026-11-07 all three are served first by **NUS SoC's GPU gateway** (the
+> NUS School of Computing service — so prompts leave our own network on the
+> common path). `deepseek-v4.1-flash` falls back to our office **GX10 cluster**
+> (four GX10s running one engine); the on-prem H200 and RTX 5090 servers are
+> paused. Requests spill to OpenRouter (the matching OpenRouter
+> DeepSeek-V4.1-Flash / `qwen/qwen3.8-27b`) only when every free backend is down or at its
+> concurrency roof (30 concurrent requests for deepseek) **and** your Claude pool
+> allows OpenRouter — that overflow is metered; otherwise the request waits.
+> `qwen3.8-flash-next` never spills. **1M context for deepseek.** Deepseek is the one the
 > Studio chatbox uses by default, and the one you should set as
 > `ANTHROPIC_MODEL`.
 
@@ -269,9 +272,9 @@ model the platform does not deliberately host. GLM-5.3-Flash and the qwen3.6
 pair were dropped 2026-09-01 (`qwen3.6-27b` was the source of a real
 OpenRouter cost-abuse incident — 102 of 147 requests in one window, from
 `user` accounts); Kimi K3 and generic OpenRouter were removed 2026-08-21. The
-proxy's `denyExternalModelForRole` enforces this: only `deepseek-v4.1-flash` and
-`qwen3.8-27b` (both self-hosted) are accepted; any other non-Anthropic request
-returns `403`.
+proxy's `denyExternalModelForRole` enforces this: only `deepseek-v4.1-flash`,
+`qwen3.8-27b` and `qwen3.8-flash-next` (the `SELF_HOSTED_MODELS` list) are
+accepted; any other non-Anthropic request returns `403`.
 
 > A **mistyped local model id no longer silently bills**: it is refused outright
 > instead of falling through to a metered OpenRouter rack.
@@ -395,6 +398,10 @@ it throttles the heaviest legitimate work:
 | `admin` / `super_admin` | 45M | 500M |
 | `user` | 45M | 500M |
 
+On top of that, role `admin` has a separate **Opus** cap of **15M / 150M** units
+(since 2026-11-07): when it runs out, Opus returns `429` and Sonnet keeps working.
+`super_admin` has no Opus cap.
+
 **Nobody is exempt.** Admins were uncapped until 2026-08-24, when the
 exemption was removed: three of the four pooled accounts had been revoked on
 2026-08-21 (leaving one), ~25% of all Claude requests were being denied, and
@@ -417,8 +424,8 @@ are what caused operators to be throttled by a cohort-sized cap.
   as old usage ages out.
 - Current per-user consumption is visible to admins on
   [/code](/code) under **Per-user pool usage**.
-- The pool quota applies to the **pooled Claude models only** — the DeepSeek
-  family runs on separate keys and never counts against the pool windows.
+- The pool quota applies to the **pooled Claude models only** — DeepSeek and
+  Qwen run on separate backends and never count against the pool windows.
 
 ### Seeing your usage from the CLI
 
@@ -484,7 +491,7 @@ params, and the model's responses. Browse your own at
 - **Opt out.** Toggle recording off on [/claude-sessions](/claude-sessions) (or
   `POST /api/v1/me/claude-recording {"enabled":false}`). While off, nothing is
   stored for your sessions; token metering still applies. This applies to **all**
-  models — the in-house DeepSeek-V4.1-Flash traffic is recorded the same way
+  models — the DeepSeek-V4.1-Flash traffic is recorded the same way
   (your recording preference, not per-model), so treat the deepseek default the
   same as a pooled Claude model for privacy.
 
@@ -541,7 +548,7 @@ PAT, per Quick start) — one family, one holder, nothing to collide.
   automatically; arbitrary SDK traffic may be rejected upstream. Native
   DeepSeek traffic uses the same Messages API shape, so the same rule holds.
 - Long agentic turns are fine — the edge allows up to 1 hour per request,
-  streaming. (DeepSeek on our own server has no such ceiling concern; the
+  streaming. (DeepSeek on its free backends has no such ceiling concern; the
   OpenRouter offload does.)
 - Requests are logged (your email, chosen account, path, model, status,
   duration) for usage accounting. **This line used to also claim prompt/response

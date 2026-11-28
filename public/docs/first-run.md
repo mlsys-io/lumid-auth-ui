@@ -19,11 +19,11 @@ install the agent in under 20 seconds, deploy a strategy and see it compile in
 about 10 more, and a backtest that named a real instrument settled in **14–60
 seconds**.
 
-Two things are genuinely slower and neither is a fault. Backtest submissions are
-capped at **one at a time, five minutes apart**, so the second run waits even
-though the first was quick; and a **forward test needs hours of live paper**
-before its numbers mean anything — it banks one observation per run and wants
-30 of them before it will report a ratio at all.
+One thing is genuinely slower and it is not a fault: a **forward test needs
+hours of live paper** before its numbers mean anything — it banks one
+observation per run and wants 30 of them before it will report a ratio at all.
+Backtests are capped only loosely: up to **five open at once, ten seconds
+apart**.
 
 So plan the first sitting around the deploy. You will have a verdict in the same
 sitting; what you will not have is a forward-test scorecard.
@@ -83,11 +83,10 @@ casual browsing.*
 
 You do not need a token, a scope, or a model choice. The platform mints a
 `claude:proxy` token for you behind the scenes on your first turn and keeps it
-fresh. Your model is **`deepseek-v4.1-flash`** and it is unlimited — it runs on
-our own GPUs, so there is no per-call cost to ration. The picker also offers
-**`qwen3.8-27b`**, also in-house (luyao1 RTX 5090) and open to everyone. The
-metered lanes (Claude) are held for admin accounts, so you cannot spend a
-budget by accident on your first afternoon. See [AI coding](/studio/docs/coding)
+fresh. Your model is **`deepseek-v4.1-flash`** and it is unlimited — there is
+no per-call budget for you to ration. There is no model picker to choose from:
+it is shown to admin accounts only, and the metered lanes (Claude) are held for
+them too, so you cannot spend a budget by accident on your first afternoon. See [AI coding](/studio/docs/coding)
 for what "unlimited" does and does not mean.
 
 **First turn of a session is slower than the rest.** Your sandbox is spawned on
@@ -109,19 +108,18 @@ Open**.
 
 ![The Marketplace: Quant Research and MBB Consultant already added (Added · Open); the others still offer Add to my account.](/docs/img/first-run-marketplace.png)
 
-Afterwards it appears in the sidebar with **four tabs**:
+Afterwards it appears in the sidebar with **three tabs**:
 
 | tab | what it shows |
 |---|---|
-| **Strategies** | everything you have registered — start here. Deploy, and each row's actions run a Backtest / Forward test / Discuss |
-| **Workflows** | every workflow the agent runs, one row each — Backtest, Forward test, Analyze, and the tweet-driven Kol strategy. Open a row for its runs |
-| **Experiments** | the status surface for studies: which experiment is ahead, on how many samples, and whether the verdict is being withheld. See [Workflows & experiments](/studio/docs/workflows) |
-| **Proposals** | what several planners suggested running next, each with a verdict on whether it would actually collect rows. It is a **reading** surface — there is no accept button. You turn one into a real experiment by declaring it: the **Measurement** form on a Workflows row, or ask the rail to define it (*"declare the mcp_probe_checked proposal as an experiment"*) |
+| **Research** | the app's graph: every workflow it runs — Backtest, Forward test, Analyze funnel, the tweet-driven KOL strategy and more — with the experiments each one feeds hanging under it. Click a workflow for its panel: Summary, Runs, Steps (and Compare once you pick a second one). See [Workflows & experiments](/studio/docs/workflows) |
+| **Strategies** | everything you have registered — start here. **Deploy a strategy**, and each row's actions: Run backtest / Get results / Disable / Ask about it. Click a row for the strategy's own page, which also has **Forward test** |
+| **Data** | what a backtest replays: instrument ids per venue, the shared signals, the default window |
 
 There is deliberately no separate Backtest / Forward / Runtime tab: those are
-workflows, so they live as rows on **Workflows**. Open a run from any row to see
-exactly what it produced — its honesty labels (prices / signals / settlement),
-the claim, the PnL split.
+workflows, so they live on the **Research** graph. Open a run from a workflow's
+Runs to see exactly what it produced — its honesty labels (prices / signals /
+settlement), the claim, the PnL split.
 
 If your sidebar says **LQT Strategies** rather than **Quant Research**, you are
 on the agent's pre-rename card: it labels the backtest *(registers)* — which is
@@ -214,8 +212,8 @@ yet, and one that fell below $5,000 of liquidity drops out.
 **Symbols.** An `instrument_id` is the venue's own ticker, carried verbatim.
 Kalshi's look like `KXBTCD-26SEP0211-T77099.99` — series, date, strike.
 
-**Every one of them expires, and so does its tape.** The replay window is the
-last **7 days** (`tape_window_secs: 604800`), so an instrument whose date has
+**Every one of them expires, and so does its tape.** The default replay window
+is the last **7 days** (`tape_window_secs: 604800`), so an instrument whose date has
 fallen outside that window has no prints left to replay: the run falls back to
 the synthetic generator and comes back `replay: "synthetic_lcg"` with
 `prints_replayed: 0`. Nothing is broken and the label is honest — you just
@@ -305,8 +303,8 @@ doing its job, not a bug to work around.
 
 ## 5. Deploy it
 
-Open **Quant Research → Strategies** in the sidebar (installed in step 3).
-Give the strategy a name, paste `.lqts`
+Open **Quant Research → Strategies** in the sidebar (installed in step 3),
+press **Deploy a strategy**, give the strategy a name, paste `.lqts`
 source, and submit:
 
 ![The Strategies tab: your registry above, the deploy form below.](/docs/img/first-run-strategies-2.png)
@@ -396,17 +394,20 @@ it for the detail surface:
 
 ## 6. Backtest and forward test
 
-Both are row actions on your strategy. They answer different questions.
+Both start from your strategy: **Run backtest** is a row action, **Forward
+test** is on the strategy's own page (click the row). They answer different
+questions.
 
 | | what it does | what it answers |
 |---|---|---|
-| **Backtest** | replays recorded market history | *would this have worked?* |
-| **Poll result** | fetches the verdict of that replay | — |
+| **Run backtest** | replays recorded market history | *would this have worked?* |
+| **Get results** | fetches the verdict of a replay you started elsewhere | — |
 | **Forward test** | reads the live-paper lane's scorecards | *does it work now, against a book that pushes back?* |
 
-**Backtest is two clicks, not one.** *Backtest* submits and returns immediately
-with a claim id; *Poll result* fetches the verdict later, usually minutes
-later. Nothing is wrong if the first click shows no numbers.
+**Backtest is one click.** *Run backtest* submits and the page follows the claim
+to its verdict, usually a minute or two later; *Get results* is the way back to
+a verdict from another device or one started in chat. Nothing is wrong if the
+first seconds show no numbers.
 
 **Forward test has no start button.** Your strategy forward-tests from the
 moment it deploys — the action *reads* what the paper lane has published. Zero
@@ -427,7 +428,7 @@ against your own rows:
 | stop it | *Disable `ofi_z_momentum`.* |
 
 **Leave the instrument blank, or name one that has already settled.** Blank
-is the recommended path: the *Backtest* dialog's **Instrument** field is
+is the recommended path: the *Run backtest* dialog's **Instrument** field is
 optional, and left empty the backtest picks from `tape_covered_v1`, a snapshot
 of markets that have **settled** and whose recorded signals cover enough of the
 replay to be real on all three axes. In chat, say *let it pick*.
@@ -436,19 +437,20 @@ If you name one yourself, pick a market that **closed at least 20 minutes ago
 and within the last 7 days**. An open market, or one that closed in the last
 ~15 minutes, can only be marked to its last price: the replay comes back
 `settlement: mark_to_market`, which is never presentable as performance. It is
-labelled, never hidden, but it is easier not to spend the five minutes. (A
+labelled, never hidden, but it is easier not to spend the run. (A
 brand-new account that named a live BTC market on 2026-09-27 got exactly this.)
 
 A real replay that places **no orders** is a valid result, not a failure: the
 strategy looked at real signals and chose not to trade (§8).
 
-**Where chat genuinely helps is the refusal.** Submits are at least five minutes
-apart and at most one may be open; a breach is *refused*, not queued. Chat reads
+**Where chat genuinely helps is the refusal.** Submits are at least ten seconds
+apart and at most five may be open; a breach is *refused*, not queued. Chat reads
 that refusal back with the earliest retry time. The form gives you an error and
 leaves you guessing whether it landed.
 
-**What window a backtest replays.** You do not choose it. The worker takes the
-**most recent 7 days** of recorded prints for that instrument, capped at
+**What window a backtest replays.** Left blank, the worker takes the
+**most recent 7 days** of recorded prints for that instrument (the dialog's
+**Window**, 1 hour to 90 days, and **Window ends** change that), capped at
 **50,000 events** — the newest ones, not the oldest, so a busy market gives you
 a shorter span than a quiet one. Then, if it can find recorded signal values, it
 **clips the replay to the span those signals actually cover**, because no
@@ -468,13 +470,18 @@ observation per run**, so it needs 30 runs before reporting a ratio at all —
 at a 5-minute cadence that is two and a half hours of live paper. Below that
 you get `sharpe_undefined` and a drawdown, which is the honest pair.
 
-Read `fills`, the markouts, and whether `net_usd` is positive *after*
+For a strategy you registered, every forward lane is a **shadow** lane: it
+reports the decision funnel (proposed / submitted / rejected), not fills or PnL.
+Backtest for PnL.
+
+Where a scorecard does carry fills, read `fills`, the markouts, and whether
+`net_usd` is positive *after*
 `fees_usd` — and treat a run with `sell_fills: 0` as unfinished rather than
 profitable, because an unclosed position has not been tested by anything yet.
 
 ## 6b. Let a KOL's tweets pick the parameterization
 
-There is a fourth workflow on **Workflows**: **Kol strategy**. It reads a frozen
+There is another workflow on the **Research** graph: **KOL strategy**. It reads a frozen
 slice of a market-moving account's tweets (Elon Musk, in `musk_tweets_v1`),
 scores a momentum-vs-caution lean, and from that lean *parameterizes* a
 strategy — a momentum lean trades `ofi_z` breakouts, a caution lean trades
@@ -486,8 +493,8 @@ The honest boundary matters: **a tweet is never a signal.** Only `vpin`,
 *how hard*. The number that comes back is a backtest verdict on recorded
 prints, with the same three honesty axes as every other run — not a narrative.
 
-Open **Experiments → kol alpha** for the experiments; **Workflows → Kol strategy**
-is where the workflow that feeds them runs. The `musk_v1` experiment is
+Open **KOL strategy** on the Research graph; the `kol_alpha` experiment it
+feeds hangs under it. The `musk_v1` experiment is
 one-click (it is self-sufficient — it has the tweet slice and picks its own
 tape-covered symbol); `current` is a passive reference. `real_tape` reads the
 fraction of runs that replayed recorded prints rather than falling back to
@@ -497,10 +504,10 @@ synthetic. Or in chat: *"run the musk_v1 experiment, then poll it."*
 
 ## 7. View the results
 
-Runs are on **Workflows**: pick a workflow, read its runs, open any run for what
-it produced. Studies and their verdicts are on **Experiments** — a run tells you what
-one execution did, a study tells you whether an experiment is actually ahead
-and on how many samples. The per-strategy views hang off each **Strategies**
+Runs are on the **Research** graph: pick a workflow, read its Runs, open any run
+for what it produced. Experiments and their verdicts hang under the workflow
+that feeds them — a run tells you what one execution did, an experiment tells
+you whether a version is actually ahead and on how many samples. The per-strategy views hang off each **Strategies**
 row.
 
 Backtest results — read the three labels *before* the P&L, every time:
@@ -673,9 +680,9 @@ scorecards. Zero scorecards means it has not published yet, not that it failed.
 
 ## 9. Discuss it, then go round again
 
-**Discuss** on the row opens a chat already bound to that strategy, so "why did
-this propose nothing yesterday?" resolves against the right one with nothing
-re-pasted.
+**Ask about it** on the row fills the chat with a question already bound to that
+strategy (you press send), so "why did this propose nothing yesterday?" resolves
+against the right one with nothing re-pasted.
 
 ![Discuss: a chat already bound to one strategy.](/docs/img/first-run-discuss-2.png)
 
@@ -692,7 +699,7 @@ rather than assembling it yourself:
 *The chips above the answer (scrolled off here) are the tools it ran in this
 turn, and the one doing the work is `app_read` on
 `me://app-data?app=quant-research&tool=runs&loop=backtest` — **your own** run
-feed, filtered to backtests, the same source the Workflows surface renders. It
+feed, filtered to backtests, the same source the Research graph's run lists render. It
 then reads `me://strategies` to tell which results trace back to a strategy you
 registered. The chat is not guessing from the page, it is querying. **Read the
 scope, though:** if it also reaches for `lqt_mailbox_read` `results` or
@@ -741,9 +748,9 @@ never recompiled.
 That process — formulate, deploy, backtest, read, discuss, revise — is the job.
 Everything above it is setup you do once.
 
-**One backtest at a time, 300 seconds apart.** A second submission while one
-is in flight is *refused*, not queued — the consumer runs the replay inline, so
-an unbounded queue would stall every other tenant. The refusal tells you the
+**Up to five backtests open, ten seconds apart.** One more while five are in
+flight is *refused*, not queued — the replays share one worker pool, so an
+unbounded queue would stall every other tenant. The refusal tells you the
 earliest time you may retry; read it rather than re-submitting.
 
 ---
@@ -757,7 +764,7 @@ Three things, and all of them are intentional:
   analytics jobs — **not** to mint tokens. Minting from the browser needs no
   scope at all, which is what the 403 in §1 says.
 - **The `findata` access grant** — warehouse access is given per person, not to
-  everyone, because it is a direct connection to 1.7 TB of production data.
+  everyone, because it is a direct connection to 2.8 TB of production data.
 - **A `sql_<name>` warehouse role** — provisioned separately from the grant.
   Being entitled and having a role are two different states, and the SQL panel
   distinguishes them.
@@ -792,6 +799,13 @@ drifted from the system is how the next twenty people lose an afternoon.
 
 ## Changelog
 
+- **2026-11-28** — Studio's app pages changed: Quant Research now has three tabs
+  (**Research** graph · **Strategies** · **Data**); Workflows, Experiments and
+  Proposals are no longer tabs. Row actions are **Run backtest** (follows the
+  run to its verdict) / **Get results** / **Disable** / **Ask about it**;
+  Forward test is on the strategy's page. Backtest pacing is five open, ten
+  seconds apart (was one, five minutes), and the replay window is settable.
+  The model picker is admin-only. Screenshots predate these changes.
 - **2026-09-28** — The AI Consulting track moved to its own page,
   [AI Consulting Onboarding](/studio/docs/mbb-consultant); this page is the
   Quant Research track only. Also: button names as the product shows them —
