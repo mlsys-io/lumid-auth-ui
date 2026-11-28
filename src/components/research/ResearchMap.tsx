@@ -63,6 +63,8 @@ import { useOncePerSession } from "@/components/activity/hooks";
 import { useStudioRefetch } from "@/hooks/useStudioRefetch";
 import { cn } from "@/lib/utils";
 import { sharedLine } from "@/lib/measure";
+import { familyStatus, versionFamilies, withFamilies, type VersionFamily } from "@/lib/version-families";
+import FamilyPanel from "@/components/research/FamilyPanel";
 
 const NeedsFixingMenu = lazy(() => import("@/components/activity/NeedsFixingMenu"));
 
@@ -177,6 +179,18 @@ function VersionCard3D({ v, selected }: { v: VersionInfo; selected: boolean }) {
 	);
 }
 
+function FamilyCard3D({ f, selected }: { f: VersionFamily; selected: boolean }) {
+	return (
+		<div className={cn(cardBase(selected), "border-ink-200", f.tag === "not run yet" && "border-dashed")} style={{ width: 200 }}>
+			<div className="flex items-center gap-1.5 min-w-0">
+				<span className="text-caption font-medium text-ink-900 truncate">{f.name}</span>
+				<span className={cn("ml-auto flex-shrink-0 px-1.5 rounded-full border text-nano font-medium", TAG_CLS[f.tag] ?? TAG_CLS.current)}>{f.tag}</span>
+			</div>
+			<div className="text-micro text-ink-700 truncate">{f.sub}</div>
+		</div>
+	);
+}
+
 function SuggestedCard3D({ p, selected }: { p: Proposal; selected: boolean }) {
 	return (
 		<div className={cn(cardBase(selected), "border-dashed border-gold-300 bg-gold-50 shadow-none")} style={{ width: 190 }}>
@@ -278,9 +292,13 @@ function MapCanvas({ fresh, app, exps, proposals, workflows, groups, rows, marks
 	const running = useShellActivity()?.runningApps.includes(app) ?? false;
 	// The graph (2026-11-25): app → workflows → experiments (setups) /
 	// variants / child nodes. Helpers fold into the workflow they serve.
-	const tree = useMemo(() => buildResearchTree(app, exps, proposals, workflows, groups), [app, exps, proposals, workflows, groups]);
+	// Versions that differ in one setting are drawn as one family node.
+	const tree = useMemo(() => withFamilies(buildResearchTree(app, exps, proposals, workflows, groups), exps), [app, exps, proposals, workflows, groups]);
+	// A version folded into a family is selected as its family on the map.
+	const shown = selected ? tree.drawnAs.get(selected) ?? selected : null;
+	const shownMarks = useMemo(() => new Map([...marks].map(([k, v]) => [tree.drawnAs.get(k) ?? k, v] as const)), [marks, tree]);
 	// The root selected opens its panel without dimming the whole space.
-	const lit = useMemo(() => (selected && !selected.startsWith("app:") ? pathTo(tree.nodes, selected) : null), [tree, selected]);
+	const lit = useMemo(() => (shown && !shown.startsWith("app:") ? pathTo(tree.nodes, shown) : null), [tree, shown]);
 	const expById = useMemo(() => new Map(exps.map((e) => [e.id, e])), [exps]);
 	const propById = useMemo(() => new Map(proposals.map((p) => [p.id, p])), [proposals]);
 	const wfById = useMemo(() => new Map(workflows.map((w) => [w.id, w])), [workflows]);
@@ -301,24 +319,30 @@ function MapCanvas({ fresh, app, exps, proposals, workflows, groups, rows, marks
 	const nodeTitle = (ref: string) => (ref === OTHER_NODE ? "Other workflows" : groupById.get(ref)?.title ?? humanId(ref));
 	// Evidence around each version: one particle per result (log-scaled in Space3D).
 	const evidence = useCallback((n: MapNode) => {
+		if (n.kind === "family") {
+			const f = tree.families.get(n.id);
+			return f && f.n ? { count: f.n, className: VERSION_FILL[f.tag] ?? "fill-ink-500" } : null;
+		}
 		if (n.kind !== "version") return null;
 		const v = versionOf(n.id);
 		if (!v || !v.n) return null;
 		return { count: v.n, className: VERSION_FILL[v.tag] ?? "fill-ink-500" };
-	}, [versionOf]);
+	}, [versionOf, tree]);
 	const describe = useCallback((n: MapNode): string => {
 		if (n.kind === "app") return `${appTitle(app)}: ${mainCount} workflow${mainCount === 1 ? "" : "s"}${running ? ", running now" : ""}`;
 		if (n.kind === "workflow") { const w = wfById.get(n.ref); return `${w ? wfLabel(w) : n.ref}${w?.parent ? " (variant)" : ""}: ${rowStatus(rows.get(n.ref)).text}`; }
 		if (n.kind === "node") return `${nodeTitle(n.ref)}: holds ${childCount(n.id)}`;
 		if (n.kind === "experiment") { const e = expById.get(n.ref); return e ? `${experimentLabel(e)}: ${experimentStatus(e).text}` : n.ref; }
 		if (n.kind === "version") { const v = versionOf(n.id); return v ? `${v.label}: ${v.tag}${v.tag !== "not run yet" ? `, ${v.line}` : ""}` : n.ref; }
+		if (n.kind === "family") { const f = tree.families.get(n.id); return f ? `${f.name}: ${f.sub} — ${familyStatus(f).text}` : n.ref; }
 		return `Suggested: ${humanId(n.ref)}`;
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [app, mainCount, running, expById, versionOf, wfById, rows, childCount, groupById]);
+	}, [app, mainCount, running, expById, versionOf, wfById, rows, childCount, groupById, tree]);
 	const renderCard = useCallback((n: MapNode, st: { selected: boolean }) => {
 		if (n.kind === "app") return <AppCard3D app={app} running={running} count={mainCount} selected={st.selected} />;
 		if (n.kind === "experiment") { const e = expById.get(n.ref); return e ? <ExperimentCard3D e={e} selected={st.selected} /> : null; }
 		if (n.kind === "version") { const v = versionOf(n.id); return v ? <VersionCard3D v={v} selected={st.selected} /> : null; }
+		if (n.kind === "family") { const f = tree.families.get(n.id); return f ? <FamilyCard3D f={f} selected={st.selected} /> : null; }
 		if (n.kind === "workflow" || n.kind === "node") {
 			const w = wfById.get(n.ref);
 			return (
@@ -331,7 +355,7 @@ function MapCanvas({ fresh, app, exps, proposals, workflows, groups, rows, marks
 		const p = propById.get(n.ref);
 		return p ? <SuggestedCard3D p={p} selected={st.selected} /> : null;
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [app, running, mainCount, expById, propById, versionOf, wfById, rows, childCount, groupById]);
+	}, [app, running, mainCount, expById, propById, versionOf, wfById, rows, childCount, groupById, tree]);
 	// Each workflow's colour (sidebar bar = map branch = running box).
 	const colorOf = useWorkflowColors();
 	// ONE colour per branch (2026-11-27: "the balls and lines are inconsistent in
@@ -353,7 +377,7 @@ function MapCanvas({ fresh, app, exps, proposals, workflows, groups, rows, marks
 	}, [tree, app, colorOf]);
 	const edgeClass = useCallback((e: MapEdge) => branchOf.get(e.target)?.stroke, [branchOf]);
 	const renderDot = useCallback((n: MapNode) => {
-		const mark = marks.get(n.id);
+		const mark = shownMarks.get(n.id);
 		if (n.kind === "app") return <Dot size={DOT_SIZE.app} rings={running ? "live" : true} className="bg-plum-600" label={appTitle(app)} labelClass="text-meta font-semibold text-ink-900"
 			sub={`${mainCount} workflow${mainCount === 1 ? "" : "s"}${running ? " · running now" : ""}`} mark={mark} />;
 		if (n.kind === "workflow") {
@@ -408,9 +432,21 @@ function MapCanvas({ fresh, app, exps, proposals, workflows, groups, rows, marks
 					: cn(sw.bar, VERSION_SHADE[vtag] ?? "opacity-60");
 			return <Dot size={DOT_SIZE.version} className={cls} ringClass={sw?.ring} orb={vtag !== "not run yet"} label={v?.label ?? n.ref} labelClass="text-micro text-ink-800" sub={tag} mark={mark} />;
 		}
+		if (n.kind === "family") {
+			// One dot for the versions that differ in one setting: what they
+			// share as its name, the setting and its values under it.
+			const f = tree.families.get(n.id);
+			const sw = branchOf.get(n.id);
+			const ftag = f?.tag ?? "not run yet";
+			const cls = !sw ? (VERSION_DOT[ftag] ?? "bg-plum-400")
+				: ftag === "not run yet" ? cn("bg-card border border-dashed", sw.dash)
+					: cn(sw.bar, VERSION_SHADE[ftag] ?? "opacity-75");
+			return <Dot size={DOT_SIZE.family} className={cn(cls, "outline outline-1 outline-offset-2 outline-plum-300")} ringClass={sw?.ring} orb={ftag !== "not run yet"}
+				label={f?.name ?? n.ref} labelClass="text-micro font-medium text-ink-900" sub={f?.sub} subClass="text-ink-700" mark={mark} />;
+		}
 		return <Dot size={DOT_SIZE.suggested} orb={false} className="bg-card border border-dashed border-gold-600" label={`Suggested: ${humanId(n.ref)}`} labelClass="text-micro font-medium text-gold-700" mark={mark} />;
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [app, running, mainCount, expById, versionOf, wfById, rows, tree, branchOf, childCount, marks, groupById, fresh]);
+	}, [app, running, mainCount, expById, versionOf, wfById, rows, tree, branchOf, childCount, shownMarks, groupById, fresh]);
 	// One stage size for every app, set by the screen alone (window height less
 	// where the stage starts) — never by what's in it, whether suggestions wait, or a panel is open (two apps side by
 	// side read as two sizes otherwise; user 2026-11-25). The approval card
@@ -430,7 +466,7 @@ function MapCanvas({ fresh, app, exps, proposals, workflows, groups, rows, marks
 			<Space3D nodes={tree.nodes} edges={tree.edges} renderCard={renderCard} renderDot={renderDot} describe={describe} edgeClass={edgeClass}
 				// Workflows carry an overview panel: hovering lights it up, no card swap.
 				hoverCard={() => false}
-				selected={selected} lit={lit} grow={grow} order={order} height={height} evidence={evidence} insetBottom={insetBottom} insetRight={insetRight}
+				selected={shown} lit={lit} grow={grow} order={order} height={height} evidence={evidence} insetBottom={insetBottom} insetRight={insetRight}
 				onSelect={onSelect} />
 		</div>
 	);
@@ -952,7 +988,8 @@ export default function ResearchMap({ app }: { app: string }) {
 	const selWf = selKind === "wf" ? workflows.find((w) => `wf:${w.id}` === selected) : undefined;
 	const selNode = selKind === "node" ? (selected === `node:${OTHER_NODE}` ? { id: OTHER_NODE as "__other", title: "Other workflows", parent: "" } : groups.find((g) => `node:${g.id}` === selected)) : undefined;
 	const selExp = selKind === "exp" ? exps.find((e) => `exp:${e.id}` === selected)
-		: selKind === "ver" ? exps.find((e) => e.id === selected!.split(":")[1]) : undefined;
+		: selKind === "ver" || selKind === "fam" ? exps.find((e) => e.id === selected!.split(":")[1]) : undefined;
+	const selFam = selKind === "fam" && selExp ? versionFamilies(selExp).find((f) => f.id === selected) : undefined;
 	const selVersionSide = selKind === "ver" ? sideOf(selected) : null;
 	const marks = new Map<string, "A" | "B">();
 	if (compareB && selected) { marks.set(selected, "A"); marks.set(compareB, "B"); }
@@ -970,7 +1007,7 @@ export default function ResearchMap({ app }: { app: string }) {
 	// Clicking a workflow, node, experiment or version opens its panel OVER the
 	// map, at the right edge; the camera frames the path in the space left.
 	const selProposalIdx = selKind === "sug" ? pending.findIndex((p) => `sug:${p.id}` === selected) : -1;
-	const panelOpen = !!(selWf || selNode || selExp || selProposalIdx >= 0 || selKind === "app");
+	const panelOpen = !!(selWf || selNode || (selExp && (selKind !== "fam" || selFam)) || selProposalIdx >= 0 || selKind === "app");
 	// An idea's card needs a little more width for its three answers.
 	// The side panel takes a third of the stage (2026-11-27: "the experiment
 	// panel can take 1/3 of the graph space"), between 352 and 600 px; the graph
@@ -999,10 +1036,13 @@ export default function ResearchMap({ app }: { app: string }) {
 				<CompareView app={app} a={selVersionSide} b={sideOf(compareB)} spec={graph?.spec} onPick={() => setPicking(true)} />
 			</div>
 		</div>
+	) : selFam && selExp ? (
+		<FamilyPanel key={selFam.id} app={app} e={selExp} f={selFam} spec={graph?.spec} specText={graph?.text} style={panelStyle} onClose={close}
+			onBack={() => onSelect(`exp:${selExp.id}`)} onPickVersion={(v) => onSelect(`ver:${selExp.id}:${v}`)} />
 	) : selKind === "ver" && selExp && !compareB ? (
 		<VersionPanel key={selected!} app={app} e={selExp} version={selected!.split(":")[2]} style={panelStyle} onClose={close}
 			onBack={() => onSelect(`exp:${selExp.id}`)} onCompare={() => setPicking(true)} />
-	) : selExp ? (
+	) : selExp && selKind !== "fam" ? (
 		<ExperimentDetail key={selExp.id} app={app} e={selExp} panel onClose={close} style={panelStyle} spec={graph?.spec} specText={graph?.text}
 			onCompare={selVersionSide ? () => setPicking(true) : undefined}
 			onPickVersion={(arm) => onSelect(`ver:${selExp.id}:${arm}`)} pickedVersion={selKind === "ver" ? selected!.split(":")[2] : null} />

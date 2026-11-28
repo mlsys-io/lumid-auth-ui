@@ -21,6 +21,7 @@ import {
 	buildResearchTree, DOT_SIZE, experimentStatus, humanId, rowStatus, versionLabel, versionsOf, OTHER_NODE,
 	type MapNode, type Proposal, type Tone, experimentLabel} from "@/lib/research-map";
 import { bestResult, bestResultValue } from "@/lib/research-dashboard";
+import { familyBestWords, familyStatus, withFamilies } from "@/lib/version-families";
 import { useRunsFeed } from "@/components/activity/hooks";
 import { fmtAgo } from "@/lib/activity";
 import { cn } from "@/lib/utils";
@@ -65,6 +66,8 @@ export default function ResearchTable({ app, exps, pending, workflows, groups, r
 	const [q, setQ] = useState("");
 	const [filter, setFilter] = useState<Filter>("all");
 	const [closed, setClosed] = useState<Set<string>>(() => new Set());
+	// A family starts folded (one row for its versions); the rest start open.
+	const [openFams, setOpenFams] = useState<Set<string>>(() => new Set());
 	const [picked, setPicked] = useState<string[]>([]);
 	// A workflow's last runs (oldest → newest) from the 7-day feed, for rows
 	// whose summary carries no run_spark. One read, shared with the tiles.
@@ -81,7 +84,8 @@ export default function ResearchTable({ app, exps, pending, workflows, groups, r
 	}, [runs, app]);
 
 	const table = useMemo(() => {
-		const tree = buildResearchTree(app, exps, pending, workflows, groups);
+		// Versions that differ in one setting are one row; its expander shows them.
+		const tree = withFamilies(buildResearchTree(app, exps, pending, workflows, groups), exps, { members: true });
 		const expById = new Map(exps.map((e) => [e.id, e]));
 		const wfById = new Map(workflows.map((w) => [w.id, w]));
 		const groupById = new Map(groups.map((g) => [g.id, g]));
@@ -118,6 +122,11 @@ export default function ResearchTable({ app, exps, pending, workflows, groups, r
 				const v = e ? versionsOf(e).find((x) => x.id === vid) : undefined;
 				const match: Filter[] = [v?.tag === "winning" ? "winning" : v?.tag === "not run yet" ? "idle" : "all"];
 				row = { node: n, depth, name: e && vid ? versionLabel(e, vid) : humanId(vid ?? n.ref), status: { text: v?.tag ?? "", tone: v?.tone ?? "idle" }, best: v && v.n ? v.line : undefined, pick: `${expId}:${vid}`, match, kids: children };
+			} else if (n.kind === "family") {
+				const f = tree.families.get(n.id);
+				const st = f ? familyStatus(f) : { text: "", tone: "idle" as Tone };
+				const match: Filter[] = [f?.tag === "winning" ? "winning" : f?.tag === "not run yet" ? "idle" : "all"];
+				row = { node: n, depth, name: f?.name ?? n.ref, sub: f?.sub, status: st, best: f ? familyBestWords(f) || undefined : undefined, match, kids: children };
 			} else if (n.kind === "suggested") {
 				const p = pending.find((x) => x.id === n.ref);
 				ideas.push({ node: n, depth: 1, name: humanId(n.ref), status: { text: "Waiting for you", tone: "attention" }, best: p?.est_runs ? `about ${p.est_runs} runs` : undefined, match: ["all"], kids: [] });
@@ -142,11 +151,14 @@ export default function ResearchTable({ app, exps, pending, workflows, groups, r
 			let cur: Row | undefined = r;
 			while (cur) { keep.add(cur.node.id); cur = cur.node.parent ? byId.get(cur.node.parent) : undefined; }
 		}
-		const hiddenBy = (r: Row): boolean => { let p = r.node.parent ? byId.get(r.node.parent) : undefined; while (p) { if (closed.has(p.node.id)) return true; p = p.node.parent ? byId.get(p.node.parent) : undefined; } return false; };
+		const hiddenBy = (r: Row): boolean => { let p = r.node.parent ? byId.get(r.node.parent) : undefined; while (p) { if (isClosed(p.node)) return true; p = p.node.parent ? byId.get(p.node.parent) : undefined; } return false; };
 		return table.rows.filter((r) => keep.has(r.node.id) && (needle || filter !== "all" || !hiddenBy(r)));
-	}, [table, q, filter, closed]);
+	// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [table, q, filter, closed, openFams]);
 
-	const toggle = (id: string) => setClosed((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+	function isClosed(n: MapNode): boolean { return n.kind === "family" ? !openFams.has(n.id) : closed.has(n.id); }
+	const flip = (s: Set<string>, id: string) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; };
+	const toggle = (n: MapNode) => (n.kind === "family" ? setOpenFams((s) => flip(s, n.id)) : setClosed((s) => flip(s, n.id)));
 	const pick = (k: string) => setPicked((p) => (p.includes(k) ? p.filter((x) => x !== k) : p.length >= 5 ? p : [...p, k]));
 
 	const cell = "px-2 py-1.5 align-middle";
@@ -177,7 +189,7 @@ export default function ResearchTable({ app, exps, pending, workflows, groups, r
 						</tr>
 					</thead>
 					<tbody>
-						{visible.map((r) => <TableRow key={r.node.id} r={r} selected={selected === r.node.id} open={!closed.has(r.node.id)} onToggle={() => toggle(r.node.id)}
+						{visible.map((r) => <TableRow key={r.node.id} r={r} selected={selected === r.node.id} open={!isClosed(r.node)} onToggle={() => toggle(r.node)}
 							onSelect={() => onSelect(r.node.id)} picked={!!r.pick && picked.includes(r.pick)} onPick={r.pick ? () => pick(r.pick!) : undefined} cell={cell} />)}
 						{visible.length === 0 && <tr><td colSpan={5} className="px-3 py-6 text-center text-caption text-ink-600">Nothing matches{q ? ` "${q}"` : ""}.</td></tr>}
 						{table.ideas.length > 0 && filter === "all" && !q && (
@@ -207,9 +219,11 @@ function TableRow({ r, selected, open, onToggle, onSelect, picked, onPick, cell 
 	r: Row; selected: boolean; open: boolean; onToggle: () => void; onSelect: () => void; picked: boolean; onPick?: () => void; cell: string;
 }) {
 	const size = r.node.kind === "workflow" ? (r.sub === "variant" ? DOT_SIZE.variant : DOT_SIZE.workflow)
-		: r.node.kind === "node" ? DOT_SIZE.node : r.node.kind === "experiment" ? DOT_SIZE.experiment : r.node.kind === "version" ? DOT_SIZE.version : DOT_SIZE.suggested;
+		: r.node.kind === "node" ? DOT_SIZE.node : r.node.kind === "experiment" ? DOT_SIZE.experiment : r.node.kind === "version" ? DOT_SIZE.version
+			: r.node.kind === "family" ? DOT_SIZE.family : DOT_SIZE.suggested;
 	const dot = r.node.kind === "node" ? "border-2 border-dashed border-plum-500 bg-card" : r.node.kind === "suggested" ? "border border-dashed border-gold-600 bg-card"
-		: r.status.tone === "failing" ? "bg-brick-500" : r.node.kind === "workflow" ? "bg-plum-600" : r.node.kind === "experiment" ? "bg-plum-500" : "bg-plum-400";
+		: r.status.tone === "failing" ? "bg-brick-500" : r.node.kind === "workflow" ? "bg-plum-600" : r.node.kind === "experiment" ? "bg-plum-500"
+			: r.node.kind === "family" ? "bg-plum-400 outline outline-1 outline-offset-2 outline-plum-300" : "bg-plum-400";
 	const spark = (r.spark || "").slice(-14).split("");
 	return (
 		<tr aria-selected={selected} onClick={onSelect}
@@ -227,7 +241,7 @@ function TableRow({ r, selected, open, onToggle, onSelect, picked, onPick, cell 
 					) : <span className="w-4 flex-shrink-0" />}
 					<span className={cn("flex-shrink-0 rounded-full", dot)} style={{ width: size, height: size }} aria-hidden />
 					<span className={cn("min-w-0 break-words sm:truncate", r.node.kind === "version" ? "text-ink-800" : "font-medium text-ink-900")}>{r.name}</span>
-					{r.sub && r.node.kind !== "experiment" && <span className="flex-shrink-0 text-micro text-ink-600">{r.sub}</span>}
+					{r.sub && r.node.kind !== "experiment" && <span className={cn("text-micro text-ink-600", r.node.kind === "family" ? "min-w-0 truncate" : "flex-shrink-0")} title={r.sub}>{r.sub}</span>}
 				</div>
 				{/* Phones: one stacked row — the status and best result under the name,
 				    so the name gets the width (it was cut to "Bac…" at 390 px). */}

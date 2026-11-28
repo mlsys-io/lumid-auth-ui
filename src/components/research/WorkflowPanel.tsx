@@ -114,7 +114,7 @@ function useLatestMetrics(app: string, loop: string, cycles: MeCycleListItem[] |
 
 // ── shell ─────────────────────────────────────────────────────────────────
 
-function PanelShell({ kicker, title, sub, onClose, children, foot, actions, label, style, page = false }: {
+export function PanelShell({ kicker, title, sub, onClose, children, foot, actions, label, style, page = false }: {
 	kicker: string; title: string; sub?: React.ReactNode; onClose: () => void; children: React.ReactNode; foot?: React.ReactNode; label: string; style?: React.CSSProperties;
 	/** The panel's verbs, beside its title (Run · Ask · ⋯). */
 	actions?: React.ReactNode;

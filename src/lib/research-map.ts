@@ -490,7 +490,8 @@ export function criteriaInWords(expr?: string): string {
 
 // ── the tree ─────────────────────────────────────────────────────────────
 
-export type MapNodeKind = "app" | "experiment" | "version" | "suggested" | "workflow" | "node";
+/** "family": versions that differ in one setting, drawn as one node (lib/version-families.ts). */
+export type MapNodeKind = "app" | "experiment" | "version" | "family" | "suggested" | "workflow" | "node";
 export interface MapNode { id: string; kind: MapNodeKind; depth: number; ref: string; parent?: string }
 export interface MapEdge { id: string; source: string; target: string; dashed?: boolean; label?: string }
 
@@ -522,7 +523,7 @@ export const OTHER_NODE = "__other";
  *  space, the list and the panel. The step between kinds says how much a node
  *  holds; depth may move a dot ~5% at most (2026-11-27: "some dots are too
  *  big, some too small"). */
-export const DOT_SIZE = { app: 16, workflow: 12, variant: 11, node: 11, experiment: 9, suggested: 8, version: 7 } as const;
+export const DOT_SIZE = { app: 16, workflow: 12, variant: 11, node: 11, experiment: 9, suggested: 8, family: 8, version: 7 } as const;
 
 /**
  * The research graph (2026-11-25): the app → its WORKFLOWS (first ring) →
