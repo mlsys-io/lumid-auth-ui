@@ -1,6 +1,6 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 import type { MeExperiment, MeRunRow, MeWorkflowRow } from "@/api/me";
-import { bestResult, bestResultValue, bestResults, bestSoFar, bestTileLines, dollars, failingWorkflows, isYesNoMetric, phoneSummary, researchHeadline, weekSummary, yesNoWords } from "./research-dashboard";
+import { metricText, bestResult, bestResultValue, bestResults, bestSoFar, bestTileLines, dollars, failingWorkflows, isYesNoMetric, phoneSummary, researchHeadline, weekSummary, yesNoWords } from "./research-dashboard";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -73,6 +73,13 @@ check("a top number a gate stopped is not a lead", () => {
 	eq([b.standing, b.stoppedAt], ["didn't pass a step", "Robustness"]);
 	eq(bestResults([stopped, mk("l", {})]).map((x) => x.select), ["exp:l", "exp:s"]);
 	eq(researchHeadline({ exps: [stopped], failing: [], ideas: 0, seen: { s: "B" }, now: NOW }), null);
+});
+check("a unit is written once", () => {
+	for (const k of ["energy_j_per_request", "energy_j_per_token", "latency_ms", "cost_usd"]) {
+		const t = metricText(k, 1.5);
+		if (/(\S+(?: per \S+)?) \1$/.test(t)) throw new Error(`unit doubled: ${t}`);
+	}
+	eq(metricText("goodput_tok_s", 22.4), "22.4 tok/s");
 });
 check("best so far never goes back", () => {
 	eq(bestSoFar([1, 3, 2, 5, NaN, 4], true), [1, 3, 3, 5, 5]);

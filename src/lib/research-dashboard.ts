@@ -12,8 +12,9 @@ const WEEK_S = 7 * 86400;
 /** A metric value with its unit, the way the run page writes it. */
 export function metricText(name: string, v: number): string {
 	const h = humanMetric(name);
-	const t = fmtMetricValue(v, h.unit, name);
-	return h.unit && !t.endsWith("%") ? `${t} ${h.unit}` : t;
+	// fmtMetricValue writes the unit itself now; adding it again read
+	// "75.31 J per request J per request" (2026-11-28).
+	return fmtMetricValue(v, h.unit, name);
 }
 
 // ── yes/no metrics ────────────────────────────────────────────────────────
