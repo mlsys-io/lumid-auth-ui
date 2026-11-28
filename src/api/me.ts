@@ -655,6 +655,10 @@ export const me = {
   experimentsAll: () => call<{ experiments: Array<MeExperiment & { app: string }>; count: number }>("GET", "/experiments"),
   // Central measurement: the instruments identity can measure with (/me/measure).
   measureInstruments: () => call<{ instruments: import("@/lib/measure").MeasureInstrument[] }>("GET", "/measure/instruments"),
+  // Usage metering (round 10): what this user's measurements used, against the
+  // app's spec compute.budget (identity /me/usage). Device-seconds; $ notional.
+  usage: (app?: string) =>
+    call<import("@/lib/spend").MeUsage>("GET", `/usage${app ? `?app=${encodeURIComponent(app)}` : ""}`),
   // Offer lifecycle rides the run-feedback verb: POST /me/runs/:run_id/feedback
   // {verdict: good|bad|neutral} (was /cycles/feedback, which took a -1/0/+1
   // `rating`). The extra fields (kind, label, output_id) pass through.

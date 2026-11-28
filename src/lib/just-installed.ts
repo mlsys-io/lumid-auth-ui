@@ -32,3 +32,8 @@ export function takePendingCustomize(name: string): boolean {
 	write(cur.filter((n) => n !== name));
 	return true;
 }
+
+/** Apps installed this session that haven't been seen ready yet (read-only). */
+export function pendingInstallNames(): string[] {
+	return read();
+}
