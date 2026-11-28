@@ -104,6 +104,17 @@ export function tiedAtTop(e: MeExperiment): string[] {
 	return top.length >= 2 ? top : [];
 }
 
+/** A gated round is over when every version has run and a gate stopped each
+ *  one. The procedure then is new versions, not the same ones again: a re-run
+ *  of a stopped version is another trial against the same data (it inflates
+ *  the multiple-testing count), and "Run each version once more" sat as the
+ *  main button under "This round is over… add new versions" (2026-11-28). */
+export function roundOver(e: MeExperiment): boolean {
+	const g = e.gate_progress || {};
+	const all = [...new Set([...(e.arms || []).map((a) => String(a.id)), ...Object.keys(g)])];
+	return all.length > 0 && all.every((k) => g[k] && !g[k].passed);
+}
+
 /** Where a gated experiment's versions stand: passed every step / stopped / held. */
 function gateTally(e: MeExperiment) {
 	const g = e.gate_progress || {};

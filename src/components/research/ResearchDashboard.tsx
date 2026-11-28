@@ -169,7 +169,7 @@ function BestTile({ app, best, onSelect, onHide }: { app: string; best: BestResu
 							<div className="flex items-baseline gap-1.5">
 								<span className="truncate text-meta font-semibold text-ink-900">{top.leader}</span>
 								<span className={cn("flex-shrink-0 text-micro", top.standing === "winning" ? "text-gold-700" : "text-ink-600")}>
-									{top.standing === "winning" ? <><CheckCircle2 className="mr-0.5 inline h-3 w-3 -translate-y-px" aria-hidden />wins</> : top.standing}
+									{top.standing === "winning" ? <><CheckCircle2 className="mr-0.5 inline h-3 w-3 -translate-y-px" aria-hidden />wins</> : top.standing === "didn't pass a step" ? `didn't pass ${top.stoppedAt ?? "a step"}` : top.standing}
 								</span>
 							</div>
 							<div className="truncate font-mono text-caption tabular-nums text-ink-800">{top.metric} {top.valueText} <span className="font-sans text-micro text-ink-600">· {top.n} results</span></div>

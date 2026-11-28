@@ -66,6 +66,14 @@ check("failing workflows and the week", () => {
 	eq([w.runs, w.failed, w.dots.map((d) => d.state), w.spendCents], [2, 1, ["done", "failed"], 110]);
 	eq(dollars(410), "$4.10");
 });
+check("a top number a gate stopped is not a lead", () => {
+	const mk = (id: string, extra: Record<string, unknown>) => ({ id, best_variant: "a", n_results: 5, metric: { name: "sharpe" }, variants: { a: { n: 5, mean: 1 } }, ...extra }) as unknown as MeExperiment;
+	const stopped = mk("s", { best_failed_gate: true, best_stopped_at: "robustness" });
+	const b = bestResult(stopped)!;
+	eq([b.standing, b.stoppedAt], ["didn't pass a step", "Robustness"]);
+	eq(bestResults([stopped, mk("l", {})]).map((x) => x.select), ["exp:l", "exp:s"]);
+	eq(researchHeadline({ exps: [stopped], failing: [], ideas: 0, seen: { s: "B" }, now: NOW }), null);
+});
 check("best so far never goes back", () => {
 	eq(bestSoFar([1, 3, 2, 5, NaN, 4], true), [1, 3, 3, 5, 5]);
 	eq(bestSoFar([9, 7, 8, 3], false), [9, 7, 7, 3]);
