@@ -40,7 +40,7 @@ export function threadHome(app: string | null | undefined): string {
 
 /** Human label for a thread's place, for tooltips and history rows. */
 export function scopeLabel(app: string): string | null {
-	return app === LIBRARY_KEY ? 'Library'
+	return app === LIBRARY_KEY ? 'Marketplace'
 		: app === DATA_KEY ? 'Data Warehouse'
 		: app === COMPUTE_KEY ? 'Research Fleet'
 		: app === APPS_KEY ? 'Apps'

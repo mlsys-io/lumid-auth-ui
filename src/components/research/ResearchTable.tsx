@@ -20,7 +20,7 @@ import type { SpecNode, SpecWorkflow } from "@/lib/app-spec";
 import {
 	buildResearchTree, DOT_SIZE, experimentStatus, humanId, rowStatus, versionLabel, versionsOf, OTHER_NODE,
 	type MapNode, type Proposal, type Tone, experimentLabel} from "@/lib/research-map";
-import { bestResult } from "@/lib/research-dashboard";
+import { bestResult, bestResultValue } from "@/lib/research-dashboard";
 import { useRunsFeed } from "@/components/activity/hooks";
 import { fmtAgo } from "@/lib/activity";
 import { cn } from "@/lib/utils";
@@ -111,7 +111,7 @@ export default function ResearchTable({ app, exps, pending, workflows, groups, r
 				const st = e ? experimentStatus(e) : { text: "", tone: "idle" as Tone };
 				const b = e ? bestResult(e) : null;
 				const match: Filter[] = [st.tone === "ok" ? "winning" : st.tone === "failing" ? "failing" : st.tone === "running" ? "running" : !e?.n_results ? "idle" : "all"];
-				row = { node: n, depth, name: e ? experimentLabel(e) : n.ref, sub: "experiment", status: st, best: b ? `${b.leader}: ${b.metric} ${b.valueText}` : undefined, when: e?.updated_at ? fmtAgo(Date.parse(e.updated_at) / 1000) : undefined, match, kids: children };
+				row = { node: n, depth, name: e ? experimentLabel(e) : n.ref, sub: "experiment", status: st, best: b ? `${b.leader}: ${bestResultValue(b)}` : undefined, when: e?.updated_at ? fmtAgo(Date.parse(e.updated_at) / 1000) : undefined, match, kids: children };
 			} else if (n.kind === "version") {
 				const [, expId, vid] = n.id.split(":");
 				const e = expById.get(expId);

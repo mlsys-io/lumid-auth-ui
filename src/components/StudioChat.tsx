@@ -358,7 +358,7 @@ export function StudioChat({ docked = false, groundApp, threadId }: { docked?: b
 		if (!scope) return 'Ask anything…';
 		if (scope === COMPUTE_KEY) return 'Ask about the fleet…';
 		if (scope === DATA_KEY) return 'Ask about your data…';
-		if (scope === LIBRARY_KEY) return 'Ask about the Library…';
+		if (scope === LIBRARY_KEY) return 'Ask about the Marketplace…';
 		if (scope === APPS_KEY) return 'Ask about your apps…';
 		return `Ask ${appTitle(scope)}…`;
 	})();

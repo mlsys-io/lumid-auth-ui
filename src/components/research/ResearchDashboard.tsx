@@ -23,7 +23,7 @@ import { AlertTriangle, CheckCircle2, CircleDot, Lightbulb, Sparkles } from "luc
 import { me, type MeExperiment, type MeExperimentRow, type MeWorkflowRow } from "@/api/me";
 import type { Proposal } from "@/lib/research-map";
 import { humanId } from "@/lib/research-map";
-import { bestResults, bestSoFar, dollars, failingWorkflows, phoneSummary, researchHeadline, weekSummary, type BestResult } from "@/lib/research-dashboard";
+import { bestResults, bestSoFar, bestTileLines, dollars, failingWorkflows, phoneSummary, researchHeadline, weekSummary, type BestResult } from "@/lib/research-dashboard";
 import { useRunsFeed } from "@/components/activity/hooks";
 import { groupActivity } from "@/lib/activity";
 import { cn } from "@/lib/utils";
@@ -190,6 +190,8 @@ function BestTile({ app, best, spec, onSelect, onHide }: { app: string; best: Be
 		}).catch(() => {});
 		return () => { live = false; };
 	}, [app, top?.select, top, spec]);
+	// Metric name + value; a yes/no metric is words alone ("meets constraints").
+	const lines = top ? bestTileLines(top, stepWords) : { value: "" };
 	return (
 		<Tile id="best" onHide={onHide}>
 			{!top ? (
@@ -206,8 +208,8 @@ function BestTile({ app, best, spec, onSelect, onHide }: { app: string; best: Be
 									{top.standing === "winning" ? <><CheckCircle2 className="mr-0.5 inline h-3 w-3 -translate-y-px" aria-hidden />wins</> : top.standing === "didn't pass a step" ? `didn't pass ${top.stoppedAt ?? "a step"}` : top.standing}
 								</span>
 							</div>
-							<div className="truncate text-micro text-ink-700">{top.metric}</div>
-							<div className="truncate font-mono text-caption tabular-nums text-ink-800" title={stepWords ?? top.valueText}>{stepWords ?? top.valueText}</div>
+							{lines.metric && <div className="truncate text-micro text-ink-700">{lines.metric}</div>}
+							<div className={cn("truncate text-caption text-ink-800", lines.metric && "font-mono tabular-nums")} title={lines.value}>{lines.value}</div>
 						</div>
 						{series && <BestLine values={series} higherIsBetter={top.higherIsBetter} />}
 					</div>

@@ -111,8 +111,8 @@ const PAGE_META: Array<{
 		pattern: /^\/studio\/(library|marketplace)/,
 		ownHeader: true,
 		icon: Store,
-		title: "Library",
-		subtitle: "Marketplace, skills, and experiments — pull in, refine, publish back.",
+		title: "Marketplace",
+		subtitle: "Apps, skills, and studies — pull in, refine, publish back.",
 		iconTone: "text-gold-600",
 	},
 	{

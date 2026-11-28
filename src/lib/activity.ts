@@ -14,6 +14,7 @@
 
 import type { MeRunRow, SparkRun } from "@/api/me";
 import { parseScheduledRunId } from "@/lib/run-routes";
+import { isVirtualScope } from "@/lib/chat-scopes";
 
 export interface FailingStreak {
 	/** Consecutive failed runs, newest first, ending at the latest finished run. */
@@ -228,6 +229,92 @@ export function groupActivity(rows: MeRunRow[], opts: { app?: string } = {}): Ac
 	const failing = wfs.filter((w) => w.failing).sort((a, b) => (b.failing!.count - a.failing!.count) || latest(b) - latest(a));
 
 	return { running, failing, apps };
+}
+
+// ── The run list (Activity → Timeline → List) ──────────────────────────────
+// 2026-11-28 audit: at ?state=failed the list showed "Unknown case id(s): …"
+// three times and "Nothing to answer: …" several times as separate rows, and
+// runs of apps the user had since removed filled it. Repeats collapse into one
+// row ("Case eval · 3× Unknown case id …", expand to see each run), and runs of
+// removed apps sit behind a toggle, labelled as such.
+
+/** The App column's tag for a run whose app is no longer installed. */
+export const REMOVED_APP = "removed app";
+
+type ListRun = Pick<MeRunRow, "run_id" | "app" | "workflow_slug" | "state" | "reason">;
+
+/** True when the run's app is not installed any more. Unknown (`installed`
+ *  missing or empty — still loading, or the read failed) is never "removed",
+ *  and neither is a run with no app or a first-party surface's virtual scope. */
+export function isRemovedApp(app: string | null | undefined, installed?: ReadonlySet<string> | null): boolean {
+	if (!app || !installed || installed.size === 0 || isVirtualScope(app)) return false;
+	return !installed.has(app);
+}
+
+export interface RunListGroup<T extends ListRun = MeRunRow> {
+	/** The first (newest) run's id. */
+	key: string;
+	/** One or more runs, in list order (newest first). */
+	runs: T[];
+	app: string;
+	workflow: string;
+	state: string;
+	/** The shared Detail text ("" when the runs say nothing). */
+	detail: string;
+	removed: boolean;
+}
+
+/** The run list as rows: consecutive runs of the same workflow, state and
+ *  (non-empty) detail collapse into one group; runs of removed apps are left
+ *  out unless `showRemoved`, and then come after the rest. `removed` is how
+ *  many runs belong to removed apps (shown or not). */
+export function runListGroups<T extends ListRun>(runs: T[], opts: {
+	installed?: ReadonlySet<string> | null;
+	showRemoved?: boolean;
+	/** The Detail column's words for a run (default: plainCause for a failure, else the reason). */
+	detail?: (r: T) => string;
+} = {}): { groups: RunListGroup<T>[]; removed: number } {
+	const detailOf = opts.detail ?? ((r: T) => (r.state === "failed" ? plainCause(r.reason) : (r.reason || "").trim()));
+	const kept: T[] = [];
+	const gone: T[] = [];
+	for (const r of runs) (isRemovedApp(r.app, opts.installed) ? gone : kept).push(r);
+	const ordered = opts.showRemoved ? [...kept, ...gone] : kept;
+	const groups: RunListGroup<T>[] = [];
+	for (const r of ordered) {
+		const app = r.app || "";
+		const workflow = r.workflow_slug || "";
+		const detail = detailOf(r) || "";
+		const removed = isRemovedApp(app, opts.installed);
+		const last = groups[groups.length - 1];
+		if (last && detail && last.detail === detail && last.app === app && last.workflow === workflow && last.state === r.state && last.removed === removed) {
+			last.runs.push(r);
+			continue;
+		}
+		groups.push({ key: r.run_id, runs: [r], app, workflow, state: r.state, detail, removed });
+	}
+	return { groups, removed: gone.length };
+}
+
+/** The Detail column for a group: "3× Unknown case id …" (or the detail alone for one run). */
+export function runGroupDetail(g: Pick<RunListGroup<ListRun>, "runs" | "detail">): string {
+	if (g.runs.length < 2) return g.detail;
+	return g.detail ? `${g.runs.length}× ${g.detail}` : `${g.runs.length} runs`;
+}
+
+/** A group in one line, for its title and screen readers: "Case eval · 3× Unknown case id …". */
+export function runGroupLabel(name: string, g: Pick<RunListGroup<ListRun>, "runs" | "detail">): string {
+	const d = runGroupDetail(g);
+	return d ? `${name} · ${d}` : name;
+}
+
+/** What an empty list says when every run in it belongs to a removed app. */
+export function onlyRemovedAppsWords(n: number): string {
+	return n === 1 ? "The one run here is from an app you removed." : `All ${n.toLocaleString()} runs here are from apps you removed.`;
+}
+
+/** The toggle beside the list: "Show runs of removed apps (12)". */
+export function removedAppsToggleLabel(n: number): string {
+	return `Show runs of removed apps (${n.toLocaleString()})`;
 }
 
 // ── Plain words ────────────────────────────────────────────────────────────

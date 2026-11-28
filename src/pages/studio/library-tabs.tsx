@@ -14,13 +14,17 @@
 // Lumen (2026-11): the page owns its title (PageHeader, serif) and the three
 // sections are underline tabs under it — the top strip no longer repeats
 // "Library" (TopStatusStrip ownHeader), and the bordered pill row is gone.
+//
+// The heading says "Marketplace", the sidebar row's name (operator's naming,
+// 2026-09-13), and the first tab is "Apps" (Apps · Skills · Studies). URLs
+// keep their /studio/library/* shape so old links still work.
 
 import { Outlet, useLocation } from "react-router-dom";
 import { PageHeader } from "@/components/ui/page-header";
 import { PageContainer } from "@/components/ui/page-container";
 
 const TABS = [
-	{ to: "/studio/library/marketplace", label: "Marketplace" },
+	{ to: "/studio/library/marketplace", label: "Apps" },
 	{ to: "/studio/library/skills", label: "Skills" },
 	{ to: "/studio/library/experiments", label: "Studies" },
 ];
@@ -38,7 +42,7 @@ export default function StudioLibraryTabs() {
 		<div className="flex flex-1 min-h-0 h-full">
 			<div className="flex-1 min-w-0 overflow-y-auto">
 				<PageContainer>
-					<PageHeader title="Library" subtitle={SUBTITLE[section] ?? SUBTITLE.marketplace} tabs={TABS} />
+					<PageHeader title="Marketplace" subtitle={SUBTITLE[section] ?? SUBTITLE.marketplace} tabs={TABS} />
 					<div className="pt-6">
 						<Outlet />
 					</div>

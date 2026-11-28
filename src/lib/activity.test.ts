@@ -1,6 +1,6 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 import type { MeRunRow } from "@/api/me";
-import { normalizeRun, groupActivity, plainCause, fmtDuration, fmtTypical, progressOf, isOverdue, loopOfRun, workflowStatusLine, nextFireSec, dirIdToSec, fmtAgo, fmtSince, failingSentence, didntRun, runCountWords, plural } from "./activity";
+import { normalizeRun, groupActivity, plainCause, fmtDuration, fmtTypical, progressOf, isOverdue, loopOfRun, workflowStatusLine, nextFireSec, dirIdToSec, fmtAgo, fmtSince, failingSentence, didntRun, runCountWords, plural, runListGroups, runGroupDetail, runGroupLabel, isRemovedApp, removedAppsToggleLabel, onlyRemovedAppsWords, REMOVED_APP } from "./activity";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -171,6 +171,51 @@ check("a silent step failure and plurals in words", () => {
 	eq(plainCause("sandbox:None failed: no error text"), "Sandbox failed without an error message");
 	eq(plainCause("gpu_measure failed: no error text"), "Gpu measure failed without an error message");
 	eq([plural(1, "result"), plural(3, "result"), plural(1200, "result")], ["1 result", "3 results", "1,200 results"]);
+});
+
+// ── the run list: repeats collapse, removed apps sit behind a toggle ──
+check("consecutive runs of one workflow failing the same way are one row", () => {
+	const unknown = "Unknown case id(s): Case_002_FemaleExec";
+	const rows = [
+		mk("mbb-consultant", "case_eval", "failed", { run_id: "a", reason: unknown }),
+		mk("mbb-consultant", "case_eval", "failed", { run_id: "b", reason: unknown }),
+		mk("mbb-consultant", "case_eval", "failed", { run_id: "c", reason: unknown }),
+		mk("mbb-consultant", "answer", "failed", { run_id: "d", reason: "Nothing to answer: pass question=..." }),
+		mk("mbb-consultant", "case_eval", "failed", { run_id: "e", reason: unknown }),
+		mk("mbb-consultant", "case_eval", "failed", { run_id: "f", reason: "HTTP 500" }),
+		mk("mbb-consultant", "case_eval", "succeeded", { run_id: "g" }),
+		mk("mbb-consultant", "case_eval", "succeeded", { run_id: "h" }),
+	];
+	const { groups, removed } = runListGroups(rows);
+	// Only CONSECUTIVE repeats fold; a different cause, workflow or state breaks
+	// the run; runs that say nothing never fold.
+	eq(groups.map((g) => g.runs.map((r) => r.run_id).join("")), ["abc", "d", "e", "f", "g", "h"]);
+	eq(removed, 0);
+	eq(runGroupDetail(groups[0]), "3× Unknown case id(s): Case_002_FemaleExec");
+	eq(runGroupLabel("Case eval", groups[0]), "Case eval · 3× Unknown case id(s): Case_002_FemaleExec");
+	eq(runGroupDetail(groups[1]), "Nothing to answer: pass question=...");
+	eq(runGroupLabel("Case eval", { runs: [rows[6]], detail: "" }), "Case eval");
+	// The Detail column's own words decide what counts as "the same cause".
+	eq(runListGroups(rows.slice(0, 3), { detail: () => "" }).groups.length, 3);
+});
+check("runs of a removed app are labelled and hidden until asked for", () => {
+	const installed = new Set(["mbb-consultant"]);
+	const rows = [
+		mk("quant-research-e2e", "backtest", "failed", { run_id: "q1", reason: "x" }),
+		mk("mbb-consultant", "case_eval", "failed", { run_id: "m1", reason: "y" }),
+		mk("quant-research-e2e", "backtest", "failed", { run_id: "q2", reason: "x" }),
+		mk("", "job", "failed", { run_id: "j1", reason: "z" }),
+	];
+	const off = runListGroups(rows, { installed });
+	eq([off.groups.map((g) => g.key), off.removed], [["m1", "j1"], 2]);
+	// Shown: after the rest, and the two now-adjacent repeats fold.
+	const on = runListGroups(rows, { installed, showRemoved: true });
+	eq(on.groups.map((g) => [g.key, g.runs.length, g.removed]), [["m1", 1, false], ["j1", 1, false], ["q1", 2, true]]);
+	// Unknown installs (still loading, read failed) never call an app removed.
+	eq([isRemovedApp("quant-research-e2e", null), isRemovedApp("quant-research-e2e", new Set()), isRemovedApp("", installed), isRemovedApp("quant-research-e2e", installed)], [false, false, false, true]);
+	eq(runListGroups(rows, { installed: null }).groups.length, 4);
+	eq([REMOVED_APP, removedAppsToggleLabel(12), onlyRemovedAppsWords(1), onlyRemovedAppsWords(3)],
+		["removed app", "Show runs of removed apps (12)", "The one run here is from an app you removed.", "All 3 runs here are from apps you removed."]);
 });
 
 export function run(): number {
