@@ -83,14 +83,16 @@ function SiteCard({ site, st, error, isAdmin }: { site: string; st: StorageStatu
 							})}
 						</ul>
 					</div>
-					<ul className="grid gap-1 sm:grid-cols-2">
+					<ul className="space-y-1 border-t border-ink-100 pt-3">
 						{pub.services.map((s) => {
 							const T = TONES[s.ok ? "ok" : "failing"];
 							return (
-								<li key={s.name} className="flex items-center gap-1.5 text-caption text-ink-700">
-									<T.Icon className={cn("h-3.5 w-3.5 shrink-0", T.icon)} aria-hidden />
-									<span className="font-medium">{s.name}</span>
-									<span className={s.ok ? "text-ink-600" : T.text}>{serviceLine(s)}</span>
+								<li key={s.name} className="flex items-center justify-between gap-3 text-caption text-ink-700">
+									<span className="flex min-w-0 items-center gap-1.5">
+										<T.Icon className={cn("h-3.5 w-3.5 shrink-0", T.icon)} aria-hidden />
+										<span className="font-medium">{s.name}</span>
+									</span>
+									<span className={cn("shrink-0 tabular-nums", s.ok ? "text-ink-600" : T.text)}>{serviceLine(s)}</span>
 								</li>
 							);
 						})}
@@ -154,7 +156,7 @@ export default function StorageTab({ isAdmin }: { isAdmin: boolean }) {
 					<RefreshCw className={cn("mr-1.5 h-3.5 w-3.5", loading && "animate-spin")} aria-hidden /> Refresh
 				</Button>
 			</div>
-			<div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-3">
+			<div className="grid items-start gap-4 [grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr))]">
 				{sites.map((s) => <SiteCard key={s} site={s} st={state[s]?.st ?? null} error={state[s]?.error ?? null} isAdmin={isAdmin} />)}
 			</div>
 		</div>

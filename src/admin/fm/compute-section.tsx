@@ -26,7 +26,10 @@ type Props = React.ComponentProps<typeof AdminSectionLayout>;
 // /studio/apps/* workspace page, so closing (or opening) chat here silently
 // flips the persisted state an app page reads on its next mount, and vice
 // versa. /studio/data avoids this the same way (see data.tsx's CHAT_OPEN_KEY).
-const COMPUTE_CHAT_OPEN_KEY = "studio_compute_chat_open";
+// v2 (2026-11-28): the fleet pages are tables and cards that need the width; an open rail left them ~700px
+// on a 1440 screen. Closed until the person opens it; the toggle in the top strip remembers the choice.
+// A new key, because every earlier visit had already stored "1" under the old one.
+const COMPUTE_CHAT_OPEN_KEY = "studio_compute_chat_open_v2";
 
 export default function ComputeSection(props: Props) {
 	return (
@@ -34,7 +37,7 @@ export default function ComputeSection(props: Props) {
 			<div className="min-w-0 flex-1 overflow-y-auto px-6 py-6">
 				<AdminSectionLayout {...props} />
 			</div>
-			<ChatRail groundApp={COMPUTE_KEY} openKey={COMPUTE_CHAT_OPEN_KEY} top={<RunningNow />} />
+			<ChatRail groundApp={COMPUTE_KEY} openKey={COMPUTE_CHAT_OPEN_KEY} defaultOpen={false} top={<RunningNow />} />
 		</div>
 	);
 }

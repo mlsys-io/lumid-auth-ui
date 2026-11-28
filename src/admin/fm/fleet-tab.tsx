@@ -178,6 +178,8 @@ export default function FleetTab({ isAdmin }: { isAdmin: boolean }) {
 				</div>
 			)}
 
+			{/* One section per site; inside it EACH MACHINE IS A BOX (operator, 2026-11-28: "each machine can be a
+			    box not a row"), boxes flowing across the width (>= 260px each), one column on a phone. */}
 			<div className="space-y-4">
 				{tree.map(([site, entries]) => {
 					const siteLive = entries.reduce(
@@ -204,82 +206,69 @@ export default function FleetTab({ isAdmin }: { isAdmin: boolean }) {
 									workers={entries.flatMap((e) => e.workers)}
 								/>
 							)}
-							<table className="w-full text-sm">
-								<tbody className="divide-y divide-slate-100">
-									{entries.map((e) => {
-										const nodeLive = isLive(e.node.last_seen);
-										const shown = showStale
-											? e.workers
-											: e.workers.filter((w) => isLive(w.last_seen));
-										if (!showStale && !nodeLive && shown.length === 0) return null;
-										return (
-											<tr key={`${site}:${e.node.id}`} className="align-top">
-												<td className="px-3 py-2">
-													<div className="flex flex-wrap items-baseline gap-2">
-														<span className="font-medium text-slate-900">
-															{e.node.alias ?? e.node.id}
-														</span>
-														<span className="font-mono text-xs text-slate-500">{e.node.id}</span>
-														{!nodeLive && (
-															<span className="rounded bg-amber-50 px-1 text-xs text-amber-700">
-																stale
-															</span>
-														)}
-														<span className="text-xs text-slate-400">
-															<Age seconds={secondsSince(e.node.last_seen)} />
-														</span>
-													</div>
-
-													{shown.length === 0 ? (
-														<div className="mt-1 text-xs text-slate-400">
-															no live workers
-														</div>
-													) : (
-														<div className="mt-2 space-y-1">
-															{shown.map((w) => (
-																<div
-																	key={`${w.site}:${w.id}`}
-																	className={`flex flex-wrap items-center gap-2 rounded border border-slate-100 bg-slate-50/60 px-2 py-1 text-xs ${
-																		isLive(w.last_seen) ? "" : "opacity-50"
-																	}`}
-																>
-																	<StatusPill status={w.status} />
-																	<span className="font-medium text-slate-800">
-																		{w.alias ?? w.id}
-																	</span>
-																	<span className="font-mono text-slate-500">{w.id}</span>
-																	{gpuLabel(w) !== siteGpu && (
-																		<span className="text-slate-600">{gpuLabel(w)}</span>
-																	)}
-																	{/* The 1.0 default is WORKER_COST_PER_HOUR, not a price —
-																	    rendering it printed "$1.000" for boxes we own outright. */}
-																	{w.cost_per_hour != null &&
-																		w.cost_per_hour !== FM_DEFAULT_COST_PER_HOUR && (
-																			<span className="text-slate-600">
-																				${w.cost_per_hour.toFixed(3)}/hr
-																			</span>
-																		)}
-																	{(w.tags ?? []).map((t) => (
-																		<span
-																			key={t}
-																			className="rounded bg-slate-200/70 px-1 text-slate-600"
-																		>
-																			{t}
-																		</span>
-																	))}
-																	<span className="ml-auto text-slate-400">
-																		<Age seconds={secondsSince(w.last_seen)} />
-																	</span>
-																</div>
+							<div className="grid gap-3 p-3 [grid-template-columns:repeat(auto-fill,minmax(min(100%,260px),1fr))]">
+								{entries.map((e) => {
+									const nodeLive = isLive(e.node.last_seen);
+									const shown = showStale
+										? e.workers
+										: e.workers.filter((w) => isLive(w.last_seen));
+									if (!showStale && !nodeLive && shown.length === 0) return null;
+									const busy = shown.filter((w) => String(w.status).toUpperCase() !== "IDLE").length;
+									return (
+										<div
+											key={`${site}:${e.node.id}`}
+											data-node={e.node.alias ?? e.node.id}
+											className={`flex flex-col rounded-md border bg-card p-3 text-sm shadow-e1 ${nodeLive ? "border-ink-200" : "border-ember-200/70 opacity-75"}`}
+										>
+											<div className="flex items-baseline justify-between gap-2">
+												<span className="truncate font-medium text-ink-900" title={e.node.id}>
+													{e.node.alias ?? e.node.id}
+												</span>
+												<span className="shrink-0 text-caption text-ink-600">
+													<Age seconds={secondsSince(e.node.last_seen)} />
+												</span>
+											</div>
+											<div className="mt-0.5 flex flex-wrap items-center gap-x-2 text-caption text-ink-600">
+												<span className="font-mono">{e.node.id}</span>
+												<span>
+													{shown.length} worker{shown.length === 1 ? "" : "s"}
+													{busy ? ` · ${busy} busy` : ""}
+												</span>
+												{!nodeLive && <span className="rounded bg-ember-50 px-1 text-ember-700">stale</span>}
+											</div>
+											{shown.length === 0 ? (
+												<div className="mt-2 text-caption text-ink-600">no live workers</div>
+											) : (
+												<div className="mt-2 space-y-1">
+													{shown.map((w) => (
+														<div
+															key={`${w.site}:${w.id}`}
+															className={`flex flex-wrap items-center gap-1.5 rounded border border-ink-100 bg-ink-50/60 px-2 py-1 text-caption ${
+																isLive(w.last_seen) ? "" : "opacity-50"
+															}`}
+														>
+															<StatusPill status={w.status} />
+															<span className="font-medium text-ink-800">{w.alias ?? w.id}</span>
+															{gpuLabel(w) !== siteGpu && <span className="text-ink-600">{gpuLabel(w)}</span>}
+															{/* The 1.0 default is WORKER_COST_PER_HOUR, not a price —
+															    rendering it printed "$1.000" for boxes we own outright. */}
+															{w.cost_per_hour != null && w.cost_per_hour !== FM_DEFAULT_COST_PER_HOUR && (
+																<span className="text-ink-600">${w.cost_per_hour.toFixed(3)}/hr</span>
+															)}
+															{(w.tags ?? []).map((t) => (
+																<span key={t} className="rounded bg-ink-100 px-1 text-ink-600">{t}</span>
 															))}
+															<span className="ml-auto text-ink-600" title={w.id}>
+																<Age seconds={secondsSince(w.last_seen)} />
+															</span>
 														</div>
-													)}
-												</td>
-											</tr>
-										);
-									})}
-								</tbody>
-							</table>
+													))}
+												</div>
+											)}
+										</div>
+									);
+								})}
+							</div>
 						</div>
 					);
 				})}
