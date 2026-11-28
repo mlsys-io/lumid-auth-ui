@@ -333,6 +333,15 @@ function AppSurfaceImpl({
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild>
+            <Link to={`/studio/a/${encodeURIComponent(app)}/manage#publish`}>
+              <UploadCloud className="w-3.5 h-3.5" />
+              <span className="flex flex-col">
+                <span>Publish…</span>
+                <span className="text-micro text-ink-600">to the Marketplace, or privately</span>
+              </span>
+            </Link>
+          </DropdownMenuItem>
+          <DropdownMenuItem asChild>
             <Link to={configTo}>
               <Settings className="w-3.5 h-3.5" /> Advanced (YAML)
             </Link>

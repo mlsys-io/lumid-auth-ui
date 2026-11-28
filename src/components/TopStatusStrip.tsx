@@ -48,6 +48,14 @@ const PAGE_META: Array<{
 		ownHeader: true,
 	},
 	{
+		// New app: the page carries its own heading (matched before the per-app rule).
+		pattern: /^\/studio\/apps\/new\/?$/,
+		icon: Boxes,
+		title: "New app",
+		iconTone: "text-gold-600",
+		ownHeader: true,
+	},
+	{
 		pattern: /^\/studio\/apps\/[^/]+/,
 		icon: Boxes,
 		title: "Agent",
@@ -219,7 +227,8 @@ export default function TopStatusStrip() {
 	// name, so the top strip's generic "App" identity is a redundant second
 	// headline — suppress the left identity block there (keep the slot + ticker).
 	const isAppWorkspace = useMemo(
-		() => /^\/studio\/apps\/[^/]+/.test(location.pathname) && location.pathname !== "/studio/apps/all",
+		// /apps/all (the inventory) and /apps/new (New app) are pages, not an app.
+		() => /^\/studio\/apps\/[^/]+/.test(location.pathname) && !/^\/studio\/apps\/(all|new)\/?$/.test(location.pathname),
 		[location.pathname],
 	);
 	// The app slug for the workspace identity (the AppSwitcher takes the "App"

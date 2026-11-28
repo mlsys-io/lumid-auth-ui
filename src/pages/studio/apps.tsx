@@ -571,7 +571,8 @@ function AppsHome() {
 	const allRows = [...appRows, ...surfaceRows];
 
 	const launcher = (
-		<div className="border-t border-border pt-5">
+		<div className="space-y-4 border-t border-border pt-5">
+			<NewAppLink />
 			<QuickStarters heading="Set up a new agent" />
 		</div>
 	);
@@ -593,6 +594,7 @@ function AppsHome() {
 							</div>
 						</div>
 					</div>
+					<NewAppLink />
 					<QuickStarters heading="Start with a starter" />
 				</div>
 			) : (
@@ -1212,6 +1214,15 @@ export function AppOverview({ app, embedded, initialLoop }: { app: string; embed
 												</span>
 											</Link>
 										</DropdownMenuItem>
+										<DropdownMenuItem asChild>
+											<Link to={`/studio/a/${encodeURIComponent(app)}/manage#publish`}>
+												<UploadCloud className="w-3.5 h-3.5" />
+												<span className="flex flex-col">
+													<span>Publish…</span>
+													<span className="text-micro text-ink-600">to the Marketplace, or privately</span>
+												</span>
+											</Link>
+										</DropdownMenuItem>
 										<DropdownMenuItem
 											disabled={!!shareBusy}
 											onSelect={() => shareAction("pull", "update", "Update queued — upstream changes merge in ~a minute (your edits are preserved).")}
@@ -1396,6 +1407,20 @@ function WorkflowNotFound({ app, loop, runId }: { app: string; loop: string; run
 				<Link to="/studio/runs" className="text-ink-700 underline hover:text-ink-900">Activity</Link>
 			</div>
 		</div>
+	);
+}
+
+/** New app: a research app of your own, from the empty starter (pages/studio/new-app). */
+function NewAppLink() {
+	return (
+		<Link to="/studio/apps/new" className="flex items-center gap-3 rounded-xl border border-ink-200 bg-card px-4 py-3 hover:border-gold-300 hover:bg-gold-50/40">
+			<span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg bg-ink-100 text-ink-800"><Plus className="h-4 w-4" /></span>
+			<span className="min-w-0">
+				<span className="block text-meta font-medium text-ink-900">New app</span>
+				<span className="block text-caption text-ink-600">A research app of your own: add workflows and experiments, then publish it to the Marketplace.</span>
+			</span>
+			<ArrowRight className="ml-auto h-4 w-4 flex-shrink-0 text-ink-600" />
+		</Link>
 	);
 }
 
