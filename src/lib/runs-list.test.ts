@@ -1,6 +1,6 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 import type { MeRunRow, MeWorkflowRow } from "@/api/me";
-import { runRowName, runRowDetail, appLabels, workflowTitles, runRowWhen, RUN_STATE_FILTERS, workflowFilterOptions, compareSelection } from "./runs-list";
+import { runRowName, runRowDetail, runRowFullDetail, appLabels, workflowTitles, runRowWhen, RUN_STATE_FILTERS, workflowFilterOptions, compareSelection } from "./runs-list";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -58,6 +58,17 @@ check("detail in words; apps titled alike are told apart", () => {
 	const t = (a: string) => (a.startsWith("quant-research") ? "Quant Research" : "MLSys Research");
 	const m = appLabels(["quant-research", "quant-research-e2e", "mlsys-research", "quant-research"], t);
 	eq([m.get("quant-research"), m.get("quant-research-e2e"), m.get("mlsys-research")], ["Quant Research", "Quant Research (E2E)", "MLSys Research"]);
+});
+
+check("the full detail is never clipped and keeps the run's own message", () => {
+	const long = "Unknown case id(s): Case_002_FemaleExecutiveRetention, Case_007_PricingTheNewThing, Case_011_SupplyChainRedesignForTheRegion";
+	const r = row("m", "case_eval", undefined, { state: "failed", reason: long });
+	if (!runRowDetail(r).endsWith("…")) throw new Error("expected the cell's words to be clipped");
+	eq(runRowFullDetail(r), `${runRowDetail(r)}\n\nThe run said: ${long}`);
+	// When the words say it all, no echo.
+	eq(runRowFullDetail(row("q", "a", undefined, { reason: "universe_refresh_queued" })), "Universe refresh queued");
+	eq(runRowFullDetail(row("q", "a", undefined, { state: "failed", reason: "Nothing to answer" })), "Nothing to answer");
+	eq(runRowFullDetail(row("q", "a")), "");
 });
 
 export function run(): number {

@@ -371,7 +371,8 @@ export function setFeedback(text: string, workflowId: string, feedback: Feedback
 // 10, 2026-11-28: the only ways were the chat — which could not read the app's
 // notes — or hand-editing YAML). Text in, text out, comments kept.
 
-export interface NewVersion { id: string; about?: string; inputs: Record<string, unknown> }
+/** `title` is the name people read (the map, the panel); `id` the spec's key. */
+export interface NewVersion { id: string; title?: string; about?: string; inputs: Record<string, unknown> }
 
 function findExperiment(d: Document.Parsed, id: string): YAMLMap | null {
 	const seq = d.get("experiments", true);
@@ -442,10 +443,10 @@ export function parseNewVersions(text: string, taken: Iterable<string>, inputNam
 		const inputs = obj(o.inputs);
 		const unknown = allowed ? Object.keys(inputs).filter((k) => !allowed.has(k)) : [];
 		if (unknown.length) { problems.push(`${where}: ${unknown.join(", ")} ${unknown.length > 1 ? "aren't inputs" : "isn't an input"} of this experiment's workflow, so ${unknown.length > 1 ? "they" : "it"} would be ignored. Its inputs: ${[...allowed!].join(", ")}.`); return; }
-		const extra = Object.keys(o).filter((k) => !["id", "about", "inputs"].includes(k));
-		if (extra.length) { problems.push(`${where}: put ${extra.join(", ")} under inputs (a version has only id, about and inputs).`); return; }
+		const extra = Object.keys(o).filter((k) => !["id", "title", "about", "inputs"].includes(k));
+		if (extra.length) { problems.push(`${where}: put ${extra.join(", ")} under inputs (a version has only id, title, about and inputs).`); return; }
 		seen.add(id);
-		versions.push({ id, ...(s(o.about).trim() ? { about: s(o.about).trim() } : {}), inputs });
+		versions.push({ id, ...(s(o.title).trim() ? { title: s(o.title).trim() } : {}), ...(s(o.about).trim() ? { about: s(o.about).trim() } : {}), inputs });
 	});
 	return { versions, problems };
 }
@@ -467,6 +468,7 @@ export function addVersions(text: string, experimentId: string, versions: NewVer
 		if (taken.has(v.id)) throw new Error(`There is already a version "${v.id}"`);
 		taken.add(v.id);
 		const entry: Obj = { id: v.id };
+		if (v.title) entry.title = v.title;
 		if (v.about) entry.about = v.about;
 		if (Object.keys(v.inputs).length) entry.inputs = v.inputs;
 		seq.add(d.createNode(entry));

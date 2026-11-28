@@ -27,14 +27,16 @@ import type { AppSpec, FeedbackStep, SpecNode, SpecWorkflow } from "@/lib/app-sp
 import { addNode, removeNode, renameNode, setFeedback, setWorkflowNode, addWorkflows } from "@/lib/app-spec";
 import { compareVerdict, runMetricValues, sideStats, type SideStats } from "@/lib/compare";
 import { workflowStatusLine, fmtAgo, fmtDuration, dirIdToSec } from "@/lib/activity";
-import { humanId, versionsOf, experimentLabel} from "@/lib/research-map";
+import { humanId, versionsOf, experimentLabel, shortStatus, workflowPress } from "@/lib/research-map";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { humanMetric, fmtMetricValue, measuredLine } from "@/lib/run-answer";
 import { instrumentChoices, instrumentName, measuredBy } from "@/lib/measure";
 import { useInstruments } from "@/hooks/useInstruments";
 
 const mLabel = (name: string) => humanMetric(name).label;
 /** A metric value with its unit, the way the run page writes it. */
-const mVal = (name: string, v: number) => { const h = humanMetric(name); const t = fmtMetricValue(v, h.unit, name); return h.unit && !t.endsWith("%") ? `${t} ${h.unit}` : t; };
+// fmtMetricValue writes the unit itself; adding it again doubled it.
+const mVal = (name: string, v: number) => fmtMetricValue(v, humanMetric(name).unit, name);
 import { compareHref, runPath, workflowPath } from "@/lib/run-routes";
 import { RunSteps, StepProgress } from "@/components/research/ProgressDots";
 import { stepsFromCycle } from "@/lib/progress-dots";
@@ -198,6 +200,7 @@ export default function WorkflowPanel({ app, wf, spec, row, exps, view, onView, 
 	const variants = spec.workflows.filter((w) => w.parent === wf.id && !w.helper);
 	const helpers = spec.workflows.filter((w) => w.parent === wf.id && w.helper);
 	const ownExps = exps.filter((e) => (e.dispatch?.loop || e.loops?.[0]) === wf.id);
+	const press = workflowPress(ownExps);
 	const toneCls = status.tone === "ok" ? "text-gold-700" : status.tone === "failing" ? "text-brick-700" : "text-ink-600";
 	const sub = (
 		<div className="space-y-2">
@@ -209,8 +212,31 @@ export default function WorkflowPanel({ app, wf, spec, row, exps, view, onView, 
 			    experiment), or make a changed copy (a new variant). Nothing new runs
 			    until you press Run. */}
 			<div className="flex flex-wrap items-center gap-1.5">
-				<Button size="sm" variant="accent" onClick={runNow} disabled={busy || running} aria-label={`Run ${wfLabel(wf)}`} title="Starts one run now">
-					<Play className="h-3.5 w-3.5" />{running ? "Running…" : "Run"}
+				{press.versions ? (
+					// It feeds experiments: the press that counts runs versions of one
+					// (the experiment's own Run button, priced there).
+					ownExps.length === 1 ? (
+						<Button size="sm" variant="accent" onClick={() => onSelect(`exp:${ownExps[0].id}`)} title={`Open ${experimentLabel(ownExps[0])} to run its versions`}>
+							<Play className="h-3.5 w-3.5" />{press.label}
+						</Button>
+					) : (
+						<DropdownMenu>
+							<DropdownMenuTrigger asChild>
+								<Button size="sm" variant="accent"><Play className="h-3.5 w-3.5" />{press.label}</Button>
+							</DropdownMenuTrigger>
+							<DropdownMenuContent align="start" className="w-72">
+								{ownExps.map((e) => (
+									<DropdownMenuItem key={e.id} onSelect={() => onSelect(`exp:${e.id}`)} className="flex flex-col items-start gap-0">
+										<span className="text-caption text-ink-900">{experimentLabel(e)}</span>
+										<span className="text-micro text-ink-600">{shortStatus(e).text}</span>
+									</DropdownMenuItem>
+								))}
+							</DropdownMenuContent>
+						</DropdownMenu>
+					)
+				) : null}
+				<Button size="sm" variant={press.versions ? "ghost" : "accent"} onClick={runNow} disabled={busy || running} aria-label={`${press.plainLabel}: ${wfLabel(wf)}`} title={press.plainTitle}>
+					<Play className="h-3.5 w-3.5" />{running ? "Running…" : press.plainLabel}
 				</Button>
 				<Button size="sm" variant="secondary" onClick={onTrySetups} title="Try values of one input — one version per value, compared on a metric">
 					<Plus className="h-3.5 w-3.5" />New experiment
@@ -331,7 +357,7 @@ function OverviewView({ app, wf, spec, row, cycles, variants, exps, onSelect, on
 				</span>
 			))}
 		</span>
-	) : cycles === null ? <span className="text-ink-600">Reading its runs…</span> : cycles.length === 0 ? <span className="text-ink-600">No results yet — press Run to get the first.</span> : <span className="text-ink-600">Its latest run recorded no results.</span>]);
+	) : cycles === null ? <span className="text-ink-600">Reading its runs…</span> : cycles.length === 0 ? <span className="text-ink-600">{workflowPress(exps.filter((e) => (e.dispatch?.loop || e.loops?.[0]) === wf.id)).versions ? "No results yet: run versions of its experiment to get the first." : "No results yet: press Run to get the first."}</span> : <span className="text-ink-600">{workflowPress(exps.filter((e) => (e.dispatch?.loop || e.loops?.[0]) === wf.id)).found}</span>]);
 	if (measured) lines.push(["Measured", <span className={measured.measured ? "text-ink-800" : "text-ember-700"}>{measured.text.replace(/^Measured on:?\s*/i, "")}</span>]);
 	if (cost) lines.push(["Cost", cost]);
 	if (parent) lines.push(["Built from", <button type="button" onClick={() => onSelect(`wf:${parent.id}`)} className="text-left text-ink-900 hover:underline">Variant of {wfLabel(parent)}</button>]);

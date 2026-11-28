@@ -540,7 +540,7 @@ function DocReader({ doc }: { doc: DocEntry }) {
 						<>This guide is part of the {appDoc.appTitle} app. Choose <b>Get updates</b> on the app and it opens inside it, beside your work.</>
 					) : (
 						<>This guide is part of the {appDoc.appTitle} app. Add the app from the{' '}
-						<Link to="/studio/library/marketplace" className="font-medium text-gold-700 hover:text-gold-800">Library</Link>{' '}
+						<Link to="/studio/library/marketplace" className="font-medium text-gold-700 hover:text-gold-800">Marketplace</Link>{' '}
 						and it opens inside the app, beside your work.</>
 					)}
 				</p>

@@ -1,5 +1,6 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
-import { coneDirections, layoutSpace, project, depthCue, frameCamera, mixCamera, firstRing, sceneFloor, dustField, hash01, HOME, STEP , stepCameraSpring, nearestYaw, ZERO_VEL } from "./space3d";
+import { coneDirections, layoutSpace, project, depthCue, frameCamera, mixCamera, firstRing, sceneFloor, dustField, hash01, HOME, STEP , stepCameraSpring, nearestYaw, ZERO_VEL,
+	BOB_UNITS, BoxGrid, LABEL_HIDE_MS, LABEL_KEEP, LABEL_SHOW_MS, boxesOverlap, declutterLabels, driftEnvelope, labelBox, labelRank, settleLabel, type Box, type LabelItem } from "./space3d";
 import type { MapNode } from "./research-map";
 
 type Check = { name: string; run: () => void };
@@ -153,6 +154,152 @@ check("camera mix takes the short way round", () => {
 	const a = { ...HOME, yaw: 3.0 }, b = { ...HOME, yaw: -3.0 };
 	const m = mixCamera(a, b, 0.5);
 	ok(Math.abs(Math.abs(m.yaw) - Math.PI) < 0.05, `yaw ${m.yaw}`);
+});
+
+// ── labels that never overprint ──────────────────────────────────────────
+
+check("label rank: selected > its path > app > workflow/node > experiment > suggestion > version", () => {
+	const r = [
+		labelRank("version", 2, { selected: true }),
+		labelRank("version", 2, { onPath: true }),
+		labelRank("app", 0),
+		labelRank("workflow", 1),
+		labelRank("experiment", 2),
+		labelRank("suggested", 2),
+		labelRank("version", 3),
+	];
+	for (let i = 1; i < r.length; i++) ok(r[i - 1] < r[i], `rank ${i - 1} before ${i}: ${r.join(",")}`);
+	ok(labelRank("node", 1) === labelRank("workflow", 1), "a node groups workflows: same rank");
+});
+
+check("drift envelope: the bob band through the pitch, nothing for the app", () => {
+	const e = driftEnvelope(0.7, -0.45);
+	ok(near(e.y, BOB_UNITS * Math.cos(0.45) * 0.7), `y ${e.y}`);
+	ok(e.x > 0 && e.x < e.y, "sway is smaller than the bob");
+	const z = driftEnvelope(0.7, -0.45, false);
+	ok(z.x === 0 && z.y === 0, "a still node reserves no band");
+	const out = { x: 9, y: 9 };
+	ok(driftEnvelope(1, 0, true, out) === out, "writes into the caller's object");
+});
+
+check("label box: offset and size scale with the node, grown by the envelope", () => {
+	const b: Box = [0, 0, 0, 0];
+	labelBox(b, 100, 50, { dx: 10, dy: -7, w: 80, h: 14 }, 2, { x: 1, y: 5 });
+	ok(near(b[0], 119) && near(b[1], 31) && near(b[2], 281) && near(b[3], 69), `box ${b.join(",")}`);
+});
+
+check("box grid agrees with a brute-force overlap test", () => {
+	const g = new BoxGrid(48);
+	const placed: Box[] = [];
+	const rnd = (i: number, k: number) => hash01(`grid:${i}`, k);
+	for (let i = 0; i < 120; i++) {
+		const x = -200 + rnd(i, 1) * 1200, y = -100 + rnd(i, 2) * 700;
+		const b: Box = [x, y, x + 4 + rnd(i, 3) * 160, y + 4 + rnd(i, 4) * 40];
+		const brute = placed.some((q) => boxesOverlap(b, q));
+		ok(g.hits(b) === brute, `box ${i}: grid ${g.hits(b)} vs brute ${brute}`);
+		if (rnd(i, 5) < 0.6) { g.add(b); placed.push(b); }
+	}
+	g.reset();
+	ok(g.size === 0 && !g.hits([0, 0, 1e4, 1e4]), "reset empties it");
+	ok(!g.hits([5, 5, 5, 20]), "an empty box hits nothing");
+});
+
+const item = (rank: number, order: number, box: Box, shown = false, extra: Partial<LabelItem> = {}): LabelItem =>
+	({ rank, order, box, mem: { shown, since: 0 }, eligible: true, ...extra });
+
+check("declutter: the more important label keeps its place, whatever the input order", () => {
+	const g = new BoxGrid();
+	const ver = item(6, 0, [100, 100, 200, 114], true);
+	const exp = item(4, 1, [150, 105, 260, 119], true);
+	declutterLabels([ver, exp], 1, g);
+	ok(ver.mem.shown && exp.mem.shown, "nothing changes at once (no blinking)");
+	declutterLabels([ver, exp], 1 + LABEL_HIDE_MS + 10, g);
+	ok(!ver.mem.shown && exp.mem.shown, "the version gave way to the experiment");
+	// Two hidden ones: only the winner appears, after the show delay.
+	const a = item(5, 3, [0, 0, 50, 12]), b = item(5, 2, [10, 4, 60, 16]);
+	declutterLabels([a, b], 1, g);
+	ok(!a.mem.shown && !b.mem.shown, "not yet");
+	declutterLabels([a, b], 2 + LABEL_SHOW_MS, g);
+	ok(b.mem.shown && !a.mem.shown, "equal rank: the fixed order decides");
+});
+
+check("declutter: a label already showing keeps its place against an equal", () => {
+	const g = new BoxGrid();
+	const old = item(6, 9, [0, 0, 80, 14], true), fresh = item(6, 1, [20, 2, 100, 16]);
+	for (const t of [1, 400, 900, 1600]) declutterLabels([fresh, old], t, g);
+	ok(old.mem.shown && !fresh.mem.shown, "the showing one stays; the newcomer waits");
+});
+
+check("declutter: spatial hysteresis — a hair of overlap keeps, a hair of clearance is not enough", () => {
+	const g = new BoxGrid();
+	const top = item(4, 0, [0, 0, 100, 14], true);
+	const under = item(6, 1, [0, 14 - LABEL_KEEP, 100, 28 - LABEL_KEEP], true);
+	for (const t of [1, 2000]) declutterLabels([top, under], t, g);
+	ok(top.mem.shown && under.mem.shown, "touching by ≤ the keep margin: both stay");
+	// A hidden one must clear the showing label by LABEL_CLEAR − LABEL_KEEP.
+	const hid = item(6, 1, [0, 14.5, 100, 28.5], false);
+	for (const t of [1, 2000]) declutterLabels([top, hid], t, g);
+	ok(!hid.mem.shown, "half a pixel clear is not clear enough to come back");
+	const far = item(6, 2, [0, 20, 100, 34], false);
+	for (const t of [1, 2000]) declutterLabels([top, far], t, g);
+	ok(far.mem.shown, "clear by more than the margin: it comes back");
+});
+
+check("declutter: reserved corners, open cards and dimmed labels", () => {
+	const g = new BoxGrid();
+	const hint: Box = [0, 0, 400, 24];
+	const under = item(2, 0, [100, 10, 180, 24], true);
+	const card = item(6, 1, [300, 100, 500, 200], false, { fixed: true });
+	const atCard = item(3, 2, [450, 150, 520, 164], true);
+	const dim = item(4, 3, [700, 300, 760, 314], true, { eligible: false, now: true });
+	for (const t of [1, 2000]) declutterLabels([dim, atCard, card, under], t, g, [hint]);
+	ok(!under.mem.shown, "no label under the hint line");
+	ok(!atCard.mem.shown, "an open card claims its box over any label");
+	ok(!dim.mem.shown, "dimmed by a selection");
+	const dim2 = item(4, 3, [700, 300, 760, 314], true, { eligible: false, now: true });
+	declutterLabels([dim2], 1, g);
+	ok(!dim2.mem.shown, "dimming applies at once");
+});
+
+check("settleLabel: slower to hide than to show; a wish that lapses resets", () => {
+	const m = { shown: false, since: 0 };
+	settleLabel(m, true, 100); settleLabel(m, true, 100 + LABEL_SHOW_MS - 1);
+	ok(!m.shown, "not before the show delay");
+	settleLabel(m, false, 700);
+	ok(m.since === 0, "the wish lapsed");
+	settleLabel(m, true, 1000); settleLabel(m, true, 1001 + LABEL_SHOW_MS);
+	ok(m.shown, "shown after the delay");
+	settleLabel(m, false, 2000); settleLabel(m, false, 2001 + LABEL_SHOW_MS);
+	ok(m.shown, "hiding waits longer");
+	settleLabel(m, false, 2001 + LABEL_HIDE_MS);
+	ok(!m.shown, "hidden after the hide delay");
+});
+
+check("a fan of 20 bobbing labels: once settled, no two shown names cross at any phase", () => {
+	// Quant Research's "Long history": 20 versions fanned below the experiment,
+	// rest points 9–15px apart, every dot bobbing out of phase.
+	const g = new BoxGrid();
+	const scale = 0.7, pitch = HOME.pitch;
+	const env = driftEnvelope(scale, pitch);
+	const m = { dx: 8, dy: -8, w: 130, h: 16 };
+	const rest = Array.from({ length: 20 }, (_, i) => ({ x: 300 + i * 22 + hash01(`fan${i}`, 1) * 30, y: 200 + i * 11 + hash01(`fan${i}`, 2) * 4, ph: i * 2.399963 }));
+	const items = rest.map((r, i) => item(6, i, labelBox([0, 0, 0, 0], r.x, r.y, m, 1, env), true));
+	// The pass alongside an experiment label sitting in the middle of the fan.
+	const expLabel = item(4, 99, labelBox([0, 0, 0, 0], 420, 300, m, 1, driftEnvelope(scale, pitch)), false);
+	for (let t = 1; t < 4000; t += 100) declutterLabels([...items, expLabel], t, g);
+	const shown = items.filter((x) => x.mem.shown);
+	ok(expLabel.mem.shown, "the experiment's name wins its spot");
+	ok(shown.length >= 4 && shown.length < 20, `some versions keep their names (${shown.length})`);
+	const all = [...rest.map((r, i) => ({ r, on: items[i].mem.shown })), { r: { x: 420, y: 300, ph: 0.5 }, on: true }].filter((x) => x.on);
+	for (let k = 0; k < 24; k++) {
+		const th = (k / 24) * 2 * Math.PI;
+		const boxes = all.map(({ r }) => labelBox([0, 0, 0, 0], r.x, r.y - env.y * Math.sin(th + r.ph), m, 1, { x: 0, y: 0 }));
+		for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) {
+			const a = boxes[i], b = boxes[j];
+			const ox = Math.min(a[2], b[2]) - Math.max(a[0], b[0]), oy = Math.min(a[3], b[3]) - Math.max(a[1], b[1]);
+			ok(!(ox > 2 * LABEL_KEEP && oy > 2 * LABEL_KEEP), `labels ${i},${j} overprint at phase ${k}: ${ox.toFixed(1)}×${oy.toFixed(1)}`);
+		}
+	}
 });
 
 export function run(): number {

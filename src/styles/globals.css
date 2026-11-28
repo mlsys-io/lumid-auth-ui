@@ -994,6 +994,9 @@ html[data-surface="studio"] ::selection {
 .space3d [data-kind]:hover .space3d-panel { border-color: theme('colors.plum.400'); box-shadow: 0 2px 8px color-mix(in srgb, theme('colors.ink.900') 14%, transparent); }
 .space3d [data-kind]:hover .space3d-label:not(.space3d-panel) > span:first-child { text-decoration: underline; text-decoration-color: theme('colors.plum.300'); text-underline-offset: 2px; }
 .space3d-label-left { left: auto !important; right: 100%; margin-left: 0; margin-right: 0.25rem; align-items: flex-end; text-align: right; }
+/* A name that gave way to a more important one (no overprinting) still reads
+   under the pointer: it peeks on a card-coloured backing, without moving. */
+.space3d-label[data-label="peek"]:not(.space3d-panel) { background: rgb(var(--card-rgb)); border-radius: 0.25rem; box-shadow: 0 0 0 2px rgb(var(--card-rgb)), 0 1px 4px 2px color-mix(in srgb, theme('colors.ink.900') 12%, transparent); text-shadow: none; }
 
 /* The research map's root radiates while its app works (Novix's root rings). */
 @keyframes space3d-ping { 0% { transform: scale(1); opacity: 0.7; } 100% { transform: scale(2.6); opacity: 0; } }

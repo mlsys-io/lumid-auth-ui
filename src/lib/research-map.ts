@@ -246,6 +246,25 @@ export function nextStepWords(e: MeExperiment, steps: string[],
 	return "";
 }
 
+/** What a workflow's main button should do, and the words under it. A plain
+ *  run of a workflow that feeds experiments carries no version, and the engine
+ *  records no result for a run that doesn't say which version it measured — so
+ *  "Run" was the one press whose result could never count, and Summary then
+ *  said "Its latest run recorded no results" (2026-11-28 audit). */
+export function workflowPress(exps: Array<Pick<MeExperiment, "id"> & { title?: string | null }>): {
+	versions: boolean; label: string; plainLabel: string; plainTitle: string; found: string;
+} {
+	if (!exps.length) return { versions: false, label: "Run", plainLabel: "Run", plainTitle: "Starts one run now", found: "Its latest run recorded no results." };
+	const names = exps.slice(0, 3).map(experimentLabel).join(", ") + (exps.length > 3 ? ` and ${exps.length - 3} more` : "");
+	return {
+		versions: true,
+		label: exps.length === 1 ? "Run versions" : "Run versions of…",
+		plainLabel: "Run without a version",
+		plainTitle: "Starts one run with no version: it isn't counted in any experiment",
+		found: `Results land in ${exps.length === 1 ? "its experiment" : "its experiments"} (${names}): a run counts only as one of their versions.`,
+	};
+}
+
 /** The same status in a few words, for a label on the map (the full
  *  sentence is in the card and the panel): "Can't compare yet", "musk leads". */
 export function shortStatus(e: MeExperiment): { tone: Tone; text: string } {
@@ -375,7 +394,7 @@ function titleOf(e: MeExperiment, id: string): string {
  *  blob; lists join; long text stays whole (the cell truncates, the title shows
  *  it). Meta fields (id, description, about, title, arm) are not settings. */
 /** A setting key in words, unit kept: "half_spread_bps" → "half spread (bps)". */
-function settingName(k: string): string {
+export function settingName(k: string): string {
 	if (k.includes(".")) return k; // a dotted override path is the user's own address for it
 	const m = humanMetric(k);
 	const label = inSentence(m.label);

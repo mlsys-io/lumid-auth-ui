@@ -301,3 +301,179 @@ export function stepCameraSpring(cam: Camera, vel: CameraVel, target: Camera, dt
 export const AUTO_ROTATE_RAD_PER_MS = (2 * Math.PI) / 60_000;
 export const AUTO_ROTATE_IDLE_MS = 1500;
 export const PITCH_LIMIT = 1.1;
+
+// ── Labels that never overprint (2026-11-28) ─────────────────────────────
+// Every dot carries its name to its right. Where two names would cross, the
+// more important one keeps its label and the other draws as a bare dot until
+// it is hovered or selected. The component runs this inside its frame loop,
+// so it allocates nothing per frame beyond what a caller reuses.
+
+/** Drift every dot makes on its own (Space3D's sink-and-float): world units
+ *  up and down, and the small sideways sway. A label reserves the whole band
+ *  its node drifts through, so two neighbours bobbing out of phase can never
+ *  slide onto each other — deciding from the rest point alone let them. */
+export const BOB_UNITS = 11;
+export const SWAY_UNITS = 2;
+
+/** Screen pixels a node's label can drift from its rest point, either way:
+ *  `x` from the sway, `y` from the bob (seen through the camera's pitch). */
+export function driftEnvelope(scale: number, pitch: number, drifts = true, out: { x: number; y: number } = { x: 0, y: 0 }): { x: number; y: number } {
+	out.x = drifts ? SWAY_UNITS * scale : 0;
+	out.y = drifts ? BOB_UNITS * Math.abs(Math.cos(pitch)) * scale : 0;
+	return out;
+}
+
+/** Whose label wins a crossing, lower first: the selected node, the rest of
+ *  its path, the app, its workflows (and the nodes that group them),
+ *  experiments, suggestions, versions last. */
+export function labelRank(kind: MapNode["kind"], depth: number, state: { selected?: boolean; onPath?: boolean } = {}): number {
+	if (state.selected) return 0;
+	if (state.onPath) return 1;
+	if (depth === 0 || kind === "app") return 2;
+	if (kind === "workflow" || kind === "node") return 3;
+	if (kind === "experiment") return 4;
+	if (kind === "suggested") return 5;
+	return 6;
+}
+
+/** Screen box: x0, y0, x1, y1. */
+export type Box = [number, number, number, number];
+export const boxesOverlap = (a: Box, b: Box): boolean => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
+
+/** A label as measured once, unscaled: its offset from the node's centre
+ *  (`dx`, `dy` to its top-left corner) and its size. */
+export interface LabelMetrics { dx: number; dy: number; w: number; h: number }
+
+/**
+ * The box a label occupies for a node resting at (cx, cy) drawn at `size`,
+ * grown by the drift envelope — written into `out` (no allocation).
+ */
+export function labelBox(out: Box, cx: number, cy: number, m: LabelMetrics, size: number, env: { x: number; y: number }): Box {
+	out[0] = cx + m.dx * size - env.x;
+	out[1] = cy + m.dy * size - env.y;
+	out[2] = cx + (m.dx + m.w) * size + env.x;
+	out[3] = cy + (m.dy + m.h) * size + env.y;
+	return out;
+}
+
+/** Spatial hysteresis, px per side: a showing label tolerates this much
+ *  overlap before it gives way; a hidden one needs this much clearance to
+ *  come back. Between the two it keeps its state (no blinking at the edge). */
+export const LABEL_KEEP = 1;
+export const LABEL_CLEAR = 2;
+
+/** The box a label tests and claims: shrunk a hair if it is showing, grown
+ *  if it is hidden — written into `out`. */
+export function labelCore(out: Box, box: Box, shown: boolean): Box {
+	const g = shown ? LABEL_KEEP : -LABEL_CLEAR;
+	out[0] = box[0] + g; out[1] = box[1] + g; out[2] = box[2] - g; out[3] = box[3] - g;
+	return out;
+}
+
+/**
+ * Placed boxes in a coarse grid, so testing a label touches only the boxes
+ * in the cells it covers (n labels: ~n log n for the sort, ~n for the pass,
+ * not n²). `reset()` keeps its buckets for the next frame.
+ */
+export class BoxGrid {
+	private cells = new Map<number, number[]>();
+	private live: number[][] = [];
+	private boxes: number[] = [];
+	constructor(private readonly cell = 64) {}
+	reset(): void {
+		for (const b of this.live) b.length = 0;
+		this.live.length = 0;
+		this.boxes.length = 0;
+	}
+	get size(): number { return this.boxes.length / 4; }
+	private static key(i: number, j: number): number { return (i + 32768) * 65536 + (j + 32768); }
+	/** Whether `b` overlaps any box added so far. */
+	hits(b: Box): boolean {
+		if (!(b[2] > b[0] && b[3] > b[1])) return false;
+		const c = this.cell, B = this.boxes;
+		const i0 = Math.floor(b[0] / c), j0 = Math.floor(b[1] / c), i1 = Math.floor((b[2] - 1e-6) / c), j1 = Math.floor((b[3] - 1e-6) / c);
+		for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
+			const list = this.cells.get(BoxGrid.key(i, j));
+			if (!list) continue;
+			for (const k of list) {
+				const o = k * 4;
+				if (b[0] < B[o + 2] && b[2] > B[o] && b[1] < B[o + 3] && b[3] > B[o + 1]) return true;
+			}
+		}
+		return false;
+	}
+	add(b: Box): void {
+		if (!(b[2] > b[0] && b[3] > b[1])) return;
+		const k = this.boxes.length / 4;
+		this.boxes.push(b[0], b[1], b[2], b[3]);
+		const c = this.cell;
+		const i0 = Math.floor(b[0] / c), j0 = Math.floor(b[1] / c), i1 = Math.floor((b[2] - 1e-6) / c), j1 = Math.floor((b[3] - 1e-6) / c);
+		for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) {
+			const key = BoxGrid.key(i, j);
+			let list = this.cells.get(key);
+			if (!list) { list = []; this.cells.set(key, list); }
+			if (!list.length) this.live.push(list);
+			list.push(k);
+		}
+	}
+}
+
+/** Whether a label is showing, and since when it has wanted the other state. */
+export interface LabelMemory { shown: boolean; since: number }
+/** Labels change only once the wish has held this long (ms): slower to hide
+ *  than to show, so a brief crossing while the space turns leaves it alone. */
+export const LABEL_SHOW_MS = 500;
+export const LABEL_HIDE_MS = 700;
+
+/** Timed hysteresis: move `mem` toward `want` at time `t`. `now` applies it
+ *  at once (dimmed by a selection, or nothing moves to blink against). */
+export function settleLabel(mem: LabelMemory, want: boolean, t: number, now = false): void {
+	if (want === mem.shown) { mem.since = 0; return; }
+	if (now) { mem.shown = want; mem.since = 0; return; }
+	if (!mem.since) mem.since = t;
+	if (t - mem.since > (want ? LABEL_SHOW_MS : LABEL_HIDE_MS)) { mem.shown = want; mem.since = 0; }
+}
+
+/** One label (or open card) in a declutter pass. The caller keeps these
+ *  between frames and refreshes the fields. */
+export interface LabelItem {
+	rank: number;
+	/** A fixed order among equals (the node's index). */
+	order: number;
+	/** The box it would occupy (drift included). */
+	box: Box;
+	mem: LabelMemory;
+	/** An open card: claims its box, never hides. */
+	fixed?: boolean;
+	/** May it show at all? (false: at the back of the space, or dimmed.) */
+	eligible: boolean;
+	/** Change at once rather than after the timed hysteresis. */
+	now?: boolean;
+	/** Scratch for the core box (reused). */
+	core?: Box;
+}
+
+/** Most important first; among equals a label already showing keeps its
+ *  place, then a fixed order (sorting by depth made neighbours swap as the
+ *  space turned — labels blinked, 2026-11-25). */
+export function labelOrder(a: LabelItem, b: LabelItem): number {
+	return Number(!a.fixed) - Number(!b.fixed) || a.rank - b.rank || Number(!a.mem.shown) - Number(!b.mem.shown) || a.order - b.order;
+}
+
+/**
+ * Decide which labels show: `items` are sorted in place, then each claims its
+ * box unless a more important one (or a reserved area such as the controls)
+ * already holds it. Updates every item's `mem`. `reserved` boxes go in first.
+ */
+export function declutterLabels(items: LabelItem[], t: number, grid: BoxGrid, reserved: readonly Box[] = []): void {
+	grid.reset();
+	for (const r of reserved) grid.add(r);
+	items.sort(labelOrder);
+	for (const it of items) {
+		if (it.fixed) { grid.add(it.box); continue; }
+		const core = labelCore(it.core ?? (it.core = [0, 0, 0, 0]), it.box, it.mem.shown);
+		const want = it.eligible && !grid.hits(core);
+		settleLabel(it.mem, want, t, !!it.now);
+		if (it.mem.shown) grid.add(core);
+	}
+}

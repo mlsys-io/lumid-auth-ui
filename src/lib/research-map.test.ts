@@ -2,7 +2,7 @@
 // Fixtures are trimmed copies of real lum.id experiments (2026-11-24).
 import type { MeExperiment } from "@/api/me";
 import { appPages, pageHref } from "./app-pages";
-import { roundOver, humanId, inSentence, experimentStatus, versionsOf, nextStepWords, tiedAtTop, criteriaInWords, buildResearchTree, pathTo, mapSummary, comparabilityNote, suggestionParent, experimentLoop, versionsToRun, triedVersions, settingRows, experimentLabel, proposalCheck, shortStatus, batchProgress, type Proposal } from "./research-map";
+import { workflowPress, roundOver, humanId, inSentence, experimentStatus, versionsOf, nextStepWords, tiedAtTop, criteriaInWords, buildResearchTree, pathTo, mapSummary, comparabilityNote, suggestionParent, experimentLoop, versionsToRun, triedVersions, settingRows, experimentLabel, proposalCheck, shortStatus, batchProgress, type Proposal } from "./research-map";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -259,6 +259,12 @@ check("gated chains: the next move is said in words", () => {
 		eq([roundOver(gp(false, false)), roundOver(gp(true, false)), roundOver({ id: "u", arms: [{ id: "a" }] } as unknown as MeExperiment)], [true, false, false]);
 		const untried = { id: "r", arms: [{ id: "a" }, { id: "c" }], gate_progress: { a: { reached: "x", index: 1, passed: false } } } as unknown as MeExperiment;
 		eq(roundOver(untried), false);
+	}
+	eq(workflowPress([]).versions, false);
+	{
+		const w = workflowPress([{ id: "strategy_search" }, { id: "long_history", title: "Long history" }]);
+		eq([w.versions, w.label, w.found], [true, "Run versions of…", "Results land in its experiments (Strategy search, Long history): a run counts only as one of their versions."]);
+		eq(workflowPress([{ id: "a" }]).label, "Run versions");
 	}
 	eq(nextStepWords(ran, ["simulate"]), "Next: run the 1 untried version — the cheap steps first.");
 	eq(nextStepWords(ran, ["simulate"], ["a", "b"]), "Next: 1 version ran but recorded no goodput — open it to see why before running it again.");

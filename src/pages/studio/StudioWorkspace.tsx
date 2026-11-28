@@ -94,7 +94,7 @@ export default function StudioWorkspace() {
 								<Loader2 className="h-4 w-4 animate-spin text-lagoon-600" aria-hidden />
 								Installing {pending.map((n) => appTitle(n)).join(", ")}… it usually takes under a minute, and opens here when it&apos;s ready.
 							</div>
-							: <div className="px-5 py-10 text-sm text-muted-foreground">No apps installed yet — browse the marketplace from the Library.</div>}
+							: <div className="px-5 py-10 text-sm text-muted-foreground">No apps installed yet — browse the Marketplace to add one.</div>}
 				</div>
 			</div>
 

@@ -1,6 +1,6 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 import type { MeExperiment, MeRunRow, MeWorkflowRow } from "@/api/me";
-import { bestResult, bestResults, bestSoFar, dollars, failingWorkflows, phoneSummary, researchHeadline, weekSummary } from "./research-dashboard";
+import { metricText, bestResult, bestResultValue, bestResults, bestSoFar, bestTileLines, dollars, failingWorkflows, isYesNoMetric, phoneSummary, researchHeadline, weekSummary, yesNoWords } from "./research-dashboard";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -74,6 +74,13 @@ check("a top number a gate stopped is not a lead", () => {
 	eq(bestResults([stopped, mk("l", {})]).map((x) => x.select), ["exp:l", "exp:s"]);
 	eq(researchHeadline({ exps: [stopped], failing: [], ideas: 0, seen: { s: "B" }, now: NOW }), null);
 });
+check("a unit is written once", () => {
+	for (const k of ["energy_j_per_request", "energy_j_per_token", "latency_ms", "cost_usd"]) {
+		const t = metricText(k, 1.5);
+		if (/(\S+(?: per \S+)?) \1$/.test(t)) throw new Error(`unit doubled: ${t}`);
+	}
+	eq(metricText("goodput_tok_s", 22.4), "22.4 tok/s");
+});
 check("best so far never goes back", () => {
 	eq(bestSoFar([1, 3, 2, 5, NaN, 4], true), [1, 3, 3, 5, 5]);
 	eq(bestSoFar([9, 7, 8, 3], false), [9, 7, 7, 3]);
@@ -87,6 +94,32 @@ check("phone: the three tiles in one line", () => {
 check("the leader is named by its spec title when it has one", () => {
 	const b = bestResult(exp({ best_variant: "llm_0_6b_c12", arms: [{ id: "llm_0_6b_c12", title: "0.6B · concurrency 12" }] as never, variants: { llm_0_6b_c12: { n: 1, mean: 0.37 } } }))!;
 	eq(b.leader, "0.6B · concurrency 12");
+});
+
+check("a yes/no metric reads as words, never 'Meets constraints yes'", () => {
+	eq([isYesNoMetric("meets_constraints"), isYesNoMetric("passes_gate"), isYesNoMetric("is_valid"), isYesNoMetric("ok")], [true, true, true, true]);
+	// Values alone: only 0 and 1, at least two, no unit, not a count or a share.
+	eq([isYesNoMetric("constraint_check", [1, 0, 1]), isYesNoMetric("sharpe", [1]), isYesNoMetric("success_rate", [1, 0]), isYesNoMetric("n_errors", [0, 1]), isYesNoMetric("ttft_ms", [0, 1])], [true, false, false, false, false]);
+	eq(yesNoWords("meets_constraints", 1), { tile: "meets constraints", sentence: "meets every constraint" });
+	eq(yesNoWords("meets_constraints", 0), { tile: "doesn't meet constraints", sentence: "doesn't meet every constraint" });
+	eq(yesNoWords("passes_gate", 0).tile, "doesn't pass gate");
+	eq(yesNoWords("is_valid", 0).tile, "isn't valid");
+	eq(yesNoWords("same_gpu_as_simulated", 1).tile, "same GPU as simulated");
+	eq(yesNoWords("constraint_check", 1).tile, "passes constraint check");
+	eq(yesNoWords("meets_constraints", 0.67).tile, "meets constraints in 67% of runs");
+	// The headline and the tile (the MLSys audit: "Util 0.85 wins with Meets constraints yes").
+	const e = exp({ id: "util", best_variant: "u85", criteria_met: true, updated_at: "2026-11-26T10:00:00Z", metric: { name: "meets_constraints" },
+		arms: [{ id: "u85", title: "Util 0.85" }] as never, variants: { u85: { n: 4, mean: 1 }, u70: { n: 4, mean: 0 } } });
+	const b = bestResult(e)!;
+	eq([b.valueText, b.yesNo], ["meets constraints", "meets every constraint"]);
+	const h = researchHeadline({ exps: [e], failing: [], ideas: 0, now: NOW })!;
+	if (!h.text.endsWith("Util 0.85 wins: meets every constraint")) throw new Error(h.text);
+	eq(bestTileLines(b, "yes · no simulated"), { value: "meets constraints" });
+	eq(bestResultValue(b), "meets constraints");
+	// An ordinary number keeps its name and the per-step words.
+	const n = bestResult(exp({ best_variant: "a", variants: { a: { n: 3, mean: 1.42 }, b: { n: 3, mean: 1 } } }))!;
+	eq([n.yesNo, bestResultValue(n)], [undefined, "Sharpe 1.42"]);
+	eq(bestTileLines(n, "1.42 backtest · 1.1 forward"), { metric: "Sharpe", value: "1.42 backtest · 1.1 forward" });
 });
 
 export function run(): number {

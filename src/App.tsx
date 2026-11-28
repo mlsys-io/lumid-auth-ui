@@ -86,6 +86,7 @@ const StudioClaudeSessions = lazy(() => import("./pages/studio/claude-sessions")
 const StudioDocs       = lazy(() => import("./pages/studio/docs"));
 const StudioMarketplace = lazy(() => import("./pages/studio/library"));
 const StudioLibraryTabs = lazy(() => import("./pages/studio/library-tabs"));
+const StudioNotFound    = lazy(() => import("./pages/studio/not-found"));
 const StudioData        = lazy(() => import("./pages/studio/data"));
 const StudioRepo = lazy(() => import("./pages/studio/repo"));
 const PublicShell = lazy(() => import("./components/PublicShell"));
@@ -932,6 +933,9 @@ export default function App() {
                 /studio/compute/jobs and /studio/compute/sandboxes survive. */}
             <Route path="compute/*"                    element={<ComputeToResearchFleetRedirect />} />
             <Route path="compute"                      element={<ComputeToResearchFleetRedirect />} />
+            {/* /studio/sandboxes is the name people type for Research Fleet's
+                Sandboxes tab; it used to fall through to the home chat. */}
+            <Route path="sandboxes"                    element={<Navigate to="/studio/research-fleet/sandboxes" replace />} />
             <Route path="data"                         element={<DataToDataWarehouseRedirect />} />
             {/* Library — Marketplace / Skills / Experiments as tabs under
                 one nav entry; the old top-level paths redirect in. */}
@@ -1152,6 +1156,11 @@ export default function App() {
                 </SuperAdminGuard>
               }
             />
+            {/* Catch-all: an unknown Studio path says so ("No page here") instead
+                of falling to the root "*" route, whose redirect to /studio showed
+                the home chat as if it were the page asked for. Ranked last by
+                React Router, so it never shadows a real route. */}
+            <Route path="*"                            element={<StudioNotFound />} />
           </Route>
           {/* Authenticated-but-incomplete users (empty invitation_code)
               get redirected here by AuthGuard. The page itself runs
