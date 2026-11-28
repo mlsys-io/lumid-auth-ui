@@ -419,3 +419,32 @@ export function bestWords(ev: Evidence): string {
 	}
 	return `Best so far: ${label} — ${num}${at}`;
 }
+
+/**
+ * How far each version got, from its ledger rows, for a version that has no
+ * result at the experiment's own metric yet (a gated chain records that only at
+ * its last step). "no results yet" / "not run yet" sat beside a grid full of
+ * its rows (round 10, 2026-11-28). The furthest declared step with a row wins;
+ * its gate verdict says passed / stopped, an ungated step says measured.
+ */
+export function versionProgress(rows: MeExperimentRow[] | null | undefined, stepIds: string[]): Map<string, { text: string; tag: "stopped" | "passed" | "measured"; step: string }> {
+	const out = new Map<string, { text: string; tag: "stopped" | "passed" | "measured"; step: string }>();
+	const order = new Map(stepIds.map((s, i) => [s, i]));
+	const best = new Map<string, { k: number; row: MeExperimentRow }>();
+	for (const r of rows || []) {
+		const v = r.variant_id;
+		const st = r.dims?.stage;
+		if (!v || !st || !order.has(st)) continue;
+		const k = order.get(st)!;
+		const cur = best.get(v);
+		if (!cur || k > cur.k || (k === cur.k && String(r.ts) >= String(cur.row.ts))) best.set(v, { k, row: r });
+	}
+	for (const [v, { row }] of best) {
+		const step = row.dims!.stage!;
+		const label = humanId(step);
+		const p = row.dims?.passed;
+		const tag = p === "0" ? "stopped" : p === "1" ? "passed" : "measured";
+		out.set(v, { step, tag, text: tag === "stopped" ? `Stopped at ${label}` : tag === "passed" ? `Passed ${label}` : `Measured at ${label}` });
+	}
+	return out;
+}

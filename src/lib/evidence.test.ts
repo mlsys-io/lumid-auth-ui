@@ -1,7 +1,7 @@
 // Run by scripts/test-workflow.mjs via src/workflow/workflow.test.ts.
 import type { MeExperiment, MeExperimentRow } from "@/api/me";
 import { readAppSpec } from "./app-spec";
-import { bestWords, cellWords, evidenceOf, experimentSteps, gatesFromText, nextWords, ruleInWords, runningVersions, stepFootWords, stepPassWords, usd, type EvidenceStepSpec } from "./evidence";
+import { versionProgress, bestWords, cellWords, evidenceOf, experimentSteps, gatesFromText, nextWords, ruleInWords, runningVersions, stepFootWords, stepPassWords, usd, type EvidenceStepSpec } from "./evidence";
 
 type Check = { name: string; run: () => void };
 const checks: Check[] = [];
@@ -93,6 +93,19 @@ check("simulate → sandbox (gate on the first only): measured, then ready", () 
 	eq(cellWords(ev.cells.get("x")!.get("sandbox")!, ev.steps[1]), "Sandbox: TTFT p99 812 ms");
 	eq(ev.best, { version: "x", step: "sandbox", metric: "ttft_ms_p99", value: 812 });
 	eq(ev.next.map((n) => [n.label, n.versions]), [["Sandbox", ["z"]]]);
+});
+check("progress: how far a version got, before it has the experiment's own metric", () => {
+	const rows = [
+		{ ts: "1", variant_id: "a", metrics: {}, dims: { stage: "data_check", passed: "1" } },
+		{ ts: "2", variant_id: "a", metrics: {}, dims: { stage: "bar_backtest", passed: "0" } },
+		{ ts: "3", variant_id: "b", metrics: {}, dims: { stage: "data_check", passed: "1" } },
+		{ ts: "4", variant_id: "b", metrics: {}, dims: { stage: "bar_backtest", passed: "1" } },
+		{ ts: "5", variant_id: "c", metrics: {}, dims: { stage: "probe" } },
+		{ ts: "6", variant_id: "d", metrics: {}, dims: { stage: "data_check" } },
+	] as unknown as MeExperimentRow[];
+	const p = versionProgress(rows, ["data_check", "bar_backtest", "robustness"]);
+	eq([p.get("a")?.text, p.get("b")?.text, p.get("c"), p.get("d")?.text], ["Stopped at Bar backtest", "Passed Bar backtest", undefined, "Measured at Data check"]);
+	eq(versionProgress(null, ["x"]).size, 0);
 });
 check("ties: the next declared metric decides, or the words say it can't", () => {
 	const rows: MeExperimentRow[] = [

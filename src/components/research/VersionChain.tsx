@@ -15,8 +15,11 @@ const CHIP: Record<ChainLink["state"], string> = {
 	"not run yet": "bg-transparent border-dashed border-ink-300 text-ink-600",
 };
 
-export default function VersionChain({ chain, labelOf, valueOf, onPick, picked }: {
+export default function VersionChain({ chain, labelOf, valueOf, onPick, picked, progress }: {
 	chain: ChainLink[];
+	/** How far a version got when it has no result at the experiment's metric
+	 *  yet (lib/evidence versionProgress) — said instead of "no results yet". */
+	progress?: Map<string, { text: string; tag: "stopped" | "passed" | "measured" }>;
 	labelOf: (arm: string) => string;
 	valueOf: (v: number) => string;
 	/** Clicking a version card selects it (on the graph, and in the panel). */
@@ -35,9 +38,11 @@ export default function VersionChain({ chain, labelOf, valueOf, onPick, picked }
 				<span className="text-caption font-medium truncate">{labelOf(c.arm)}</span>
 			</div>
 			<div className={cn("text-micro tabular-nums", c.state === "winning" ? "text-white/90" : "text-ink-600")}>
-				{c.mean == null ? "no results yet" : `${valueOf(c.mean)} · ${c.n} result${c.n === 1 ? "" : "s"}`}
+				{c.mean == null ? (progress?.get(c.arm)?.text ?? "no results yet") : `${valueOf(c.mean)} · ${c.n} result${c.n === 1 ? "" : "s"}`}
 			</div>
-			<div className={cn("text-nano font-medium uppercase tracking-wide mt-0.5", c.state === "winning" ? "text-white" : c.state === "dropped" ? "text-ember-700" : c.state === "best so far" ? "text-plum-700" : "text-ink-600")}>{c.state}</div>
+			<div className={cn("text-nano font-medium uppercase tracking-wide mt-0.5", c.state === "winning" ? "text-white" : c.state === "dropped" || (c.mean == null && progress?.get(c.arm)?.tag === "stopped") ? "text-ember-700" : c.state === "best so far" ? "text-plum-700" : "text-ink-600")}>
+				{c.mean == null && progress?.get(c.arm) ? progress.get(c.arm)!.tag : c.state}
+			</div>
 		</button>
 	);
 	return (

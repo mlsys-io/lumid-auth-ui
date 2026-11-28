@@ -37,7 +37,7 @@ import EvidenceGrid from "@/components/research/EvidenceGrid";
 import AddVersions from "@/components/research/AddVersions";
 import ExperimentSpend, { useExperimentRows } from "@/components/research/ExperimentSpend";
 import HoldoutLine from "@/components/research/HoldoutLine";
-import { experimentSteps } from "@/lib/evidence";
+import { versionProgress, experimentSteps } from "@/lib/evidence";
 import YourCall from "@/components/research/YourCall";
 import WorkflowPanel, { NodePanel, CompareView, wfLabel, type CompareSide, type PanelView } from "@/components/research/WorkflowPanel";
 import TrySetups from "@/components/research/TrySetups";
@@ -552,6 +552,7 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 	const steps = useMemo(() => experimentSteps(spec, e, specText), [spec, e, specText]);
 	// One read of the ledger rows for the spend and holdout lines.
 	const expRows = useExperimentRows(app, e.id);
+	const progress = useMemo(() => versionProgress(expRows, steps.map((x) => x.step)), [expRows, steps]);
 	const grid = (
 		<>
 			<EvidenceGrid app={app} e={e} steps={steps} onPickVersion={onPickVersion} pickedVersion={pickedVersion} />
@@ -605,7 +606,7 @@ function ExperimentDetail({ app, e, panel = false, onClose, style, onCompare, on
 	// The versions in the order they were tried, each with its state — unless
 	// the spark rows above already name each one.
 	const chain = spark ? null : evolution ? (
-		<VersionChain chain={evolution.chain} labelOf={labelOf} valueOf={(v) => fmtMetricValue(v, m?.unit ?? "", metric || "")} onPick={onPickVersion} picked={pickedVersion} />
+		<VersionChain chain={evolution.chain} labelOf={labelOf} valueOf={(v) => fmtMetricValue(v, m?.unit ?? "", metric || "")} onPick={onPickVersion} picked={pickedVersion} progress={progress} />
 	) : (
 		<ul className="space-y-1">
 			{versions.map((v) => (
