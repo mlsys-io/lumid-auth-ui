@@ -4,14 +4,19 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { UserRound } from "lucide-react";
 import { getMyUsername, setMyUsername, type UsernameInfo } from "../../api/username";
+import { applyUsername, getUsername } from "../../api/sandboxes";
+import { renameState, verifyState, type SiteRenameState } from "../../lib/username-apply";
+import { TONES } from "../../lib/tones";
 import { USERNAME_RULE, renameNote, usernameProblem } from "../../lib/username";
 import { Button } from "../../components/ui/button";
 
-export default function UsernameCard() {
+export default function UsernameCard({ sites = ["home", "office"] }: { sites?: string[] }) {
 	const [info, setInfo] = useState<UsernameInfo | null>(null);
 	const [editing, setEditing] = useState(false);
 	const [draft, setDraft] = useState("");
 	const [saving, setSaving] = useState(false);
+	// Per-site progress after a change: the page WAITS until each site has moved you, then checks it.
+	const [progress, setProgress] = useState<Record<string, SiteRenameState>>({});
 	useEffect(() => { getMyUsername().then(setInfo).catch(() => setInfo(null)); }, []);
 	if (!info) return null;
 	const current = info.username;
@@ -22,11 +27,35 @@ export default function UsernameCard() {
 		try {
 			const r = await setMyUsername(draft.trim());
 			setInfo(r); setEditing(false);
-			toast.success(`Your username is now ${r.username}`);
+			if (r.username) void applyEverywhere(r.username);
 		} catch (e: any) {
 			toast.error(e?.response?.data?.message ?? "could not save that username");
 		} finally { setSaving(false); }
 	}
+	async function applyOne(site: string, want: string) {
+		const set = (st: SiteRenameState) => setProgress((p) => ({ ...p, [site]: st }));
+		set({ kind: "working" });
+		for (let attempt = 0; attempt < 24; attempt++) {
+			try {
+				const st = renameState(await applyUsername(site));
+				if (st.kind !== "retry") { set(st); break; }
+				set(st);
+			} catch (e: any) {
+				const code = e?.response?.status;
+				if (code === 404) { set({ kind: "later", text: "this site switches to unified usernames later" }); return; }
+				set({ kind: "failed", text: e?.response?.data?.detail ?? `could not reach this site${code ? ` (HTTP ${code})` : ""}` });
+				return;
+			}
+			await new Promise((r) => setTimeout(r, 5000));
+		}
+		try { set(verifyState(await getUsername(site), want)); } catch { /* keep the last state */ }
+	}
+	async function applyEverywhere(want: string) {
+		setProgress(Object.fromEntries(sites.map((s) => [s, { kind: "working" } as SiteRenameState])));
+		await Promise.all(sites.map((s) => applyOne(s, want)));
+		toast.success(`Your username is now ${want}`);
+	}
+	const tone = (k: SiteRenameState["kind"]) => (k === "done" ? TONES.ok : k === "failed" ? TONES.failing : k === "later" ? TONES.idle : TONES.running);
 	return (
 		<section className="mb-4 rounded-lg border border-ink-200 bg-card p-4" data-testid="username-card">
 			<div className="flex flex-wrap items-center justify-between gap-3">
@@ -48,6 +77,20 @@ export default function UsernameCard() {
 				your current sandbox and machine names keep working.
 				{info.previous?.length ? ` Earlier names: ${info.previous.join(", ")} (they keep working as links).` : ""}
 			</p>
+			{Object.keys(progress).length > 0 && (
+				<ul className="mt-3 space-y-1" data-testid="username-progress">
+					{Object.entries(progress).map(([site, st]) => {
+						const T = tone(st.kind);
+						return (
+							<li key={site} className="flex items-center gap-2 text-caption">
+								<T.Icon className={`h-3.5 w-3.5 shrink-0 ${T.icon} ${st.kind === "working" || st.kind === "retry" ? "animate-spin" : ""}`} aria-hidden />
+								<span className="w-14 font-medium text-ink-800">{site}</span>
+								<span className={st.kind === "failed" ? T.text : "text-ink-700"}>{st.kind === "working" ? "moving you to the new name…" : st.text}</span>
+							</li>
+						);
+					})}
+				</ul>
+			)}
 			{editing && (
 				<div className="mt-3 space-y-2">
 					<div className="flex flex-wrap items-center gap-2">
